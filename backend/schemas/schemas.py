@@ -62,17 +62,18 @@ class OTPVerifyRequest(BaseModel):
 class UserOut(BaseModel):
     id: str
     email: str
-    full_name: str
-    phone_number: str | None
-    role: str
-    organization_id: str | None
-    is_active: bool
-    is_verified: bool
+    full_name: str | None = None
+    phone_number: str | None = None
+    role: str = "operator"
+    organization_id: str | None = None
+    is_active: bool = True
+    is_verified: bool = True
     profile_data: str | None = None
-    created_at: datetime
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True
+
 
 
 class UserUpdate(BaseModel):
