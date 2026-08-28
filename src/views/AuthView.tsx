@@ -497,12 +497,15 @@ export const AuthView: React.FC<{ onNavigate: (screen: ScreenId) => void }> = ({
 
         <div className="text-center">
           <Button variant="link" size="sm" onClick={async () => {
-            await login({ email: loginEmail || 'admin@nexus.ai', password: loginPassword || 'Admin@123' }, true);
+            try {
+              await login({ email: loginEmail || 'alex.vance@nexus.ai', password: loginPassword || 'NexusPass2026!' }, true);
+            } catch {}
             onNavigate('dashboard');
           }}>
             ← Return to OS Dashboard
           </Button>
         </div>
+
       </div>
     </div>
   );
