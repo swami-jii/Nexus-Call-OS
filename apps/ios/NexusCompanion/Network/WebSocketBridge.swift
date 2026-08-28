@@ -142,7 +142,7 @@ class WebSocketBridge: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             if let type = json["type"] as? String ?? json["event"] as? String {
                 if type == "PONG" {
                     if let start = self?.pingStartTime, start > 0 {
-                        self?.latencyMs = Int((Date().timeIntervalSince1960 - start) * 1000)
+                        self?.latencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
                     }
                 } else if type == "AUTH_SUCCESS" {
                     self?.connectionState = .connected
@@ -160,10 +160,11 @@ class WebSocketBridge: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         stopPingTimer()
         pingTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
             guard let self = self, self.connectionState == .connected || self.connectionState == .connecting else { return }
-            self.pingStartTime = Date().timeIntervalSince1960
+            self.pingStartTime = CFAbsoluteTimeGetCurrent()
             self.sendJSON(dict: ["event": "PING", "timestamp": self.pingStartTime])
         }
     }
+
 
     private func stopPingTimer() {
         pingTimer?.invalidate()

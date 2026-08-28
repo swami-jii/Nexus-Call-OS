@@ -12,7 +12,6 @@ class CallKitManager: NSObject, CXProviderDelegate {
 
     override init() {
         let config = CXProviderConfiguration()
-        config.localizedName = "Nexus Gateway"
         config.supportsVideo = false
         config.maximumCallsPerCallGroup = 1
         config.supportedHandleTypes = [.phoneNumber, .generic]
@@ -22,6 +21,7 @@ class CallKitManager: NSObject, CXProviderDelegate {
         super.init()
         self.provider.setDelegate(self, queue: DispatchQueue.main)
     }
+
 
     func reportIncomingCall(uuid: UUID, handle: String, hasVideo: Bool = false, completion: @escaping (Error?) -> Void) {
         let update = CXCallUpdate()
