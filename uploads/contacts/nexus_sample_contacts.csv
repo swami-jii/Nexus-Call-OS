@@ -1,0 +1,9 @@
+contact_name,phone_number,email_address,company,status,lead_score,tags,account_tier,preferred_language,budget_usd,interest_product,city
+Mukesh Sharma,+91 9650855975,mukeshswami7827@gmail.com,Apollo Healthcare,contacted,95,VIP; Healthcare; High Intent,Enterprise,Hindi,15000,AI Voice Agent Suite,New Delhi
+Priya Verma,+91 9811223344,priya.verma@example.com,Max Super Speciality,new,88,Hospital; Inbound IVR,Premium,Hindi/English,10000,Automated Appointment Bot,Gurugram
+Aarav Patel,+91 9723456789,aarav.patel@example.com,Apex Real Estate,qualified,92,Real Estate; Buyer; Hot Lead,Corporate,English,25000,Outbound Lead Qualifier,Mumbai
+Sneha Kulkarni,+91 9820112233,sneha.k@example.com,Fortis Hospital,contacted,85,Healthcare; Patient Outreach,Growth,Hindi,8500,Patient Reminder Bot,Pune
+Vikram Malhotra,+91 9876543210,vikram.m@example.com,Malhotra Financial Corp,qualified,96,Finance; Wealth; VIP,Enterprise,English,50000,AI Telephony Gateway,Bangalore
+Ananya Sen,+91 9830123456,ananya.sen@example.com,Kolkata Tech Innovations,new,79,SaaS; Startup; Follow-up,Standard,Bengali/English,5000,Custom Voice Workflows,Kolkata
+Rohan Mehta,+91 9898765432,rohan.mehta@example.com,Gujarat Logistics & Cargo,contacted,90,Logistics; Fleet; Support,Corporate,Gujarati/Hindi,18000,24/7 Support Bot,Ahmedabad
+Deepak Chawla,+91 9711002233,deepak.c@example.com,Chawla Auto Enterprises,converted,98,Automobile; Dealership,Enterprise,Hindi/English,35000,Omnichannel Call OS,Jaipur

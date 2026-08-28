@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexus-call-os"
+version = "1.0.0"
+description = "Nexus AI Voice Operating System Backend"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend*"]
+
+[tool.pyright]
+include = ["backend"]
+exclude = ["**/node_modules", "**/__pycache__", "backend/venv"]
+extraPaths = [".", "backend/venv/Lib/site-packages"]
+pythonVersion = "3.11"
+pythonPlatform = "Windows"
+typeCheckingMode = "off"
+reportMissingImports = "error"
+reportGeneralTypeIssues = "none"
+reportAttributeAccessIssue = "none"
+reportOptionalMemberAccess = "none"
+

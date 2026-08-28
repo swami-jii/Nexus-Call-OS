@@ -1,0 +1,40 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.db
+*.sqlite3
+
+# Android & Gradle
+.gradle/
+**/build/
+local.properties
+.idea/
+*.iml
+
+# iOS & macOS
+*.xcuserstate
+xcuserdata/
+*.xcarchive
+DerivedData/
+
+# Temporary / Scratch
+scratch/
+uploads/cache/
+uploads/.recycle_bin/
+
+
+

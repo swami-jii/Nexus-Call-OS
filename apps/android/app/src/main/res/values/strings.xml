@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Nexus Gateway</string>
+    <string name="connecting">Connecting to Nexus Call OS...</string>
+    <string name="connected">Online &amp; Connected (5G GSM)</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="auto_answer_enabled">Auto-Answer Active</string>
+    <string name="grant_permissions">Grant System Permissions</string>
+</resources>

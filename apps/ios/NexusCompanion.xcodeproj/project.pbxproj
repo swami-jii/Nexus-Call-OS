@@ -1,0 +1,427 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000012C70000100000001 /* NexusCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000022C70000100000001 /* NexusCompanionApp.swift */; };
+		A10000032C70000100000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000042C70000100000001 /* ContentView.swift */; };
+		A10000052C70000100000001 /* PermissionsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000062C70000100000001 /* PermissionsCardView.swift */; };
+		A10000072C70000100000001 /* DeviceDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000082C70000100000001 /* DeviceDiagnosticsView.swift */; };
+		A10000092C70000100000001 /* GatewayViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A2C70000100000001 /* GatewayViewModel.swift */; };
+		A100000B2C70000100000001 /* WebSocketBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C2C70000100000001 /* WebSocketBridge.swift */; };
+		A100000D2C70000100000001 /* CallKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E2C70000100000001 /* CallKitManager.swift */; };
+		A10000302C70000100000001 /* PushKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000312C70000100000001 /* PushKitManager.swift */; };
+		A100000F2C70000100000001 /* AudioEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000102C70000100000001 /* AudioEngineManager.swift */; };
+		A10000112C70000100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000122C70000100000001 /* Assets.xcassets */; };
+		A10000132C70000100000001 /* CallKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000142C70000100000001 /* CallKit.framework */; };
+		A10000152C70000100000001 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000162C70000100000001 /* AVFoundation.framework */; };
+		A10000322C70000100000001 /* PushKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000332C70000100000001 /* PushKit.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000172C70000100000001 /* NexusCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NexusCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000022C70000100000001 /* NexusCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NexusCompanionApp.swift; sourceTree = "<group>"; };
+		A10000042C70000100000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A10000062C70000100000001 /* PermissionsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsCardView.swift; sourceTree = "<group>"; };
+		A10000082C70000100000001 /* DeviceDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiagnosticsView.swift; sourceTree = "<group>"; };
+		A100000A2C70000100000001 /* GatewayViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayViewModel.swift; sourceTree = "<group>"; };
+		A100000C2C70000100000001 /* WebSocketBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketBridge.swift; sourceTree = "<group>"; };
+		A100000E2C70000100000001 /* CallKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallKitManager.swift; sourceTree = "<group>"; };
+		A10000312C70000100000001 /* PushKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushKitManager.swift; sourceTree = "<group>"; };
+		A10000102C70000100000001 /* AudioEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineManager.swift; sourceTree = "<group>"; };
+		A10000122C70000100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A10000182C70000100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000192C70000100000001 /* NexusCompanion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NexusCompanion.entitlements; sourceTree = "<group>"; };
+		A10000142C70000100000001 /* CallKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CallKit.framework; path = System/Library/Frameworks/CallKit.framework; sourceTree = SDKROOT; };
+		A10000162C70000100000001 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		A10000332C70000100000001 /* PushKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = PushKit.framework; path = System/Library/Frameworks/PushKit.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A100001A2C70000100000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000132C70000100000001 /* CallKit.framework in Frameworks */,
+				A10000152C70000100000001 /* AVFoundation.framework in Frameworks */,
+				A10000322C70000100000001 /* PushKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A100001B2C70000100000001 = {
+			isa = PBXGroup;
+			children = (
+				A100001C2C70000100000001 /* NexusCompanion */,
+				A100001D2C70000100000001 /* Frameworks */,
+				A100001E2C70000100000001 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A100001C2C70000100000001 /* NexusCompanion */ = {
+			isa = PBXGroup;
+			children = (
+				A10000022C70000100000001 /* NexusCompanionApp.swift */,
+				A100001F2C70000100000001 /* Views */,
+				A10000202C70000100000001 /* ViewModels */,
+				A10000212C70000100000001 /* Network */,
+				A10000222C70000100000001 /* Telephony */,
+				A10000232C70000100000001 /* Audio */,
+				A10000122C70000100000001 /* Assets.xcassets */,
+				A10000182C70000100000001 /* Info.plist */,
+				A10000192C70000100000001 /* NexusCompanion.entitlements */,
+			);
+			path = NexusCompanion;
+			sourceTree = "<group>";
+		};
+		A100001F2C70000100000001 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A10000042C70000100000001 /* ContentView.swift */,
+				A10000062C70000100000001 /* PermissionsCardView.swift */,
+				A10000082C70000100000001 /* DeviceDiagnosticsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A10000202C70000100000001 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A100000A2C70000100000001 /* GatewayViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		A10000212C70000100000001 /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				A100000C2C70000100000001 /* WebSocketBridge.swift */,
+			);
+			path = Network;
+			sourceTree = "<group>";
+		};
+		A10000222C70000100000001 /* Telephony */ = {
+			isa = PBXGroup;
+			children = (
+				A100000E2C70000100000001 /* CallKitManager.swift */,
+				A10000312C70000100000001 /* PushKitManager.swift */,
+			);
+			path = Telephony;
+			sourceTree = "<group>";
+		};
+		A10000232C70000100000001 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				A10000102C70000100000001 /* AudioEngineManager.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+		A100001D2C70000100000001 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A10000142C70000100000001 /* CallKit.framework */,
+				A10000162C70000100000001 /* AVFoundation.framework */,
+				A10000332C70000100000001 /* PushKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A100001E2C70000100000001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000172C70000100000001 /* NexusCompanion.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000242C70000100000001 /* NexusCompanion */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000252C70000100000001 /* Build configuration list for PBXNativeTarget "NexusCompanion" */;
+			buildPhases = (
+				A10000262C70000100000001 /* Sources */,
+				A100001A2C70000100000001 /* Frameworks */,
+				A10000272C70000100000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NexusCompanion;
+			productName = NexusCompanion;
+			productReference = A10000172C70000100000001 /* NexusCompanion.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000282C70000100000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A10000242C70000100000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = A10000292C70000100000001 /* Build configuration list for PBXProject "NexusCompanion" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A100001B2C70000100000001;
+			productRefGroup = A100001E2C70000100000001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000242C70000100000001 /* NexusCompanion */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000272C70000100000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000112C70000100000001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000262C70000100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000012C70000100000001 /* NexusCompanionApp.swift in Sources */,
+				A10000032C70000100000001 /* ContentView.swift in Sources */,
+				A10000052C70000100000001 /* PermissionsCardView.swift in Sources */,
+				A10000072C70000100000001 /* DeviceDiagnosticsView.swift in Sources */,
+				A10000092C70000100000001 /* GatewayViewModel.swift in Sources */,
+				A100000B2C70000100000001 /* WebSocketBridge.swift in Sources */,
+				A100000D2C70000100000001 /* CallKitManager.swift in Sources */,
+				A10000302C70000100000001 /* PushKitManager.swift in Sources */,
+				A100000F2C70000100000001 /* AudioEngineManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A100002A2C70000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDEFINED_VARIABLES = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A100002B2C70000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDEFINED_VARIABLES = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A100002C2C70000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = NexusCompanion/NexusCompanion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 240;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NexusCompanion/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Nexus Gateway";
+				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nexus.callos.companion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A100002D2C70000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = NexusCompanion/NexusCompanion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 240;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NexusCompanion/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Nexus Gateway";
+				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nexus.callos.companion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000292C70000100000001 /* Build configuration list for PBXProject "NexusCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100002A2C70000100000001 /* Debug */,
+				A100002B2C70000100000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000252C70000100000001 /* Build configuration list for PBXNativeTarget "NexusCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100002C2C70000100000001 /* Debug */,
+				A100002D2C70000100000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = A10000282C70000100000001 /* Project object */;
+}

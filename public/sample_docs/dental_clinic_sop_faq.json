@@ -1,0 +1,29 @@
+{
+  "clinic_name": "Dental Care & Wellness Clinic",
+  "version": "1.0.0",
+  "location": "104 Medical Enclave, Sector 18, City Center",
+  "operating_hours": {
+    "monday_to_saturday": "09:00 AM - 08:00 PM IST",
+    "sunday": "Closed (24/7 AI Emergency Line Active)"
+  },
+  "cancellation_policy": {
+    "free_cancellation_window": "24 hours prior to appointment",
+    "late_cancellation_fee": 500,
+    "no_show_penalty": 1000,
+    "max_free_reschedules": 2
+  },
+  "pricing": [
+    { "service": "General Dental Consultation", "price_inr": 500 },
+    { "service": "Teeth Cleaning & Scaling", "price_range_inr": "1500 - 2500" },
+    { "service": "Root Canal Treatment (RCT)", "price_inr": 4500, "includes": "Digital X-Ray" },
+    { "service": "Zirconia Dental Crown", "price_inr": 8000, "warranty": "10 Years" },
+    { "service": "Teeth Whitening Laser Session", "price_inr": 6000 }
+  ],
+  "insurance_accepted": [
+    "Star Health",
+    "HDFC ERGO",
+    "Max Bupa",
+    "Care Health",
+    "ICICI Lombard"
+  ]
+}
