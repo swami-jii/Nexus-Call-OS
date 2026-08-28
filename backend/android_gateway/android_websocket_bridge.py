@@ -194,10 +194,8 @@ class AndroidWebSocketBridgeServer:
                     auto_answer=event.get("auto_answer"),
                     auto_answer_delay_sec=event.get("auto_answer_delay_sec"),
                 )
-
-                    call_state=event.get("call_state"),
-                )
             return {"type": "telemetry_ack", "device_id": device_id}
+
 
 
         if event_name == "INCOMING_CALL":
