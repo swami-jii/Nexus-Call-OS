@@ -216,9 +216,23 @@ export const DemoCallStudioView: React.FC = () => {
   // Target Dialing Phone Number (User's real phone to call)
   const [targetPhoneNumber, setTargetPhoneNumber] = useState<string>('+91');
   const [callingState, setCallingState] = useState<'idle' | 'dialing' | 'ringing' | 'connected' | 'ended'>('idle');
+  const [lanInfo, setLanInfo] = useState<any | null>(null);
+
+  useEffect(() => {
+    fetchAPI('/api/android-gateway/lan-info')
+      .then((data) => {
+        if (data && data.status === 'success') {
+          setLanInfo(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const mobilePairingUrl = lanInfo?.mobile_gateway_url || `${window.location.protocol}//${window.location.hostname || '192.168.1.34'}:${window.location.port || '3000'}/#/mobile-gateway`;
 
   // Set initial selections when data loads or from localStorage agent selection
   useEffect(() => {
+
     if (backendAgents.length > 0) {
       const storedAgentId = localStorage.getItem('nexus_selected_agent_id');
       const matched = backendAgents.find((a) => a.id === storedAgentId);
@@ -1711,11 +1725,11 @@ export const DemoCallStudioView: React.FC = () => {
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center space-y-2">
                   <div className="p-2 bg-white rounded-xl shadow-md border-2 border-emerald-500">
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=3&data=${encodeURIComponent(
-                        `${window.location.protocol}//${window.location.hostname || '192.168.1.34'}:${window.location.port || '3000'}/#/mobile-gateway`
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=3&data=${encodeURIComponent(
+                        mobilePairingUrl
                       )}`}
                       alt="Scan Mobile QR Code"
-                      className="w-36 h-36 rounded-lg"
+                      className="w-40 h-40 rounded-lg"
                       onError={(e: any) => {
                         e.currentTarget.style.display = 'none';
                       }}
@@ -1725,7 +1739,7 @@ export const DemoCallStudioView: React.FC = () => {
                   <div className="text-center space-y-0.5 w-full max-w-sm">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Direct Mobile URL</span>
                     <div className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 truncate select-all">
-                      {`${window.location.protocol}//${window.location.hostname || '192.168.1.34'}:${window.location.port || '3000'}/#/mobile-gateway`}
+                      {mobilePairingUrl}
                     </div>
                   </div>
                 </div>
@@ -1752,10 +1766,10 @@ export const DemoCallStudioView: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button
                     onClick={() => {
-                      window.open('/#/mobile-gateway', '_blank');
+                      window.open(mobilePairingUrl, '_blank');
                       addToast('Opened Mobile Companion in testing window!', 'info');
                     }}
-                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs py-2 flex items-center justify-center gap-1.5 shadow-sm rounded-xl"
+                    className="w-full bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs py-2 flex items-center justify-center gap-1.5 shadow-sm rounded-xl"
                   >
                     <Smartphone className="h-4 w-4" />
                     <span>Launch on This Device</span>
@@ -1764,8 +1778,7 @@ export const DemoCallStudioView: React.FC = () => {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      const url = `${window.location.protocol}//${window.location.hostname || '192.168.1.34'}:${window.location.port || '3000'}/#/mobile-gateway`;
-                      navigator.clipboard.writeText(url);
+                      navigator.clipboard.writeText(mobilePairingUrl);
                       addToast('Mobile Companion Link copied!', 'success');
                     }}
                     className="w-full text-xs font-semibold py-2 flex items-center justify-center gap-1.5 rounded-xl"
@@ -1776,6 +1789,7 @@ export const DemoCallStudioView: React.FC = () => {
                 </div>
               </div>
             )}
+
 
             {/* Tab 2: Download Native Clients */}
             {pairModalTab === 'download' && (
