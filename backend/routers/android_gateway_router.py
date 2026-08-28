@@ -348,3 +348,17 @@ async def android_websocket_bridge(
         _ws_bridge_server.disconnect(device_id)
 
 
+@router.get("/download-apk")
+async def download_gateway_apk():
+    """Serves the genuine compiled Android Gateway APK directly to mobile devices."""
+    apk_path = Path("public/downloads/Nexus-GSM-Gateway-v2.4.apk")
+    if not apk_path.exists():
+        raise HTTPException(status_code=404, detail="APK binary not found on server")
+    return FileResponse(
+        path=str(apk_path),
+        filename="Nexus-GSM-Gateway-v2.4.apk",
+        media_type="application/vnd.android.package-archive"
+    )
+
+
+

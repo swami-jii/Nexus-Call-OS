@@ -153,15 +153,34 @@ def serve_integration_docs(filename: str):
     return Response(content=f"# Documentation for {filename}\n\nFile not found on server.", media_type="text/markdown; charset=utf-8")
 
 
+@app.get("/download")
+@app.get("/download/apk")
+@app.get("/downloads/Nexus-GSM-Gateway-v2.4.apk")
+def direct_apk_download():
+    """Direct APK download endpoint for mobile browsers over Wi-Fi."""
+    import os
+    from fastapi.responses import FileResponse
+    apk_path = os.path.join(PROJECT_ROOT, "public", "downloads", "Nexus-GSM-Gateway-v2.4.apk")
+    if os.path.exists(apk_path):
+        return FileResponse(
+            apk_path,
+            filename="Nexus-GSM-Gateway-v2.4.apk",
+            media_type="application/vnd.android.package-archive"
+        )
+    return {"error": "APK not found on server"}
+
+
 @app.get("/")
 def root():
     return {
         "title": settings.PROJECT_NAME,
         "version": settings.VERSION,
+        "download_apk": "/download",
         "documentation": "/docs",
         "redoc": "/redoc",
         "health": "/api/health",
     }
+
 
 
 if __name__ == "__main__":
