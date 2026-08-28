@@ -376,21 +376,49 @@ async def get_lan_info():
     except Exception:
         pass
 
+    # Check for active cloudflared tunnel URL for zero-firewall mobile pairing
+    public_https_base = None
+    try:
+        task_dir = Path("C:/Users/I/.gemini/antigravity-ide/brain/f42442b6-68a4-4090-b751-f88f908674bf/.system_generated/tasks")
+        if task_dir.exists():
+            for log_f in task_dir.glob("*.log"):
+                try:
+                    content = log_f.read_text(encoding="utf-8", errors="ignore")
+                    if "trycloudflare.com" in content:
+                        for line in content.splitlines():
+                            if ".trycloudflare.com" in line and "https://" in line:
+                                parts = line.split("https://")
+                                if len(parts) > 1:
+                                    host = parts[1].split()[0].replace("|", "").strip()
+                                    public_https_base = f"https://{host}"
+                                    break
+                        if public_https_base:
+                            break
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
     base_dir = Path(__file__).resolve().parent.parent.parent
     apk_path = base_dir / "public" / "downloads" / "Nexus-GSM-Gateway-v2.4.apk"
     apk_size = apk_path.stat().st_size if apk_path.exists() else 6863359
 
+    effective_mobile_url = f"{public_https_base}/#/mobile-gateway" if public_https_base else f"http://{lan_ip}:3000/#/mobile-gateway"
+    effective_apk_url = f"{public_https_base}/download" if public_https_base else f"http://{lan_ip}:8000/download"
+
     return {
         "status": "success",
         "lan_ip": lan_ip,
+        "public_https_url": public_https_base,
         "frontend_port": 3000,
         "backend_port": 8000,
-        "mobile_gateway_url": f"http://{lan_ip}:3000/#/mobile-gateway",
-        "apk_download_url": f"http://{lan_ip}:8000/download",
+        "mobile_gateway_url": effective_mobile_url,
+        "apk_download_url": effective_apk_url,
         "apk_filename": "Nexus-GSM-Gateway-v2.4.apk",
         "apk_size_bytes": apk_size,
         "is_ready": True
     }
+
 
 
 

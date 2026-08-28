@@ -106,8 +106,9 @@ export const AndroidGatewayView: React.FC = () => {
         ? window.location.hostname 
         : '192.168.1.34');
 
-  const mobileGatewayUrl = `http://${resolvedLanIp}:3000/#/mobile-gateway`;
-  const apkDownloadUrl = `http://${resolvedLanIp}:8000/download`;
+  const mobileGatewayUrl = lanInfo?.mobile_gateway_url || `http://${resolvedLanIp}:3000/#/mobile-gateway`;
+  const apkDownloadUrl = lanInfo?.apk_download_url || `http://${resolvedLanIp}:8000/download`;
+
 
   // Test LAN Mobile Connection Endpoint
   const handleTestConnection = async () => {

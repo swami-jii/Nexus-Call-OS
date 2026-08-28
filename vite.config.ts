@@ -12,8 +12,10 @@ export default defineConfig(() => {
       },
     },
     server: {
-      host: true,
+      host: '0.0.0.0',
       port: 3000,
+      allowedHosts: true,
+      cors: true,
       clearScreen: false,
       hmr: {
         overlay: false,
@@ -40,11 +42,13 @@ export default defineConfig(() => {
       proxy: {
         '/auth': { target: 'http://127.0.0.1:8000', changeOrigin: true },
         '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+        '/download': { target: 'http://127.0.0.1:8000', changeOrigin: true },
         '/docs': { target: 'http://127.0.0.1:8000', changeOrigin: true },
         '/redoc': { target: 'http://127.0.0.1:8000', changeOrigin: true },
         '/openapi.json': { target: 'http://127.0.0.1:8000', changeOrigin: true },
         '/ws': { target: 'ws://127.0.0.1:8000', ws: true },
       },
     },
+
   };
 });
