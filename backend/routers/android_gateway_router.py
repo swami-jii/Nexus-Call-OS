@@ -301,15 +301,31 @@ async def rename_device(
     return {"status": "success", "device_id": req.device_id, "name": req.new_name}
 
 
-@router.post("/devices/{device_id}/disconnect")
-async def disconnect_device(
+@router.delete("/devices/{device_id}")
+async def delete_device(
     device_id: str,
     current_user: User = Depends(get_current_user),
 ):
-    """Disconnect an active companion device."""
-    _device_registry.disconnect_device(device_id)
+    """Permanently delete/unpair a companion device from registry and database."""
+    _device_registry.delete_device(device_id)
     _ws_bridge_server.disconnect(device_id)
-    return {"status": "success", "device_id": device_id}
+    return {"status": "success", "message": f"Device {device_id} removed", "device_id": device_id}
+
+
+class SetAutoAnswerDelayRequest(BaseModel):
+    device_id: str
+    delay_sec: int = 3
+
+
+@router.post("/devices/auto-answer-delay")
+async def set_auto_answer_delay_endpoint(
+    req: SetAutoAnswerDelayRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Set automatic call answer pick-up delay in seconds."""
+    success = _device_registry.set_auto_answer_delay(req.device_id, req.delay_sec)
+    return {"status": "success", "device_id": req.device_id, "delay_sec": req.delay_sec}
+
 
 
 @router.get("/health")

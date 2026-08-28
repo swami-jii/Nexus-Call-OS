@@ -60,9 +60,12 @@ class AndroidDevice:
         self.subscriptions: List[Dict[str, Any]] = []
         self.selected_sub_id: int = -1
         self.call_state: str = "IDLE"
+        self.auto_answer_delay_sec: int = 3
 
     def update_telemetry(
         self,
+        name: Optional[str] = None,
+        os_version: Optional[str] = None,
         battery_level: Optional[int] = None,
         is_charging: Optional[bool] = None,
         signal_dbm: Optional[int] = None,
@@ -73,7 +76,13 @@ class AndroidDevice:
         subscriptions: Optional[List[Dict[str, Any]]] = None,
         selected_sub_id: Optional[int] = None,
         call_state: Optional[str] = None,
+        auto_answer: Optional[bool] = None,
+        auto_answer_delay_sec: Optional[int] = None,
     ) -> None:
+        if name and name.strip():
+            self.name = name
+        if os_version and os_version.strip():
+            self.os_version = os_version
         if battery_level is not None:
             self.battery_level = battery_level
         if is_charging is not None:
@@ -94,6 +103,10 @@ class AndroidDevice:
             self.selected_sub_id = selected_sub_id
         if call_state is not None:
             self.call_state = call_state
+        if auto_answer is not None:
+            self.auto_answer = auto_answer
+        if auto_answer_delay_sec is not None:
+            self.auto_answer_delay_sec = auto_answer_delay_sec
         self.last_heartbeat = time.time()
         self.is_online = True
 
@@ -108,6 +121,7 @@ class AndroidDevice:
             "organization_id": self.organization_id,
             "workspace_id": self.workspace_id,
             "auto_answer": self.auto_answer,
+            "auto_answer_delay_sec": getattr(self, "auto_answer_delay_sec", 3),
             "priority": self.priority,
             "is_online": self.is_online and (time.time() - self.last_heartbeat < 30),
             "battery_level": self.battery_level,
@@ -121,6 +135,7 @@ class AndroidDevice:
             "selected_sub_id": self.selected_sub_id,
             "call_state": self.call_state,
         }
+
 
 
 
@@ -350,6 +365,25 @@ class DeviceRegistry:
             return True
         return False
 
+    def set_auto_answer_delay(self, device_id: str, delay_sec: int) -> bool:
+        device = self._devices.get(device_id)
+        if device:
+            device.auto_answer_delay_sec = max(0, min(30, delay_sec))
+            return True
+        return False
+
+    def delete_device(self, device_id: str) -> bool:
+        self._devices.pop(device_id, None)
+        try:
+            with SessionLocal() as db:
+                db_dev = db.query(CompanionDevice).filter(CompanionDevice.device_id == device_id).first()
+                if db_dev:
+                    db.delete(db_dev)
+                    db.commit()
+        except Exception as e:
+            logger.error(f"Failed to delete device {device_id} from DB: {e}")
+        return True
+
     def _sync_status_to_db(self, device_id: str, is_online: bool) -> None:
         try:
             with SessionLocal() as db:
@@ -360,4 +394,5 @@ class DeviceRegistry:
                     db.commit()
         except Exception as e:
             logger.debug(f"Could not sync status to DB for device {device_id}: {e}")
+
 

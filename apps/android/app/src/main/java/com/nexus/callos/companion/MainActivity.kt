@@ -82,7 +82,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnPresetLan: Button
     private lateinit var btnConnect: Button
 
+    // Auto-Answer Controls (NEW)
+    private lateinit var cardAutoAnswerSettings: LinearLayout
+    private lateinit var switchAutoAnswer: Switch
+    private lateinit var btnDelay0: Button
+    private lateinit var btnDelay3: Button
+    private lateinit var btnDelay5: Button
+    private lateinit var btnDelay10: Button
+
     // Hardware & SIM Views
+    private lateinit var cardConnection: LinearLayout
+    private lateinit var cardDevice: LinearLayout
+    private lateinit var cardSim: LinearLayout
     private lateinit var tvDeviceModel: TextView
     private lateinit var tvAndroidVersion: TextView
     private lateinit var tvBattery: TextView
@@ -90,14 +101,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSimCount: TextView
     private lateinit var llSimCardsContainer: LinearLayout
     private lateinit var tvNoSimMsg: TextView
-    private lateinit var tvCallState: TextView
-    private lateinit var tvAutoAnswer: TextView
 
     // Containers for Cards & Tabs
-    private lateinit var cardConnection: LinearLayout
-    private lateinit var cardDevice: LinearLayout
-    private lateinit var cardSim: LinearLayout
-    private lateinit var cardTelephony: LinearLayout
     private lateinit var llPermissionsListContainer: LinearLayout
     private lateinit var btnGrantAllPermissionsDetailed: Button
     private lateinit var btnOpenSettingsDirect: Button
@@ -108,7 +113,7 @@ class MainActivity : AppCompatActivity() {
     private var bridgeService: CallBridgeService? = null
     private var isBound = false
     private var telemetryManager: HardwareTelemetryManager? = null
-    private var isDarkMode = true
+    private var isDarkMode = false // Light Mode by DEFAULT
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(4, TimeUnit.SECONDS)
@@ -226,6 +231,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupButtons()
+        setupAutoAnswerControls()
         refreshPermissionsAudit()
         refreshHardwareUi()
         autoDiscoverServerEndpoints()
@@ -233,7 +239,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadThemeState() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        isDarkMode = prefs.getBoolean("theme_is_dark", true)
+        isDarkMode = prefs.getBoolean("theme_is_dark", false) // Default Light Mode
     }
 
     private fun initViews() {
@@ -266,9 +272,9 @@ class MainActivity : AppCompatActivity() {
         btnViewPermissionsAudit = findViewById(R.id.btnViewPermissionsAudit)
 
         cardConnection = findViewById(R.id.cardConnection)
+        cardAutoAnswerSettings = findViewById(R.id.cardAutoAnswerSettings)
         cardDevice = findViewById(R.id.cardDevice)
         cardSim = findViewById(R.id.cardSim)
-        cardTelephony = findViewById(R.id.cardTelephony)
 
         tvConnectionBadge = findViewById(R.id.tvConnectionBadge)
         tvStatusDetail = findViewById(R.id.tvStatusDetail)
@@ -278,6 +284,12 @@ class MainActivity : AppCompatActivity() {
         btnPresetLan = findViewById(R.id.btnPresetLan)
         btnConnect = findViewById(R.id.btnConnect)
 
+        switchAutoAnswer = findViewById(R.id.switchAutoAnswer)
+        btnDelay0 = findViewById(R.id.btnDelay0)
+        btnDelay3 = findViewById(R.id.btnDelay3)
+        btnDelay5 = findViewById(R.id.btnDelay5)
+        btnDelay10 = findViewById(R.id.btnDelay10)
+
         tvDeviceModel = findViewById(R.id.tvDeviceModel)
         tvAndroidVersion = findViewById(R.id.tvAndroidVersion)
         tvBattery = findViewById(R.id.tvBattery)
@@ -286,9 +298,6 @@ class MainActivity : AppCompatActivity() {
         tvSimCount = findViewById(R.id.tvSimCount)
         llSimCardsContainer = findViewById(R.id.llSimCardsContainer)
         tvNoSimMsg = findViewById(R.id.tvNoSimMsg)
-
-        tvCallState = findViewById(R.id.tvCallState)
-        tvAutoAnswer = findViewById(R.id.tvAutoAnswer)
 
         llPermissionsListContainer = findViewById(R.id.llPermissionsListContainer)
         btnGrantAllPermissionsDetailed = findViewById(R.id.btnGrantAllPermissionsDetailed)
@@ -339,6 +348,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupAutoAnswerControls() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isAutoAnswer = prefs.getBoolean("auto_answer_enabled", true)
+        val currentDelay = prefs.getInt("auto_answer_delay_sec", 3)
+
+        switchAutoAnswer.isChecked = isAutoAnswer
+        updateDelayButtonsHighlight(currentDelay)
+
+        switchAutoAnswer.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("auto_answer_enabled", isChecked).apply()
+            val msg = if (isChecked) "Auto-answer ENABLED (Calls picked automatically)" else "Auto-answer DISABLED (Manual pick only)"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+
+        btnDelay0.setOnClickListener { setAutoAnswerDelay(0) }
+        btnDelay3.setOnClickListener { setAutoAnswerDelay(3) }
+        btnDelay5.setOnClickListener { setAutoAnswerDelay(5) }
+        btnDelay10.setOnClickListener { setAutoAnswerDelay(10) }
+    }
+
+    private fun setAutoAnswerDelay(sec: Int) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putInt("auto_answer_delay_sec", sec).apply()
+        updateDelayButtonsHighlight(sec)
+        val label = if (sec == 0) "Instant (0s)" else "${sec} seconds"
+        Toast.makeText(this, "Auto-answer delay set to $label", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateDelayButtonsHighlight(selectedSec: Int) {
+        val primaryColor = ContextCompat.getColor(this, R.color.primary)
+        val cardColor = ContextCompat.getColor(this, if (isDarkMode) R.color.surface_card else R.color.light_surface_card)
+        val textPrimary = ContextCompat.getColor(this, if (isDarkMode) R.color.text_primary else R.color.light_text_primary)
+
+        val btnMap = mapOf(0 to btnDelay0, 3 to btnDelay3, 5 to btnDelay5, 10 to btnDelay10)
+
+        for ((sec, btn) in btnMap) {
+            val isSelected = (sec == selectedSec)
+            btn.setBackgroundColor(if (isSelected) primaryColor else cardColor)
+            btn.setTextColor(if (isSelected) 0xFFFFFFFF.toInt() else textPrimary)
+            btn.setTypeface(null, if (isSelected) Typeface.BOLD else Typeface.NORMAL)
+        }
+    }
+
     private fun setupNavigationDrawer() {
         btnMenu.setOnClickListener {
             drawerLayout.openDrawer(GravityCompat.START)
@@ -380,7 +432,7 @@ class MainActivity : AppCompatActivity() {
         layoutVoicesView.visibility = if (index == 3) View.VISIBLE else View.GONE
         layoutDiagnosticsView.visibility = if (index == 4) View.VISIBLE else View.GONE
 
-        val activeBg = ContextCompat.getColor(this, R.color.surface_card_selected)
+        val activeBg = ContextCompat.getColor(this, if (isDarkMode) R.color.surface_card_selected else R.color.light_surface_selected)
         val clearBg = ContextCompat.getColor(this, android.R.color.transparent)
 
         navItemGateway.setBackgroundColor(if (index == 0) activeBg else clearBg)
@@ -423,15 +475,19 @@ class MainActivity : AppCompatActivity() {
         btnThemeToggle.setColorFilter(textSecondary)
 
         cardConnection.setBackgroundColor(surfaceColor)
+        cardAutoAnswerSettings.setBackgroundColor(surfaceColor)
         cardDevice.setBackgroundColor(surfaceColor)
         cardSim.setBackgroundColor(surfaceColor)
-        cardTelephony.setBackgroundColor(surfaceColor)
+        bannerPermissions.setBackgroundColor(surfaceColor)
 
-        tvServerIp.setBackgroundColor(bgColor)
+        tvServerIp.setBackgroundColor(cardColor)
         tvServerIp.setTextColor(textPrimary)
 
         tvNavThemeLabel.text = if (isDark) "☀️ Switch to Light Mode" else "🌙 Switch to Dark Mode"
         tvNavThemeLabel.setTextColor(textPrimary)
+
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        updateDelayButtonsHighlight(prefs.getInt("auto_answer_delay_sec", 3))
 
         refreshPermissionsAudit()
         refreshHardwareUi()
@@ -510,7 +566,7 @@ class MainActivity : AppCompatActivity() {
             tvPermissionBannerTitle.setTextColor(ContextCompat.getColor(this, R.color.status_online))
             tvPermissionBannerDetail.text = "Microphone & Telephony hardware bridges 100% operational."
             btnGrantAllPermissionsDetailed.text = "✓ All Permissions Granted"
-            btnGrantAllPermissionsDetailed.setBackgroundColor(ContextCompat.getColor(this, R.color.surface_card))
+            btnGrantAllPermissionsDetailed.setBackgroundColor(ContextCompat.getColor(this, if (isDark) R.color.surface_card else R.color.light_surface_card))
         } else {
             tvPermissionBannerTitle.text = "🛡️ ${total - grantedCount} Permissions Pending ($grantedCount/$total)"
             tvPermissionBannerTitle.setTextColor(ContextCompat.getColor(this, R.color.status_warning))
@@ -590,10 +646,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderTelemetry(snap: HardwareTelemetryManager.TelemetrySnapshot) {
         tvDeviceModel.text = snap.deviceModel
-        tvAndroidVersion.text = "${snap.androidVersion} (API ${snap.sdkInt})"
+        tvAndroidVersion.text = snap.androidVersion
         tvBattery.text = "${snap.batteryPercent}%${if (snap.isCharging) " ⚡ Charging" else ""}"
         tvNetworkSignal.text = "${snap.primaryNetworkType} (${snap.primarySignalDbm} dBm)"
-        tvCallState.text = snap.callState
         tvSimCount.text = "${snap.subscriptions.size} Active SIM${if (snap.subscriptions.size != 1) "s" else ""}"
 
         renderSimList(snap.subscriptions, snap.selectedSubId)

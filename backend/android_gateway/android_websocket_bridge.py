@@ -103,10 +103,12 @@ class AndroidWebSocketBridgeServer:
         # Handle AUTH Handshake
         if event_name in ["AUTH", "HANDSHAKE"]:
             token = event.get("device_token") or event.get("token")
-            dev_name = event.get("model") or event.get("name") or "Android Phone"
+            dev_name = event.get("model") or event.get("name") or "Android Smartphone"
             os_ver = event.get("os_version") or "Android 14"
             carrier = event.get("carrier_name") or "Cellular SIM"
             sim_num = event.get("sim_number") or ""
+            auto_ans = event.get("auto_answer", True)
+            auto_delay = event.get("auto_answer_delay_sec", 3)
 
             dev = self.device_registry.get_device(device_id)
             if not dev:
@@ -119,8 +121,10 @@ class AndroidWebSocketBridgeServer:
                     device_token=token or f"dev_token_{device_id}"
                 )
 
-            # Update initial telemetry snapshot
+            # Update initial telemetry snapshot with real device hardware model and OS
             dev.update_telemetry(
+                name=dev_name,
+                os_version=os_ver,
                 battery_level=event.get("battery_level"),
                 is_charging=event.get("is_charging"),
                 signal_dbm=event.get("signal_dbm"),
@@ -131,11 +135,13 @@ class AndroidWebSocketBridgeServer:
                 subscriptions=event.get("subscriptions"),
                 selected_sub_id=event.get("selected_sub_id"),
                 call_state=event.get("call_state"),
+                auto_answer=auto_ans,
+                auto_answer_delay_sec=auto_delay,
             )
 
             self._authenticated_devices.add(device_id)
             self.device_registry.mark_online(device_id)
-            logger.info(f"[AndroidWSBridge] Device {device_id} ({dev.name}) authenticated with genuine hardware telemetry.")
+            logger.info(f"[AndroidWSBridge] Device {device_id} ({dev.name} - {dev.os_version}) authenticated with genuine hardware telemetry.")
             return {
                 "type": "AUTH_SUCCESS",
                 "device_id": device_id,
@@ -152,6 +158,8 @@ class AndroidWebSocketBridgeServer:
             dev = self.device_registry.get_device(device_id)
             if dev:
                 dev.update_telemetry(
+                    name=event.get("model") or event.get("name"),
+                    os_version=event.get("os_version"),
                     battery_level=event.get("battery_level"),
                     is_charging=event.get("is_charging"),
                     signal_dbm=event.get("signal_dbm"),
@@ -162,6 +170,8 @@ class AndroidWebSocketBridgeServer:
                     subscriptions=event.get("subscriptions"),
                     selected_sub_id=event.get("selected_sub_id"),
                     call_state=event.get("call_state"),
+                    auto_answer=event.get("auto_answer"),
+                    auto_answer_delay_sec=event.get("auto_answer_delay_sec"),
                 )
             return {"type": "PONG", "timestamp": time.time()}
 
@@ -169,6 +179,8 @@ class AndroidWebSocketBridgeServer:
             dev = self.device_registry.get_device(device_id)
             if dev:
                 dev.update_telemetry(
+                    name=event.get("model") or event.get("name"),
+                    os_version=event.get("os_version"),
                     battery_level=event.get("battery_level"),
                     is_charging=event.get("is_charging"),
                     signal_dbm=event.get("signal_dbm"),
@@ -178,6 +190,11 @@ class AndroidWebSocketBridgeServer:
                     sim_number=event.get("sim_number"),
                     subscriptions=event.get("subscriptions"),
                     selected_sub_id=event.get("selected_sub_id"),
+                    call_state=event.get("call_state"),
+                    auto_answer=event.get("auto_answer"),
+                    auto_answer_delay_sec=event.get("auto_answer_delay_sec"),
+                )
+
                     call_state=event.get("call_state"),
                 )
             return {"type": "telemetry_ack", "device_id": device_id}

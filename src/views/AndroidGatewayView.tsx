@@ -37,6 +37,7 @@ interface AndroidDevice {
   carrier_name: string;
   os_version: string;
   auto_answer: boolean;
+  auto_answer_delay_sec?: number;
   priority: number;
   is_online: boolean;
   battery_level: number;
@@ -47,6 +48,7 @@ interface AndroidDevice {
   last_heartbeat: number;
   active_session_id?: string;
 }
+
 
 export const AndroidGatewayView: React.FC = () => {
   const { addToast } = useToast();
@@ -237,6 +239,35 @@ export const AndroidGatewayView: React.FC = () => {
     }
   };
 
+  // Delete / Unpair Device
+  const handleDeleteDevice = async (deviceId: string) => {
+    try {
+      const data = await fetchAPI(`/api/android-gateway/devices/${deviceId}`, {
+        method: 'DELETE',
+      });
+      if (data) {
+        addToast('Device permanently removed.', 'info');
+        fetchDevices();
+      }
+    } catch {
+      addToast('Failed to delete device.', 'error');
+    }
+  };
+
+  // Set Auto-Answer Pick-up Delay
+  const handleSetAutoAnswerDelay = async (deviceId: string, delaySec: number) => {
+    try {
+      await fetchAPI('/api/android-gateway/devices/auto-answer-delay', {
+        method: 'POST',
+        body: JSON.stringify({ device_id: deviceId, delay_sec: delaySec }),
+      });
+      addToast(`Auto-answer delay set to ${delaySec}s`, 'success');
+      fetchDevices();
+    } catch {
+      addToast('Failed to update delay setting.', 'error');
+    }
+  };
+
   // Disconnect Device
   const handleDisconnectDevice = async (deviceId: string) => {
     try {
@@ -251,6 +282,7 @@ export const AndroidGatewayView: React.FC = () => {
       addToast('Failed to disconnect device.', 'error');
     }
   };
+
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -619,16 +651,36 @@ export const AndroidGatewayView: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <button
-                        onClick={() => handleToggleAutoAnswer(dev.device_id, dev.auto_answer)}
-                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                          dev.auto_answer
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
-                        }`}
-                      >
-                        {dev.auto_answer ? 'AUTO ANSWER: ON' : 'MANUAL ANSWER'}
-                      </button>
+                      <div className="space-y-1.5">
+                        <button
+                          onClick={() => handleToggleAutoAnswer(dev.device_id, dev.auto_answer)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                            dev.auto_answer
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                          }`}
+                        >
+                          {dev.auto_answer ? 'AUTO ANSWER: ON' : 'MANUAL ANSWER'}
+                        </button>
+                        {dev.auto_answer && (
+                          <div className="flex items-center space-x-1 text-[10px]">
+                            <span className="text-zinc-400">Delay:</span>
+                            {[0, 3, 5, 10].map((sec) => (
+                              <button
+                                key={sec}
+                                onClick={() => handleSetAutoAnswerDelay(dev.device_id, sec)}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                                  (dev.auto_answer_delay_sec ?? 3) === sec
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200'
+                                }`}
+                              >
+                                {sec === 0 ? '0s' : `${sec}s`}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -649,13 +701,14 @@ export const AndroidGatewayView: React.FC = () => {
                         <Edit3 className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => handleDisconnectDevice(dev.device_id)}
+                        onClick={() => handleDeleteDevice(dev.device_id)}
                         className="p-1 text-zinc-400 hover:text-red-500"
-                        title="Disconnect"
+                        title="Delete Device"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </td>
+
                   </tr>
                 ))}
               </tbody>

@@ -75,13 +75,20 @@ class WebSocketBridgeClient(
 
                 // Send dynamic authentic telemetry in AUTH frame
                 val authFrame = telemetryProvider?.invoke() ?: JSONObject()
+                val brand = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+                val model = Build.MODEL
+                val fullName = if (model.startsWith(brand, ignoreCase = true)) model else "$brand $model"
+                val osVersionFormatted = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+
                 authFrame.put("event", "AUTH")
                 authFrame.put("device_id", deviceId)
                 authFrame.put("device_token", deviceToken ?: "")
                 authFrame.put("platform", "android")
-                authFrame.put("os_version", Build.VERSION.RELEASE)
-                authFrame.put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
+                authFrame.put("os_version", osVersionFormatted)
+                authFrame.put("name", fullName)
+                authFrame.put("model", fullName)
                 ws.send(authFrame.toString())
+
 
                 startHeartbeat(ws)
             }

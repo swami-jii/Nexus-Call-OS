@@ -4,24 +4,26 @@
     android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/light_background">
 
     <!-- MAIN CONTAINER -->
     <LinearLayout
         android:id="@+id/mainContentRoot"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:background="@color/light_background">
 
         <!-- Top Navigation Bar -->
         <LinearLayout
             android:id="@+id/topAppBar"
             android:layout_width="match_parent"
             android:layout_height="60dp"
-            android:background="@color/surface"
+            android:background="@color/light_surface"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingHorizontal="16dp">
+            android:paddingHorizontal="16dp"
+            android:elevation="2dp">
 
             <ImageButton
                 android:id="@+id/btnMenu"
@@ -29,7 +31,7 @@
                 android:layout_height="38dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_menu_sort_by_size"
-                android:tint="@color/text_primary"
+                android:tint="@color/light_text_primary"
                 android:contentDescription="Navigation Menu" />
 
             <ImageView
@@ -45,7 +47,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="GSM SIM Gateway"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/light_text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold"
                 android:layout_marginStart="10dp" />
@@ -56,7 +58,7 @@
                 android:layout_height="36dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_menu_day"
-                android:tint="@color/text_secondary"
+                android:tint="@color/light_text_secondary"
                 android:layout_marginEnd="6dp"
                 android:contentDescription="Toggle Theme" />
 
@@ -69,7 +71,7 @@
                 android:textSize="10sp"
                 android:textStyle="bold"
                 android:fontFamily="monospace"
-                android:background="@color/surface_card"
+                android:background="@color/light_surface_card"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="4dp" />
         </LinearLayout>
@@ -100,11 +102,12 @@
                         android:id="@+id/bannerPermissions"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:background="@color/surface_card"
+                        android:background="@color/light_surface"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
                         android:padding="12dp"
-                        android:layout_marginBottom="14dp">
+                        android:layout_marginBottom="14dp"
+                        android:elevation="1dp">
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -124,7 +127,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Permissions Status"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/light_text_primary"
                                 android:textSize="12sp"
                                 android:textStyle="bold" />
 
@@ -133,7 +136,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Microphone &amp; Phone permissions verified."
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/light_text_secondary"
                                 android:textSize="10sp" />
                         </LinearLayout>
 
@@ -141,7 +144,7 @@
                             android:id="@+id/btnViewPermissionsAudit"
                             android:layout_width="wrap_content"
                             android:layout_height="34dp"
-                            android:backgroundTint="@color/surface_card_selected"
+                            android:backgroundTint="@color/light_surface_selected"
                             android:text="Audit"
                             android:textColor="@color/primary"
                             android:textSize="10sp"
@@ -153,10 +156,11 @@
                         android:id="@+id/cardConnection"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:background="@color/surface"
+                        android:background="@color/light_surface"
                         android:orientation="vertical"
                         android:padding="16dp"
-                        android:layout_marginBottom="14dp">
+                        android:layout_marginBottom="14dp"
+                        android:elevation="1dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -169,7 +173,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="GATEWAY SERVER BRIDGE"
-                                android:textColor="@color/text_muted"
+                                android:textColor="@color/light_text_muted"
                                 android:textSize="11sp"
                                 android:textStyle="bold"
                                 android:letterSpacing="0.05" />
@@ -190,11 +194,11 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Ready to route physical GSM calls to Nexus AI."
-                            android:textColor="@color/text_secondary"
+                            android:textColor="@color/light_text_secondary"
                             android:textSize="12sp"
                             android:layout_marginTop="4dp" />
 
-                        <!-- Latency & Buffer Row -->
+                        <!-- Latency & Codec Row -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -206,7 +210,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Measured RTT: "
-                                android:textColor="@color/text_muted"
+                                android:textColor="@color/light_text_muted"
                                 android:textSize="11sp" />
 
                             <TextView
@@ -223,8 +227,8 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Codec: 16kHz PCM / Opus"
-                                android:textColor="@color/text_muted"
+                                android:text="Codec: 16kHz PCM"
+                                android:textColor="@color/light_text_muted"
                                 android:textSize="10sp"
                                 android:fontFamily="monospace" />
                         </LinearLayout>
@@ -235,15 +239,15 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="10dp"
-                            android:background="@color/background"
+                            android:background="@color/light_surface_card"
                             android:hint="wss://.../api/android-gateway/ws/bridge"
-                            android:textColor="@color/text_primary"
-                            android:textColorHint="@color/text_muted"
+                            android:textColor="@color/light_text_primary"
+                            android:textColorHint="@color/light_text_muted"
                             android:padding="10dp"
                             android:textSize="11sp"
                             android:fontFamily="monospace" />
 
-                        <!-- Fast Presets & Auto-Detect Row -->
+                        <!-- Fast Presets Row -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -254,9 +258,9 @@
                             <Button
                                 android:id="@+id/btnPresetTunnel"
                                 android:layout_width="0dp"
-                                android:layout_height="34dp"
+                                android:layout_height="36dp"
                                 android:layout_weight="1"
-                                android:backgroundTint="@color/surface_card"
+                                android:backgroundTint="@color/light_surface_card"
                                 android:text="☁️ Secure Tunnel"
                                 android:textColor="@color/accent"
                                 android:textSize="10sp"
@@ -265,11 +269,11 @@
                             <Button
                                 android:id="@+id/btnPresetLan"
                                 android:layout_width="0dp"
-                                android:layout_height="34dp"
+                                android:layout_height="36dp"
                                 android:layout_weight="1"
-                                android:backgroundTint="@color/surface_card"
+                                android:backgroundTint="@color/light_surface_card"
                                 android:text="📶 Wi-Fi LAN"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/light_text_primary"
                                 android:textSize="10sp"
                                 android:layout_marginStart="4dp" />
                         </LinearLayout>
@@ -282,8 +286,119 @@
                             android:layout_marginTop="12dp"
                             android:backgroundTint="@color/primary"
                             android:text="Connect Gateway to Server"
-                            android:textColor="@color/text_primary"
+                            android:textColor="#FFFFFF"
                             android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- Auto-Answer & Call Delay Configuration Card (NEW) -->
+                    <LinearLayout
+                        android:id="@+id/cardAutoAnswerSettings"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/light_surface"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        android:layout_marginBottom="14dp"
+                        android:elevation="1dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="AUTOMATIC CALL ANSWERING"
+                                    android:textColor="@color/light_text_muted"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:letterSpacing="0.05" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Auto-pick incoming GSM calls and connect to AI"
+                                    android:textColor="@color/light_text_secondary"
+                                    android:textSize="11sp"
+                                    android:layout_marginTop="2dp" />
+                            </LinearLayout>
+
+                            <Switch
+                                android:id="@+id/switchAutoAnswer"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checked="true" />
+                        </LinearLayout>
+
+                        <!-- Delay Selection Title -->
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Pick-up Delay Before Answering:"
+                            android:textColor="@color/light_text_primary"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:layout_marginTop="12dp"
+                            android:layout_marginBottom="6dp" />
+
+                        <!-- Delay Selection Buttons -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btnDelay0"
+                                android:layout_width="0dp"
+                                android:layout_height="34dp"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/light_surface_card"
+                                android:text="⚡ 0s"
+                                android:textColor="@color/light_text_primary"
+                                android:textSize="10sp"
+                                android:layout_marginEnd="2dp" />
+
+                            <Button
+                                android:id="@+id/btnDelay3"
+                                android:layout_width="0dp"
+                                android:layout_height="34dp"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/primary"
+                                android:text="⏱️ 3s"
+                                android:textColor="#FFFFFF"
+                                android:textSize="10sp"
+                                android:layout_marginHorizontal="2dp" />
+
+                            <Button
+                                android:id="@+id/btnDelay5"
+                                android:layout_width="0dp"
+                                android:layout_height="34dp"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/light_surface_card"
+                                android:text="⏱️ 5s"
+                                android:textColor="@color/light_text_primary"
+                                android:textSize="10sp"
+                                android:layout_marginHorizontal="2dp" />
+
+                            <Button
+                                android:id="@+id/btnDelay10"
+                                android:layout_width="0dp"
+                                android:layout_height="34dp"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/light_surface_card"
+                                android:text="⏱️ 10s"
+                                android:textColor="@color/light_text_primary"
+                                android:textSize="10sp"
+                                android:layout_marginStart="2dp" />
+                        </LinearLayout>
                     </LinearLayout>
 
                     <!-- Real Device Hardware Card -->
@@ -291,16 +406,17 @@
                         android:id="@+id/cardDevice"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:background="@color/surface"
+                        android:background="@color/light_surface"
                         android:orientation="vertical"
                         android:padding="16dp"
-                        android:layout_marginBottom="14dp">
+                        android:layout_marginBottom="14dp"
+                        android:elevation="1dp">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="DEVICE HARDWARE IDENTITY"
-                            android:textColor="@color/text_muted"
+                            android:textColor="@color/light_text_muted"
                             android:textSize="11sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.05"
@@ -317,7 +433,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Device Model"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/light_text_secondary"
                                 android:textSize="12sp" />
 
                             <TextView
@@ -325,7 +441,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Loading..."
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/light_text_primary"
                                 android:textSize="12sp"
                                 android:textStyle="bold" />
                         </LinearLayout>
@@ -341,7 +457,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Android Version"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/light_text_secondary"
                                 android:textSize="12sp" />
 
                             <TextView
@@ -349,7 +465,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Loading..."
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/light_text_primary"
                                 android:textSize="12sp"
                                 android:fontFamily="monospace" />
                         </LinearLayout>
@@ -365,7 +481,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Battery Level"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/light_text_secondary"
                                 android:textSize="12sp" />
 
                             <TextView
@@ -388,7 +504,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Network / Modem"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/light_text_secondary"
                                 android:textSize="12sp" />
 
                             <TextView
@@ -406,10 +522,11 @@
                         android:id="@+id/cardSim"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:background="@color/surface"
+                        android:background="@color/light_surface"
                         android:orientation="vertical"
                         android:padding="16dp"
-                        android:layout_marginBottom="14dp">
+                        android:layout_marginBottom="14dp"
+                        android:elevation="1dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -423,7 +540,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="SIM / CELLULAR SUBSCRIPTIONS"
-                                android:textColor="@color/text_muted"
+                                android:textColor="@color/light_text_muted"
                                 android:textSize="11sp"
                                 android:textStyle="bold"
                                 android:letterSpacing="0.05" />
@@ -449,78 +566,9 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="No active SIM detected or permissions needed."
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/light_text_secondary"
                                 android:textSize="12sp"
                                 android:paddingVertical="8dp" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <!-- Telephony Control Card -->
-                    <LinearLayout
-                        android:id="@+id/cardTelephony"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@color/surface"
-                        android:orientation="vertical"
-                        android:padding="16dp"
-                        android:layout_marginBottom="14dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="TELEPHONY CONTROL"
-                            android:textColor="@color/text_muted"
-                            android:textSize="11sp"
-                            android:textStyle="bold"
-                            android:letterSpacing="0.05"
-                            android:layout_marginBottom="8dp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:layout_marginBottom="6dp">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Call State"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/tvCallState"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="IDLE"
-                                android:textColor="@color/status_online"
-                                android:textSize="12sp"
-                                android:textStyle="bold"
-                                android:fontFamily="monospace" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Auto Answer"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/tvAutoAnswer"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="ACTIVE (Auto-Service)"
-                                android:textColor="@color/primary"
-                                android:textSize="12sp"
-                                android:textStyle="bold" />
                         </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
@@ -537,7 +585,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="System Permissions Audit"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/light_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -545,7 +593,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Complete status of all hardware, telephony and audio permissions."
-                        android:textColor="@color/text_secondary"
+                        android:textColor="@color/light_text_secondary"
                         android:textSize="12sp"
                         android:layout_marginTop="2dp"
                         android:layout_marginBottom="12dp" />
@@ -564,7 +612,7 @@
                         android:layout_marginTop="8dp"
                         android:backgroundTint="@color/primary"
                         android:text="Grant Missing Permissions"
-                        android:textColor="@color/text_primary"
+                        android:textColor="#FFFFFF"
                         android:textStyle="bold" />
 
                     <Button
@@ -572,9 +620,9 @@
                         android:layout_width="match_parent"
                         android:layout_height="44dp"
                         android:layout_marginTop="8dp"
-                        android:backgroundTint="@color/surface_card"
+                        android:backgroundTint="@color/light_surface_card"
                         android:text="⚙️ Open App System Settings"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/light_text_primary"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -590,7 +638,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Nexus AI Voice Agents"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/light_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -598,7 +646,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Live conversational agents active on your Nexus Call OS server."
-                        android:textColor="@color/text_secondary"
+                        android:textColor="@color/light_text_secondary"
                         android:textSize="12sp"
                         android:layout_marginTop="2dp"
                         android:layout_marginBottom="12dp" />
@@ -622,7 +670,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Voice Engines &amp; Multilingual STT/TTS"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/light_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -630,7 +678,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Real-time speech synthesis, streaming transcription and regional dialects."
-                        android:textColor="@color/text_secondary"
+                        android:textColor="@color/light_text_secondary"
                         android:textSize="12sp"
                         android:layout_marginTop="2dp"
                         android:layout_marginBottom="12dp" />
@@ -654,7 +702,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Hardware &amp; Bridge Diagnostics"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/light_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -662,7 +710,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Real-time telemetry, network latency and background service health."
-                        android:textColor="@color/text_secondary"
+                        android:textColor="@color/light_text_secondary"
                         android:textSize="12sp"
                         android:layout_marginTop="2dp"
                         android:layout_marginBottom="12dp" />
@@ -684,9 +732,10 @@
         android:layout_width="280dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="@color/surface"
+        android:background="@color/light_surface"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:padding="20dp"
+        android:elevation="16dp">
 
         <!-- Drawer Header -->
         <LinearLayout
@@ -714,7 +763,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Nexus Call OS"
-                    android:textColor="@color/text_primary"
+                    android:textColor="@color/light_text_primary"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
@@ -731,7 +780,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/card_stroke"
+            android:background="@color/light_card_stroke"
             android:layout_marginBottom="16dp" />
 
         <!-- Navigation Menu Items -->
@@ -739,7 +788,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="NAVIGATION"
-            android:textColor="@color/text_muted"
+            android:textColor="@color/light_text_muted"
             android:textSize="10sp"
             android:textStyle="bold"
             android:letterSpacing="0.08"
@@ -752,7 +801,7 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingHorizontal="12dp"
-            android:background="@color/surface_card_selected"
+            android:background="@color/light_surface_selected"
             android:layout_marginBottom="6dp">
 
             <TextView
@@ -791,7 +840,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Permissions Audit"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/light_text_primary"
                 android:textSize="13sp"
                 android:layout_marginStart="12dp" />
         </LinearLayout>
@@ -816,7 +865,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="AI Voice Agents"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/light_text_primary"
                 android:textSize="13sp"
                 android:layout_marginStart="12dp" />
         </LinearLayout>
@@ -841,7 +890,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Voice &amp; Languages"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/light_text_primary"
                 android:textSize="13sp"
                 android:layout_marginStart="12dp" />
         </LinearLayout>
@@ -866,7 +915,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="System Diagnostics"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/light_text_primary"
                 android:textSize="13sp"
                 android:layout_marginStart="12dp" />
         </LinearLayout>
@@ -882,15 +931,15 @@
             android:layout_height="40dp"
             android:orientation="horizontal"
             android:gravity="center"
-            android:background="@color/surface_card"
+            android:background="@color/light_surface_card"
             android:layout_marginBottom="12dp">
 
             <TextView
                 android:id="@+id/tvNavThemeLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="☀️ Switch to Light Mode"
-                android:textColor="@color/text_primary"
+                android:text="🌙 Switch to Dark Mode"
+                android:textColor="@color/light_text_primary"
                 android:textSize="12sp" />
         </LinearLayout>
 

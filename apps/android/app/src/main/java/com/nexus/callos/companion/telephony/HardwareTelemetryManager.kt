@@ -288,9 +288,13 @@ class HardwareTelemetryManager(private val context: Context) {
         val primarySignal = if (subs.isNotEmpty()) subs.first().signalDbm else -75
         val primaryNet = if (subs.isNotEmpty()) subs.first().networkType else getNetworkTypeForTelephony(telephonyManager)
 
+        val brand = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+        val model = Build.MODEL
+        val fullName = if (model.startsWith(brand, ignoreCase = true)) model else "$brand $model"
+
         return TelemetrySnapshot(
-            deviceModel = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}",
-            androidVersion = "Android ${Build.VERSION.RELEASE}",
+            deviceModel = fullName,
+            androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             sdkInt = Build.VERSION.SDK_INT,
             batteryPercent = currentBatteryPercent,
             isCharging = currentIsCharging,
@@ -305,11 +309,14 @@ class HardwareTelemetryManager(private val context: Context) {
     fun toJson(deviceId: String): JSONObject {
         val snap = getSnapshot()
         val selectedSub = snap.subscriptions.find { it.subId == snap.selectedSubId } ?: snap.subscriptions.firstOrNull()
+        val autoAnswerEnabled = prefs.getBoolean("auto_answer_enabled", true)
+        val autoAnswerDelay = prefs.getInt("auto_answer_delay_sec", 3)
 
         return JSONObject().apply {
             put("event", "TELEMETRY")
             put("device_id", deviceId)
             put("name", snap.deviceModel)
+            put("model", snap.deviceModel)
             put("os_version", snap.androidVersion)
             put("sdk_int", snap.sdkInt)
             put("battery_level", snap.batteryPercent)
@@ -317,10 +324,11 @@ class HardwareTelemetryManager(private val context: Context) {
             put("network_type", snap.primaryNetworkType)
             put("signal_dbm", snap.primarySignalDbm)
             put("carrier_name", selectedSub?.carrierName ?: "Cellular SIM")
-            put("sim_number", selectedSub?.number ?: "Not available from Android/carrier")
+            put("sim_number", selectedSub?.number ?: "")
             put("selected_sub_id", snap.selectedSubId)
             put("call_state", snap.callState)
-            put("auto_answer", true)
+            put("auto_answer", autoAnswerEnabled)
+            put("auto_answer_delay_sec", autoAnswerDelay)
             put("timestamp", System.currentTimeMillis() / 1000)
 
             val subsArray = JSONArray()
@@ -329,7 +337,7 @@ class HardwareTelemetryManager(private val context: Context) {
                     put("slot_index", s.slotIndex)
                     put("sub_id", s.subId)
                     put("carrier_name", s.carrierName)
-                    put("number", s.number ?: "Not available from Android/carrier")
+                    put("number", s.number ?: "")
                     put("is_esim", s.isEsim)
                     put("signal_dbm", s.signalDbm)
                     put("signal_level", s.signalLevel)
@@ -339,6 +347,7 @@ class HardwareTelemetryManager(private val context: Context) {
             put("subscriptions", subsArray)
         }
     }
+
 
     private fun notifyTelemetryUpdated() {
         val snap = getSnapshot()
