@@ -1,17 +1,35 @@
 <resources>
+    <!-- Brand Emerald & Cyan -->
     <color name="primary">#10B981</color>
     <color name="primary_dark">#059669</color>
+    <color name="primary_light">#D1FAE5</color>
     <color name="accent">#06B6D4</color>
+    <color name="accent_purple">#8B5CF6</color>
+
+    <!-- Dark Theme (Default Nexus Aesthetics) -->
     <color name="background">#09090B</color>
     <color name="surface">#18181B</color>
     <color name="surface_card">#27272A</color>
-    <color name="surface_card_selected">#132E22</color>
+    <color name="surface_card_selected">#064E3B</color>
     <color name="card_stroke">#3F3F46</color>
     <color name="card_stroke_active">#10B981</color>
     <color name="text_primary">#FAFAFA</color>
     <color name="text_secondary">#A1A1AA</color>
     <color name="text_muted">#71717A</color>
+
+    <!-- Light Theme Elements -->
+    <color name="light_background">#F8FAFC</color>
+    <color name="light_surface">#FFFFFF</color>
+    <color name="light_surface_card">#F1F5F9</color>
+    <color name="light_surface_selected">#ECFDF5</color>
+    <color name="light_card_stroke">#E2E8F0</color>
+    <color name="light_text_primary">#0F172A</color>
+    <color name="light_text_secondary">#475569</color>
+    <color name="light_text_muted">#94A3B8</color>
+
+    <!-- Status Badges -->
     <color name="status_online">#10B981</color>
     <color name="status_offline">#EF4444</color>
     <color name="status_warning">#F59E0B</color>
+    <color name="status_info">#3B82F6</color>
 </resources>

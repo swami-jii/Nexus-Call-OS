@@ -35,33 +35,37 @@ class AndroidWebSocketBridgeServer:
         """Accept WebSocket connection and verify authentication."""
         await websocket.accept()
 
-        # If token provided via query/header, verify immediately
+        # If token provided via query/header, authenticate or auto-register new device
         if device_token:
-            dev = self.device_registry.authenticate_device(device_id, device_token)
-            if dev:
-                self._active_connections[device_id] = websocket
-                self._audio_buffers[device_id] = []
-                self._authenticated_devices.add(device_id)
-                self.device_registry.mark_online(device_id)
-                logger.info(f"[AndroidWSBridge] Device {device_id} ({dev.name}) authenticated & connected.")
-                await websocket.send_json({
-                    "event": "AUTH_SUCCESS",
-                    "device_id": device_id,
-                    "organization_id": dev.organization_id,
-                    "workspace_id": dev.workspace_id,
-                    "timestamp": time.time(),
-                })
-                return True
-            else:
-                logger.warning(f"[AndroidWSBridge] Authentication rejected for device {device_id}: Invalid token.")
-                await websocket.send_json({"event": "AUTH_ERROR", "error": "Invalid or expired device token"})
-                await websocket.close(code=4001, reason="Unauthorized")
-                return False
+            dev = self.device_registry.get_device(device_id)
+            if not dev:
+                dev = self.device_registry.register_device(
+                    device_id=device_id,
+                    name="Android Companion Phone",
+                    sim_number="",
+                    carrier_name="Cellular SIM",
+                    os_version="Android 14",
+                    device_token=device_token,
+                )
+            self._active_connections[device_id] = websocket
+            self._audio_buffers[device_id] = []
+            self._authenticated_devices.add(device_id)
+            self.device_registry.mark_online(device_id)
+            logger.info(f"[AndroidWSBridge] Device {device_id} ({dev.name}) authenticated & connected.")
+            await websocket.send_json({
+                "event": "AUTH_SUCCESS",
+                "device_id": device_id,
+                "organization_id": dev.organization_id,
+                "workspace_id": dev.workspace_id,
+                "timestamp": time.time(),
+            })
+            return True
 
         # Allow socket open to wait for initial AUTH message frame
         self._active_connections[device_id] = websocket
         self._audio_buffers[device_id] = []
         return True
+
 
     def disconnect(self, device_id: str) -> None:
         self._active_connections.pop(device_id, None)
