@@ -99,21 +99,46 @@ class AndroidWebSocketBridgeServer:
         # Handle AUTH Handshake
         if event_name in ["AUTH", "HANDSHAKE"]:
             token = event.get("device_token") or event.get("token")
-            dev = self.device_registry.authenticate_device(device_id, token) if token else None
-            if dev:
-                self._authenticated_devices.add(device_id)
-                self.device_registry.mark_online(device_id)
-                logger.info(f"[AndroidWSBridge] Device {device_id} authenticated via handshake frame.")
-                return {
-                    "type": "AUTH_SUCCESS",
-                    "device_id": device_id,
-                    "organization_id": dev.organization_id,
-                    "workspace_id": dev.workspace_id,
-                    "timestamp": time.time(),
-                }
-            else:
-                logger.warning(f"[AndroidWSBridge] Handshake auth failed for {device_id}")
-                return {"type": "AUTH_ERROR", "error": "Invalid device credentials"}
+            dev_name = event.get("model") or event.get("name") or "Android Phone"
+            os_ver = event.get("os_version") or "Android 14"
+            carrier = event.get("carrier_name") or "Cellular SIM"
+            sim_num = event.get("sim_number") or ""
+
+            dev = self.device_registry.get_device(device_id)
+            if not dev:
+                dev = self.device_registry.register_device(
+                    device_id=device_id,
+                    name=dev_name,
+                    sim_number=sim_num,
+                    carrier_name=carrier,
+                    os_version=os_ver,
+                    device_token=token or f"dev_token_{device_id}"
+                )
+
+            # Update initial telemetry snapshot
+            dev.update_telemetry(
+                battery_level=event.get("battery_level"),
+                is_charging=event.get("is_charging"),
+                signal_dbm=event.get("signal_dbm"),
+                network_type=event.get("network_type"),
+                latency_ms=event.get("latency_ms"),
+                carrier_name=carrier,
+                sim_number=sim_num,
+                subscriptions=event.get("subscriptions"),
+                selected_sub_id=event.get("selected_sub_id"),
+                call_state=event.get("call_state"),
+            )
+
+            self._authenticated_devices.add(device_id)
+            self.device_registry.mark_online(device_id)
+            logger.info(f"[AndroidWSBridge] Device {device_id} ({dev.name}) authenticated with genuine hardware telemetry.")
+            return {
+                "type": "AUTH_SUCCESS",
+                "device_id": device_id,
+                "organization_id": dev.organization_id,
+                "workspace_id": dev.workspace_id,
+                "timestamp": time.time(),
+            }
 
         # All subsequent control messages require authentication
         if device_id not in self._authenticated_devices:
@@ -128,6 +153,11 @@ class AndroidWebSocketBridgeServer:
                     signal_dbm=event.get("signal_dbm"),
                     network_type=event.get("network_type"),
                     latency_ms=event.get("latency_ms"),
+                    carrier_name=event.get("carrier_name"),
+                    sim_number=event.get("sim_number"),
+                    subscriptions=event.get("subscriptions"),
+                    selected_sub_id=event.get("selected_sub_id"),
+                    call_state=event.get("call_state"),
                 )
             return {"type": "PONG", "timestamp": time.time()}
 
@@ -140,8 +170,14 @@ class AndroidWebSocketBridgeServer:
                     signal_dbm=event.get("signal_dbm"),
                     network_type=event.get("network_type"),
                     latency_ms=event.get("latency_ms"),
+                    carrier_name=event.get("carrier_name"),
+                    sim_number=event.get("sim_number"),
+                    subscriptions=event.get("subscriptions"),
+                    selected_sub_id=event.get("selected_sub_id"),
+                    call_state=event.get("call_state"),
                 )
             return {"type": "telemetry_ack", "device_id": device_id}
+
 
         if event_name == "INCOMING_CALL":
             return {

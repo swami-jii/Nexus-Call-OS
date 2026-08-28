@@ -469,7 +469,7 @@ export const AndroidGatewayView: React.FC = () => {
                 Paired Devices
               </span>
               <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1 block">
-                {healthData?.total_paired_devices || devices.length}
+                {devices.length}
               </span>
             </div>
             <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-lg">
@@ -485,7 +485,7 @@ export const AndroidGatewayView: React.FC = () => {
                 Online SIM Gateway
               </span>
               <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
-                {healthData?.online_devices_count || 1} Active
+                {devices.filter((d) => d.is_online).length} Active
               </span>
             </div>
             <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg">
@@ -501,7 +501,9 @@ export const AndroidGatewayView: React.FC = () => {
                 WebSocket Latency
               </span>
               <span className="text-2xl font-bold text-cyan-600 dark:text-cyan-400 mt-1 block font-mono">
-                {healthData?.average_latency_ms || 24}ms
+                {devices.filter((d) => d.is_online).length > 0 && healthData?.average_latency_ms
+                  ? `${healthData.average_latency_ms}ms`
+                  : '—'}
               </span>
             </div>
             <div className="p-2.5 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 rounded-lg">
@@ -540,113 +542,128 @@ export const AndroidGatewayView: React.FC = () => {
           </Button>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 text-zinc-400 font-semibold text-[11px]">
-                <th className="py-3 px-4">DEVICE & OS</th>
-                <th className="py-3 px-4">SIM NUMBER & CARRIER</th>
-                <th className="py-3 px-4">SIGNAL & NETWORK</th>
-                <th className="py-3 px-4">BATTERY</th>
-                <th className="py-3 px-4">AUTO-ANSWER</th>
-                <th className="py-3 px-4">STATUS</th>
-                <th className="py-3 px-4 text-right">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {devices.map((dev) => (
-                <tr key={dev.device_id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
-                  <td className="py-3.5 px-4">
-                    {editingDeviceId === dev.device_id ? (
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="text"
-                          value={renameInput}
-                          onChange={(e) => setRenameInput(e.target.value)}
-                          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded px-2 py-1"
-                        />
-                        <Button size="sm" onClick={() => handleRenameDevice(dev.device_id)}>
-                          Save
-                        </Button>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center space-x-1.5">
-                          <span>{dev.name}</span>
-                          {dev.priority === 1 && (
-                            <Badge variant="blue" className="text-[9px] py-0 px-1">
-                              PRIMARY
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-zinc-400 font-mono">{dev.os_version}</div>
-                      </div>
-                    )}
-                  </td>
-
-                  <td className="py-3.5 px-4">
-                    <div className="font-mono text-zinc-800 dark:text-zinc-200">{dev.sim_number}</div>
-                    <div className="text-[10px] text-zinc-400">{dev.carrier_name}</div>
-                  </td>
-
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center space-x-1.5 text-zinc-700 dark:text-zinc-300 font-mono">
-                      <Wifi className="h-3.5 w-3.5 text-emerald-500" />
-                      <span>{dev.network_type}</span>
-                      <span className="text-zinc-400 text-[10px]">({dev.signal_dbm} dBm)</span>
-                    </div>
-                  </td>
-
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center space-x-1.5">
-                      <BatteryCharging className="h-4 w-4 text-emerald-500" />
-                      <span className="font-mono text-zinc-800 dark:text-zinc-200">{dev.battery_level}%</span>
-                    </div>
-                  </td>
-
-                  <td className="py-3.5 px-4">
-                    <button
-                      onClick={() => handleToggleAutoAnswer(dev.device_id, dev.auto_answer)}
-                      className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                        dev.auto_answer
-                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
-                      }`}
-                    >
-                      {dev.auto_answer ? 'AUTO ANSWER: ON' : 'MANUAL ANSWER'}
-                    </button>
-                  </td>
-
-                  <td className="py-3.5 px-4">
-                    <Badge variant={dev.is_online ? 'emerald' : 'rose'}>
-                      {dev.is_online ? 'ONLINE' : 'OFFLINE'}
-                    </Badge>
-                  </td>
-
-                  <td className="py-3.5 px-4 text-right space-x-2">
-                    <button
-                      onClick={() => {
-                        setEditingDeviceId(dev.device_id);
-                        setRenameInput(dev.name);
-                      }}
-                      className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-                      title="Rename Device"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDisconnectDevice(dev.device_id)}
-                      className="p-1 text-zinc-400 hover:text-red-500"
-                      title="Disconnect"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
+          {devices.length === 0 ? (
+            <div className="p-8 text-center space-y-2">
+              <div className="inline-flex p-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 rounded-2xl">
+                <Smartphone className="h-6 w-6" />
+              </div>
+              <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
+                No Android SIM Gateways Connected
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
+                Scan the QR code above from your Android phone camera to install the native app and pair your physical SIM cards with Nexus Call OS.
+              </p>
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 text-zinc-400 font-semibold text-[11px]">
+                  <th className="py-3 px-4">DEVICE & OS</th>
+                  <th className="py-3 px-4">SIM NUMBER & CARRIER</th>
+                  <th className="py-3 px-4">SIGNAL & NETWORK</th>
+                  <th className="py-3 px-4">BATTERY</th>
+                  <th className="py-3 px-4">AUTO-ANSWER</th>
+                  <th className="py-3 px-4">STATUS</th>
+                  <th className="py-3 px-4 text-right">ACTIONS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {devices.map((dev) => (
+                  <tr key={dev.device_id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 transition-colors">
+                    <td className="py-3.5 px-4">
+                      {editingDeviceId === dev.device_id ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            value={renameInput}
+                            onChange={(e) => setRenameInput(e.target.value)}
+                            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded px-2 py-1"
+                          />
+                          <Button size="sm" onClick={() => handleRenameDevice(dev.device_id)}>
+                            Save
+                          </Button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center space-x-1.5">
+                            <span>{dev.name}</span>
+                            {dev.priority === 1 && (
+                              <Badge variant="blue" className="text-[9px] py-0 px-1">
+                                PRIMARY
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 font-mono">{dev.os_version}</div>
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <div className="font-mono text-zinc-800 dark:text-zinc-200">{dev.sim_number || 'Not available'}</div>
+                      <div className="text-[10px] text-zinc-400">{dev.carrier_name}</div>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center space-x-1.5 text-zinc-700 dark:text-zinc-300 font-mono">
+                        <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+                        <span>{dev.network_type}</span>
+                        <span className="text-zinc-400 text-[10px]">({dev.signal_dbm} dBm)</span>
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center space-x-1.5">
+                        <BatteryCharging className="h-4 w-4 text-emerald-500" />
+                        <span className="font-mono text-zinc-800 dark:text-zinc-200">{dev.battery_level}%</span>
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <button
+                        onClick={() => handleToggleAutoAnswer(dev.device_id, dev.auto_answer)}
+                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                          dev.auto_answer
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                        }`}
+                      >
+                        {dev.auto_answer ? 'AUTO ANSWER: ON' : 'MANUAL ANSWER'}
+                      </button>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <Badge variant={dev.is_online ? 'emerald' : 'rose'}>
+                        {dev.is_online ? 'ONLINE' : 'OFFLINE'}
+                      </Badge>
+                    </td>
+
+                    <td className="py-3.5 px-4 text-right space-x-2">
+                      <button
+                        onClick={() => {
+                          setEditingDeviceId(dev.device_id);
+                          setRenameInput(dev.name);
+                        }}
+                        className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        title="Rename Device"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDisconnectDevice(dev.device_id)}
+                        className="p-1 text-zinc-400 hover:text-red-500"
+                        title="Disconnect"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardContent>
       </Card>
+
 
       {/* 4. Live Stream Quality & OEM Guidance */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

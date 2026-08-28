@@ -33,16 +33,30 @@ class CallBridgeService : Service() {
     private var bridgeClient: WebSocketBridgeClient? = null
     private var recordManager: AudioRecordManager? = null
     private var trackManager: AudioTrackManager? = null
+    private var telemetryManager: HardwareTelemetryManager? = null
+
     var isRunning = false
         private set
 
     var onStateChangedListener: ((WebSocketBridgeClient.ConnectionState, String?) -> Unit)? = null
+    var onLatencyChangedListener: ((Int) -> Unit)? = null
+
+    val measuredLatencyMs: Int
+        get() = bridgeClient?.measuredLatencyMs ?: -1
+
+    val connectionState: WebSocketBridgeClient.ConnectionState
+        get() = if (isRunning) WebSocketBridgeClient.ConnectionState.CONNECTED else WebSocketBridgeClient.ConnectionState.DISCONNECTED
 
     inner class LocalBinder : Binder() {
         fun getService(): CallBridgeService = this@CallBridgeService
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
+
+    override fun onCreate() {
+        super.onCreate()
+        telemetryManager = HardwareTelemetryManager(applicationContext)
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -99,10 +113,15 @@ class CallBridgeService : Service() {
             },
             onStateChanged = { state, detail ->
                 onStateChangedListener?.invoke(state, detail)
+            },
+            telemetryProvider = {
+                telemetryManager?.toJson(deviceId) ?: org.json.JSONObject()
+            },
+            onLatencyMeasured = { latencyMs ->
+                onLatencyChangedListener?.invoke(latencyMs)
             }
         ).apply { connect() }
     }
-
 
     private fun stopAudioBridge() {
         isRunning = false
@@ -136,5 +155,6 @@ class CallBridgeService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopAudioBridge()
+        telemetryManager?.unregister()
     }
 }

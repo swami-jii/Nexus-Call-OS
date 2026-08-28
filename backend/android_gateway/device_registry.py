@@ -54,9 +54,12 @@ class AndroidDevice:
         self.is_charging = False
         self.signal_dbm = -75
         self.network_type = "5G"
-        self.latency_ms = 20
+        self.latency_ms = 0
         self.last_heartbeat = time.time()
         self.active_session_id: Optional[str] = None
+        self.subscriptions: List[Dict[str, Any]] = []
+        self.selected_sub_id: int = -1
+        self.call_state: str = "IDLE"
 
     def update_telemetry(
         self,
@@ -65,6 +68,11 @@ class AndroidDevice:
         signal_dbm: Optional[int] = None,
         network_type: Optional[str] = None,
         latency_ms: Optional[int] = None,
+        carrier_name: Optional[str] = None,
+        sim_number: Optional[str] = None,
+        subscriptions: Optional[List[Dict[str, Any]]] = None,
+        selected_sub_id: Optional[int] = None,
+        call_state: Optional[str] = None,
     ) -> None:
         if battery_level is not None:
             self.battery_level = battery_level
@@ -76,6 +84,16 @@ class AndroidDevice:
             self.network_type = network_type
         if latency_ms is not None:
             self.latency_ms = latency_ms
+        if carrier_name is not None and carrier_name.strip():
+            self.carrier_name = carrier_name
+        if sim_number is not None and sim_number.strip():
+            self.sim_number = sim_number
+        if subscriptions is not None:
+            self.subscriptions = subscriptions
+        if selected_sub_id is not None:
+            self.selected_sub_id = selected_sub_id
+        if call_state is not None:
+            self.call_state = call_state
         self.last_heartbeat = time.time()
         self.is_online = True
 
@@ -99,7 +117,11 @@ class AndroidDevice:
             "latency_ms": self.latency_ms,
             "last_heartbeat": self.last_heartbeat,
             "active_session_id": self.active_session_id,
+            "subscriptions": self.subscriptions,
+            "selected_sub_id": self.selected_sub_id,
+            "call_state": self.call_state,
         }
+
 
 
 class DeviceRegistry:

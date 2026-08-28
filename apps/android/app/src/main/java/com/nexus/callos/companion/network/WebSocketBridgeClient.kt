@@ -14,7 +14,9 @@ class WebSocketBridgeClient(
     private val deviceId: String = "android-primary",
     private val deviceToken: String? = null,
     private val onIncomingAudio: (ByteArray) -> Unit,
-    private val onStateChanged: (state: ConnectionState, detail: String?) -> Unit = { _, _ -> }
+    private val onStateChanged: (state: ConnectionState, detail: String?) -> Unit = { _, _ -> },
+    var telemetryProvider: (() -> JSONObject)? = null,
+    var onLatencyMeasured: ((latencyMs: Int) -> Unit)? = null
 ) {
 
     enum class ConnectionState {
@@ -39,6 +41,10 @@ class WebSocketBridgeClient(
     private var reconnectScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var heartbeatJob: Job? = null
     private var reconnectAttempts = 0
+    private var lastPingTimeMs: Long = 0
+
+    var measuredLatencyMs: Int = -1
+        private set
 
     fun connect() {
         isManualDisconnect = false
@@ -67,16 +73,16 @@ class WebSocketBridgeClient(
                 reconnectAttempts = 0
                 Log.d(TAG, "WebSocket transport connected. Sending AUTH handshake...")
 
-                // Send authentication & device handshake frame
-                val authFrame = JSONObject().apply {
-                    put("event", "AUTH")
-                    put("device_id", deviceId)
-                    put("device_token", deviceToken ?: "")
-                    put("platform", "android")
-                    put("os_version", Build.VERSION.RELEASE)
-                    put("model", Build.MODEL)
-                }
+                // Send dynamic authentic telemetry in AUTH frame
+                val authFrame = telemetryProvider?.invoke() ?: JSONObject()
+                authFrame.put("event", "AUTH")
+                authFrame.put("device_id", deviceId)
+                authFrame.put("device_token", deviceToken ?: "")
+                authFrame.put("platform", "android")
+                authFrame.put("os_version", Build.VERSION.RELEASE)
+                authFrame.put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
                 ws.send(authFrame.toString())
+
                 startHeartbeat(ws)
             }
 
@@ -98,8 +104,14 @@ class WebSocketBridgeClient(
                         val err = json.optString("error", "Authentication failed")
                         Log.e(TAG, "Auth failed: $err")
                         onStateChanged(ConnectionState.DISCONNECTED, "Auth Failed: $err")
-                    } else if (eventType == "PONG") {
-                        // Heartbeat ACK
+                    } else if (eventType == "PONG" || eventName == "PONG") {
+                        // Heartbeat ACK - calculate real measured RTT latency
+                        if (lastPingTimeMs > 0) {
+                            val rtt = (System.currentTimeMillis() - lastPingTimeMs).toInt()
+                            measuredLatencyMs = maxOf(1, rtt)
+                            onLatencyMeasured?.invoke(measuredLatencyMs)
+                            Log.d(TAG, "Measured RTT Latency: ${measuredLatencyMs}ms")
+                        }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to parse text frame", e)
@@ -137,16 +149,14 @@ class WebSocketBridgeClient(
         heartbeatJob?.cancel()
         heartbeatJob = reconnectScope.launch {
             while (isActive) {
-                delay(10000)
+                delay(5000)
                 try {
-                    val ping = JSONObject().apply {
-                        put("event", "PING")
-                        put("device_id", deviceId)
-                        put("battery_level", 95)
-                        put("is_charging", true)
-                        put("signal_dbm", -70)
-                        put("network_type", "5G")
-                        put("latency_ms", 18)
+                    lastPingTimeMs = System.currentTimeMillis()
+                    val ping = telemetryProvider?.invoke() ?: JSONObject()
+                    ping.put("event", "PING")
+                    ping.put("device_id", deviceId)
+                    if (measuredLatencyMs >= 0) {
+                        ping.put("latency_ms", measuredLatencyMs)
                     }
                     ws.send(ping.toString())
                 } catch (e: Exception) {
@@ -195,4 +205,3 @@ class WebSocketBridgeClient(
         Log.d(TAG, "WebSocket Bridge Disconnected manually")
     }
 }
-
