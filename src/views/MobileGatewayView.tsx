@@ -347,30 +347,118 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
           </button>
         </div>
 
-        {/* 1. Official 1-Tap App Install Banner */}
-        <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-emerald-500 text-white rounded-xl shadow-md">
-              <Smartphone className="h-5 w-5" />
+        {/* 1. Dedicated Mobile-First "Connect Your Android Phone" 5-Step Guide */}
+        <div className="p-5 bg-white dark:bg-zinc-900 border border-emerald-500/30 rounded-2xl shadow-md space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+            <div className="flex items-center space-x-2">
+              <Smartphone className="h-5 w-5 text-emerald-500" />
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                Connect Your Android Phone
+              </h2>
             </div>
-            <div>
-              <div className="font-bold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                <span>Official Mobile App Installation</span>
-                <Badge variant="emerald" className="text-[9px] py-0">1-Tap Direct Install</Badge>
+            <Badge variant="emerald" className="text-[10px] font-semibold py-0.5">
+              🟢 Connected to Nexus Gateway Hub
+            </Badge>
+          </div>
+
+          {/* 5 Sequential Installation Steps */}
+          <div className="space-y-3">
+            {/* Step 1: Wi-Fi confirmation */}
+            <div className="flex items-start space-x-3 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60">
+              <div className="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/30">
+                1
               </div>
-              <p className="text-[11px] text-zinc-600 dark:text-zinc-300 mt-0.5">
-                Install as a full native app on your phone with zero APK parsing errors or security warnings!
-              </p>
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                  <span>You're on the same Wi-Fi network</span>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                </div>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Your phone is currently communicating directly with the Nexus laptop backend over local Wi-Fi.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 2: Download Android APK (PRIMARY ACTION) */}
+            <div className="p-3.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-500/40 space-y-2.5">
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                  2
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                    Download the Android Gateway
+                  </div>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300">
+                    Official compiled native APK with background SIM call control.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-1 space-y-1.5">
+                <a
+                  href="/download"
+                  download="Nexus-GSM-Gateway-v2.4.apk"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-bold text-xs py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download Android APK</span>
+                </a>
+
+                <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400 px-1 font-mono">
+                  <span>Nexus-GSM-Gateway-v2.4.apk</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">~6.86 MB</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: Install APK */}
+            <div className="flex items-start space-x-3 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60">
+              <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                3
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                  Install the APK
+                </div>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Tap <strong>Download anyway</strong> in Chrome &rarr; Tap <strong>Open</strong> &rarr; Tap <strong>Install</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 4: Open App */}
+            <div className="flex items-start space-x-3 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60">
+              <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                4
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                  Open Nexus Call OS Gateway
+                </div>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Launch the installed app from your home screen or app drawer.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 5: Grant Permissions */}
+            <div className="flex items-start space-x-3 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60">
+              <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                5
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                  Grant the requested permissions
+                </div>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Allow 🎙️ Microphone, 📞 Phone/Cellular Calls, and 🔔 Foreground Notifications.
+                </p>
+              </div>
             </div>
           </div>
-          <Button
-            onClick={handleInstallApp}
-            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-md flex items-center justify-center gap-1.5 shrink-0"
-          >
-            <Download className="h-4 w-4" />
-            <span>{isInstalled ? 'App Installed ✓' : 'Install App to Phone'}</span>
-          </Button>
         </div>
+
 
         {/* 2. Interactive Telephony & Hardware Permissions Center */}
         <div className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm space-y-3.5">

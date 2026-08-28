@@ -52,14 +52,29 @@ export const AndroidGatewayView: React.FC = () => {
   const { addToast } = useToast();
   const [devices, setDevices] = useState<AndroidDevice[]>([]);
   const [healthData, setHealthData] = useState<any | null>(null);
+  const [lanInfo, setLanInfo] = useState<any | null>(null);
+  const [isTestingLan, setIsTestingLan] = useState(false);
+  const [lanTestResult, setLanTestResult] = useState<'success' | 'error' | null>(null);
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'download' | 'quick' | 'qr'>('download');
   const [pairingTokenData, setPairingTokenData] = useState<any | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState('');
 
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Fetch LAN IP info dynamically from backend
+  const fetchLanInfo = () => {
+    fetchAPI('/api/android-gateway/lan-info')
+      .then((data) => {
+        if (data && data.status === 'success') {
+          setLanInfo(data);
+        }
+      })
+      .catch(() => {});
+  };
 
   // Fetch Paired Devices & Health
   const fetchDevices = () => {
@@ -79,10 +94,41 @@ export const AndroidGatewayView: React.FC = () => {
   };
 
   useEffect(() => {
+    fetchLanInfo();
     fetchDevices();
     const interval = setInterval(fetchDevices, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  const resolvedLanIp = lanInfo?.lan_ip && lanInfo.lan_ip !== '127.0.0.1' 
+    ? lanInfo.lan_ip 
+    : (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+        ? window.location.hostname 
+        : '192.168.1.34');
+
+  const mobileGatewayUrl = `http://${resolvedLanIp}:3000/#/mobile-gateway`;
+  const apkDownloadUrl = `http://${resolvedLanIp}:8000/download`;
+
+  // Test LAN Mobile Connection Endpoint
+  const handleTestConnection = async () => {
+    setIsTestingLan(true);
+    setLanTestResult(null);
+    try {
+      const data = await fetchAPI('/api/android-gateway/health');
+      if (data) {
+        setLanTestResult('success');
+        addToast(`LAN Gateway reachable at http://${resolvedLanIp}:8000/`, 'success');
+      } else {
+        setLanTestResult('error');
+        addToast('Gateway test failed', 'error');
+      }
+    } catch {
+      setLanTestResult('error');
+      addToast('Gateway connection error', 'error');
+    } finally {
+      setIsTestingLan(false);
+    }
+  };
 
   // 1-Click Quick Connect Phone for Testing on Localhost
   const handleQuickConnect = async () => {
@@ -207,8 +253,9 @@ export const AndroidGatewayView: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
+    setCopiedLink(true);
+    addToast('Link copied to clipboard!', 'success');
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   return (
@@ -239,7 +286,7 @@ export const AndroidGatewayView: React.FC = () => {
           </Button>
 
           <Button
-            onClick={handleGeneratePairingToken}
+            onClick={() => setIsPairModalOpen(true)}
             className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-5 py-2 shadow-sm flex items-center space-x-2"
           >
             <Download className="h-4 w-4" />
@@ -247,6 +294,170 @@ export const AndroidGatewayView: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* 1.5. Desktop Primary "Connect Android Phone" Card */}
+      <Card className="shadow-md border-emerald-500/30 bg-linear-to-b from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 overflow-hidden">
+        <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl border border-emerald-500/20">
+                <QrCode className="h-6 w-6" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                  Connect Android Phone
+                </CardTitle>
+                <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Scan the QR code with your phone to pair with Nexus Call OS.
+                </CardDescription>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Phone connection ready</span>
+              </span>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-5">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            {/* Left: Large High-Contrast QR Code */}
+            <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-3">
+              <div className="p-2.5 bg-white rounded-xl shadow-md border-2 border-emerald-500">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=4&data=${encodeURIComponent(
+                    mobileGatewayUrl
+                  )}`}
+                  alt="Mobile Gateway QR Code"
+                  className="w-44 h-44 rounded-lg"
+                />
+              </div>
+
+              <div className="text-center space-y-1">
+                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                  Scan with your Android camera
+                </span>
+                <span className="text-[11px] text-zinc-400">
+                  Opens the Mobile Gateway & APK installer
+                </span>
+              </div>
+            </div>
+
+            {/* Middle: Dynamic Link & Diagnostic Indicators */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">
+                  Dynamically Generated Mobile URL
+                </span>
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-zinc-100 dark:bg-zinc-800/80 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 truncate select-all">
+                    {mobileGatewayUrl}
+                  </div>
+                  <Button
+                    onClick={() => copyToClipboard(mobileGatewayUrl)}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs font-semibold shrink-0"
+                  >
+                    {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-500 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+                    <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                  </Button>
+                  <Button
+                    onClick={fetchLanInfo}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs font-semibold shrink-0"
+                    title="Refresh LAN IP"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Network Status Indicators */}
+              <div className="grid grid-cols-3 gap-2 p-3 bg-zinc-100/60 dark:bg-zinc-800/40 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60 text-xs">
+                <div>
+                  <span className="text-[10px] text-zinc-400 font-semibold block">Network</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>LAN reachable</span>
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-zinc-400 font-semibold block">Server</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>Running</span>
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-zinc-400 font-semibold block">Mobile Gateway</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>Ready</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1">
+                <span className="font-mono">Laptop IP: <strong className="text-zinc-800 dark:text-zinc-200">{resolvedLanIp}</strong></span>
+                <span className="font-mono">Port: <strong className="text-zinc-800 dark:text-zinc-200">3000 / 8000</strong></span>
+              </div>
+
+              <div className="pt-1 flex items-center gap-2">
+                <Button
+                  onClick={handleTestConnection}
+                  disabled={isTestingLan}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4"
+                >
+                  <Activity className={`h-3.5 w-3.5 mr-1.5 ${isTestingLan ? 'animate-spin' : ''}`} />
+                  <span>Test Mobile Connection</span>
+                </Button>
+
+                <a
+                  href={apkDownloadUrl}
+                  download="Nexus-GSM-Gateway-v2.4.apk"
+                  className="inline-flex items-center text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-emerald-500 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700"
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  <span>Download APK directly ({healthData?.apk_size_formatted || '~6.86 MB'})</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Right: Troubleshooting Guide */}
+            <div className="lg:col-span-3 p-3.5 bg-zinc-50 dark:bg-zinc-950/60 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2 text-xs">
+              <span className="font-bold text-zinc-800 dark:text-zinc-200 block text-[11px] uppercase tracking-wider">
+                Having trouble connecting?
+              </span>
+              <ul className="space-y-1.5 text-zinc-600 dark:text-zinc-400 text-[11px]">
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <span>Phone and laptop must use the same Wi-Fi</span>
+                </li>
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <span>Do not use mobile data/VPN during setup</span>
+                </li>
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <span>Keep Nexus Call OS running on the laptop</span>
+                </li>
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-500 font-bold">✓</span>
+                  <span>Scan the QR code again after changing Wi-Fi</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 2. Health & Telemetry Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

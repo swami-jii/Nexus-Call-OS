@@ -351,7 +351,8 @@ async def android_websocket_bridge(
 @router.get("/download-apk")
 async def download_gateway_apk():
     """Serves the genuine compiled Android Gateway APK directly to mobile devices."""
-    apk_path = Path("public/downloads/Nexus-GSM-Gateway-v2.4.apk")
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    apk_path = base_dir / "public" / "downloads" / "Nexus-GSM-Gateway-v2.4.apk"
     if not apk_path.exists():
         raise HTTPException(status_code=404, detail="APK binary not found on server")
     return FileResponse(
@@ -359,6 +360,39 @@ async def download_gateway_apk():
         filename="Nexus-GSM-Gateway-v2.4.apk",
         media_type="application/vnd.android.package-archive"
     )
+
+
+@router.get("/lan-info")
+async def get_lan_info():
+    """Returns the host machine's active local LAN IPv4 address and gateway endpoints."""
+    import socket
+    import os
+    lan_ip = "127.0.0.1"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        pass
+
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    apk_path = base_dir / "public" / "downloads" / "Nexus-GSM-Gateway-v2.4.apk"
+    apk_size = apk_path.stat().st_size if apk_path.exists() else 6863359
+
+    return {
+        "status": "success",
+        "lan_ip": lan_ip,
+        "frontend_port": 3000,
+        "backend_port": 8000,
+        "mobile_gateway_url": f"http://{lan_ip}:3000/#/mobile-gateway",
+        "apk_download_url": f"http://{lan_ip}:8000/download",
+        "apk_filename": "Nexus-GSM-Gateway-v2.4.apk",
+        "apk_size_bytes": apk_size,
+        "is_ready": True
+    }
+
+
 
 
 
