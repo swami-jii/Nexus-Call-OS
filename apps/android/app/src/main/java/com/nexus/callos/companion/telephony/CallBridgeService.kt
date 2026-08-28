@@ -81,15 +81,37 @@ class CallBridgeService : Service() {
 
     private fun startInForeground() {
         val notification = createNotification("Nexus Gateway Active", "Duplex voice bridge connected to Nexus Call OS")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                var serviceType = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                val hasMic = androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.RECORD_AUDIO
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                val hasPhone = androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.READ_PHONE_STATE
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    if (hasMic) serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                    if (hasPhone) serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+                } else if (hasMic) {
+                    serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                }
+
+                startForeground(NOTIFICATION_ID, notification, serviceType)
             } else {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                startForeground(NOTIFICATION_ID, notification)
             }
-            startForeground(NOTIFICATION_ID, notification, serviceType)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.w(TAG, "Fallback to basic foreground start: ${e.message}")
+            try {
+                startForeground(NOTIFICATION_ID, notification)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Failed to start foreground service", e2)
+            }
         }
     }
 
@@ -98,18 +120,37 @@ class CallBridgeService : Service() {
         isRunning = true
         Log.d(TAG, "Starting Audio Bridge with server: $serverUrl, deviceId: $deviceId")
 
-        trackManager = AudioTrackManager().apply { start() }
+        try {
+            trackManager = AudioTrackManager().apply { start() }
+        } catch (e: Exception) {
+            Log.w(TAG, "AudioTrackManager start failed: ${e.message}")
+        }
 
-        recordManager = AudioRecordManager { pcmData ->
-            bridgeClient?.sendAudioChunk(pcmData)
-        }.apply { start() }
+        try {
+            val hasMic = androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.RECORD_AUDIO
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            if (hasMic) {
+                recordManager = AudioRecordManager { pcmData ->
+                    bridgeClient?.sendAudioChunk(pcmData)
+                }.apply { start() }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "AudioRecordManager start failed: ${e.message}")
+        }
 
         bridgeClient = WebSocketBridgeClient(
             serverUrl = serverUrl,
             deviceId = deviceId,
             deviceToken = deviceToken,
             onIncomingAudio = { incomingPcm ->
-                trackManager?.writePcm(incomingPcm)
+                try {
+                    trackManager?.writePcm(incomingPcm)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error writing PCM audio: ${e.message}")
+                }
             },
             onStateChanged = { state, detail ->
                 onStateChangedListener?.invoke(state, detail)
@@ -125,14 +166,27 @@ class CallBridgeService : Service() {
 
     private fun stopAudioBridge() {
         isRunning = false
-        recordManager?.stop()
+        try {
+            recordManager?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping record manager: ${e.message}")
+        }
         recordManager = null
-        trackManager?.stop()
+        try {
+            trackManager?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping track manager: ${e.message}")
+        }
         trackManager = null
-        bridgeClient?.disconnect()
+        try {
+            bridgeClient?.disconnect()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error disconnecting bridge client: ${e.message}")
+        }
         bridgeClient = null
         Log.d(TAG, "Audio Bridge stopped")
     }
+
 
     private fun createNotification(title: String, text: String): Notification {
         val pendingIntent = PendingIntent.getActivity(
