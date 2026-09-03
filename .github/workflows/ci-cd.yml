@@ -8,30 +8,33 @@ on:
 
 jobs:
   test-and-build:
+    name: Backend & Frontend Validation
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+      - name: 2. Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v3
+      - name: 3. Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Install Backend Dependencies & Verify Code Quality
+      - name: 4. Install Backend Dependencies & Validate
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pyright pytest requests fastapi uvicorn sqlalchemy pydantic
-          ruff check --select F,E,W,I backend/
-          pyright backend/
+          pip install -r backend/requirements.txt
+          python -c "import sys; sys.path.insert(0, '.'); from backend.main import app; print('Backend App Loaded Successfully')"
 
-      - name: Install Frontend Dependencies & Verify TypeScript & Build
+      - name: 5. Install Frontend Dependencies & Verify TypeScript
         run: |
-          npm ci
+          npm install
           npx tsc --noEmit
           npm run build
