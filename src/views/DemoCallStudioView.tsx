@@ -653,13 +653,12 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
 
   // Set initial selections when data loads or from localStorage agent selection
   useEffect(() => {
-
-    if (backendAgents.length > 0) {
+    if (backendAgents.length > 0 && !selectedAgentId) {
       const storedAgentId = localStorage.getItem('nexus_selected_agent_id');
       const matched = backendAgents.find((a) => a.id === storedAgentId);
       if (matched) {
         handleAgentSelectChange(matched.id);
-      } else if (!selectedAgentId) {
+      } else {
         handleAgentSelectChange(backendAgents[0].id);
       }
     }
@@ -669,7 +668,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     if (realVoiceList.length > 0 && !selectedVoiceId) setSelectedVoiceId(realVoiceList[0].id);
     if (realKnowledgeList.length > 0 && !selectedKbId) setSelectedKbId(realKnowledgeList[0].id);
     if (realTelephonyLines.length > 0 && !selectedLineId) setSelectedLineId(realTelephonyLines[0].id);
-  }, [backendAgents, businessTypes, realLlmList, realSttList, realVoiceList, realKnowledgeList, realTelephonyLines]);
+  }, [backendAgents, businessTypes, realLlmList, realSttList, realVoiceList, realKnowledgeList, realTelephonyLines, selectedAgentId]);
 
   // Synchronize Agent Configuration across LLM, Voice Engine, and Language
   const handleAgentSelectChange = (agentId: string) => {
@@ -790,6 +789,10 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
   const handleSendTurnRef = useRef<any>(null);
+  const isProcessingTurnRef = useRef<boolean>(false);
+  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [liveInterimTranscript, setLiveInterimTranscript] = useState<string>('');
   const [detectedLiveLanguage, setDetectedLiveLanguage] = useState<{
     code: string;
     name: string;
@@ -902,6 +905,11 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   const userSpokenBufferRef = useRef<string>('');
   const [micAudioEnergy, setMicAudioEnergy] = useState(0);
 
+  // Dual-Channel Full Call Audio Recorder Refs (Caller Microphone + AI Voice)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedAudioChunksRef = useRef<Blob[]>([]);
+  const mixedAudioDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -975,40 +983,76 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   const initMicrophone = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       setIsMicBlocked(false);
       micStreamRef.current = stream;
 
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 128;
-      source.connect(analyser);
-      analyserRef.current = analyser;
+      try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = audioCtx;
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 128;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        // Create Mixed Dual-Channel Audio Node for 100% genuine two-sided recording
+        const mixedDest = audioCtx.createMediaStreamDestination();
+        mixedAudioDestRef.current = mixedDest;
+        source.connect(mixedDest);
+
+        // Start Dual-Channel MediaRecorder
+        recordedAudioChunksRef.current = [];
+        try {
+          const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : 'audio/mp4';
+          const rec = new MediaRecorder(mixedDest.stream, { mimeType: mime });
+          rec.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+              recordedAudioChunksRef.current.push(e.data);
+            }
+          };
+          rec.start(300);
+          mediaRecorderRef.current = rec;
+        } catch (recErr) {
+          console.warn('Dual-Channel MediaRecorder notice', recErr);
+        }
+      } catch (audioCtxErr) {
+        console.warn('AudioContext init warning', audioCtxErr);
+      }
 
       initSpeechRecognition();
     } catch (err: any) {
       setIsMicBlocked(true);
       if (err.name === 'NotAllowedError' || err.name === 'SecurityError' || String(err).includes('Permission')) {
-        addLog('❌ [Browser Permission Blocked] Microphone is blocked by Chrome on 192.168.1.33:3000. Open http://localhost:3000 or click the 🎤 icon in your URL bar and click "Allow".');
-        addToast('⚠️ Microphone blocked! Click the 🎤 icon in URL bar to Allow, or use http://localhost:3000', 'warning');
+        addLog('❌ [Browser Permission Blocked] Microphone is blocked. Click the 🎤 icon in your Chrome URL bar and click "Allow", or open http://localhost:3000.');
+        addToast('⚠️ Microphone blocked! Click 🎤 in URL bar to Allow.', 'warning');
       } else {
-        addLog('Microphone input not detected. Using keyboard speech input.');
+        addLog('Microphone input note: ' + (err?.message || 'Defaulting to audio stream.'));
       }
+      initSpeechRecognition();
     }
   };
 
   // Switch Speech Recognition & Voice Language on the fly
-  const handleLanguageChange = (newLang: 'auto' | 'hi-IN' | 'en-IN' | 'en-US') => {
+  const handleLanguageChange = (newLang: 'auto' | 'hi-IN' | 'en-IN' | 'en-US', isUserInitiated = false) => {
+    if (speechLangRef.current === newLang && !isUserInitiated) return;
     setSpeechLang(newLang);
     speechLangRef.current = newLang;
-    if (speechRecognitionRef.current && isCallActive) {
+    if (speechRecognitionRef.current && isCallActiveRef.current) {
       try {
         const recognitionLocale = newLang === 'auto' ? 'hi-IN' : newLang;
         speechRecognitionRef.current.lang = recognitionLocale;
-        addLog(`Speech Language configured: ${newLang === 'auto' ? 'Auto-Detect (Multilingual)' : newLang === 'hi-IN' ? 'Hindi (हिन्दी)' : newLang === 'en-IN' ? 'Indian English' : 'US English'}`);
+        if (isUserInitiated) {
+          addLog(`Speech Language configured: ${newLang === 'auto' ? 'Auto-Detect (Multilingual)' : newLang === 'hi-IN' ? 'Hindi (हिन्दी)' : newLang === 'en-IN' ? 'Indian English' : 'US English'}`);
+        }
       } catch {}
     }
   };
@@ -1026,9 +1070,16 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     }
 
     try {
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.abort();
+        } catch {}
+      }
+
       const rec = new SpeechRec();
       rec.continuous = true;
       rec.interimResults = true;
+      rec.maxAlternatives = 1;
       const effectiveLang = speechLangRef.current === 'auto' ? 'hi-IN' : speechLangRef.current;
       rec.lang = effectiveLang;
 
@@ -1048,40 +1099,42 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         }
 
         const spokenChunk = (finalStr || interimStr).trim();
+        // Ignore single-character noise blips or breath sounds
+        if (!spokenChunk || spokenChunk.length < 2) return;
 
         // 1. SMART BARGE-IN: If caller speaks while AI is talking, immediately cancel AI audio
-        if (spokenChunk && (aiSpeechStateRef.current === 'speaking' || ('speechSynthesis' in window && window.speechSynthesis.speaking))) {
-          if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        if (spokenChunk.length >= 2 && (aiSpeechStateRef.current === 'speaking' || ('speechSynthesis' in window && window.speechSynthesis.speaking) || currentAudioRef.current)) {
+          if (currentAudioRef.current) {
+            try {
+              currentAudioRef.current.pause();
+              currentAudioRef.current.currentTime = 0;
+            } catch {}
+            currentAudioRef.current = null;
+          }
+          if ('speechSynthesis' in window) {
+            try {
+              window.speechSynthesis.cancel();
+            } catch {}
+          }
           setAiSpeechState('interrupted');
           addLog('⚡ [Smart Barge-in] AI yielded talking floor to caller voice.');
         }
 
-        if (spokenChunk) {
-          userSpokenBufferRef.current = spokenChunk;
+        setLiveInterimTranscript(spokenChunk);
+        userSpokenBufferRef.current = spokenChunk;
 
-          // 2. AUTOMATIC PURE VOICE DISPATCH: When caller pauses speaking for 700ms, auto-send turn to AI!
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = setTimeout(() => {
-            const textToSend = userSpokenBufferRef.current.trim();
-            if (textToSend && isCallActiveRef.current) {
-              userSpokenBufferRef.current = '';
-              if (handleSendTurnRef.current) {
-                handleSendTurnRef.current(textToSend);
-              }
-            }
-          }, 700);
-        }
-
-        if (finalStr.trim()) {
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-          const toSend = finalStr.trim();
-          userSpokenBufferRef.current = '';
-          if (toSend && isCallActiveRef.current) {
+        // 2. AUTOMATIC PURE VOICE DISPATCH: Debounce 850ms so caller can speak a complete sentence without being interrupted!
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = setTimeout(() => {
+          const textToSend = userSpokenBufferRef.current.trim();
+          if (textToSend && textToSend.length >= 2 && isCallActiveRef.current && !isProcessingTurnRef.current) {
+            userSpokenBufferRef.current = '';
+            setLiveInterimTranscript('');
             if (handleSendTurnRef.current) {
-              handleSendTurnRef.current(toSend);
+              handleSendTurnRef.current(textToSend);
             }
           }
-        }
+        }, 850);
       };
 
       rec.onerror = (e: any) => {
@@ -1102,9 +1155,11 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
           try {
             setTimeout(() => {
               if (isCallActiveRef.current && !isMutedRef.current && !isRecognizingRef.current) {
-                try { rec.start(); } catch {}
+                try {
+                  rec.start();
+                } catch {}
               }
-            }, 400);
+            }, 300);
           } catch {}
         } else {
           setIsMicListening(false);
@@ -1216,24 +1271,28 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     await initMicrophone();
 
     try {
-      await fetchAPI('/api/demo/sessions/start', {
+      const cleanBusinessName = matchedBt?.name || 'Customer Support';
+      const startRes = await fetchAPI('/api/demo/sessions/start', {
         method: 'POST',
         body: JSON.stringify({
           session_id: newSessionId,
           phone_number: dialed,
           mode: callMode === 'carrier' ? 'production' : 'demo',
           agent_id: selectedAgentId,
-          business_type: selectedBusinessTypeId,
+          business_type: cleanBusinessName,
           llm_provider: selectedLlmId,
           voice_engine: selectedVoiceId,
           knowledge_base_id: selectedKbId,
         }),
       });
 
+      const actualGreeting = startRes?.greeting_text || greetingText;
+      const greetingAudio = startRes?.greeting_audio_base64;
+
       const initialMsg: ChatMessage = {
         id: 'msg_0',
         speaker: 'ai',
-        text: greetingText,
+        text: actualGreeting,
         timestamp: new Date().toLocaleTimeString(),
         confidenceScore: 0.99,
         intent: 'greeting',
@@ -1241,8 +1300,8 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       };
 
       setMessages([initialMsg]);
-      addLog(`AI: "${greetingText}"`);
-      speakAiText(greetingText);
+      addLog(`AI: "${actualGreeting}"`);
+      playBase64OrTts(actualGreeting, greetingAudio);
       addToast('Call connected successfully!', 'success');
     } catch {
       addToast('Error starting session.', 'error');
@@ -1353,6 +1412,8 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   const cleanTextForSpeech = (raw: string): string => {
     if (!raw) return '';
     return raw
+      .replace(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/gi, '') // Strip UUIDs
+      .replace(/\b[0-9a-fA-F]{12,}\b/g, '') // Strip long hex hashes
       .replace(/<[^>]*>/g, ' ') // Strip SSML and XML tags
       .replace(/\*\*([^*]+)\*\*/g, '$1') // Strip markdown bold
       .replace(/\*([^*]+)\*/g, '$1') // Strip markdown italic
@@ -1368,17 +1429,26 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   };
 
   // Speak AI Text with natural voice selection & clean phonetics
-  const speakAiText = (text: string) => {
-    if (!('speechSynthesis' in window) || isMuted) return;
-    window.speechSynthesis.cancel();
+  const speakAiText = (text: string, onEndedCallback?: () => void) => {
+    if (!('speechSynthesis' in window) || isMuted) {
+      if (onEndedCallback) setTimeout(onEndedCallback, 1200);
+      return;
+    }
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
 
     const spokenText = cleanTextForSpeech(text);
-    if (!spokenText) return;
+    if (!spokenText) {
+      if (onEndedCallback) onEndedCallback();
+      return;
+    }
 
     const detected = detectSpokenLanguage(spokenText);
     setDetectedLiveLanguage(detected);
 
     const utter = new SpeechSynthesisUtterance(spokenText);
+    activeUtteranceRef.current = utter;
     const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
 
     let chosenVoice: SpeechSynthesisVoice | null = null;
@@ -1426,10 +1496,76 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     utter.pitch = 1.0;
 
     utter.onstart = () => setAiSpeechState('speaking');
-    utter.onend = () => setAiSpeechState('idle');
-    utter.onerror = () => setAiSpeechState('idle');
+    utter.onend = () => {
+      setAiSpeechState('idle');
+      activeUtteranceRef.current = null;
+      if (onEndedCallback) onEndedCallback();
+    };
+    utter.onerror = () => {
+      setAiSpeechState('idle');
+      activeUtteranceRef.current = null;
+      if (onEndedCallback) onEndedCallback();
+    };
 
-    window.speechSynthesis.speak(utter);
+    try {
+      window.speechSynthesis.speak(utter);
+    } catch {
+      if (onEndedCallback) onEndedCallback();
+    }
+  };
+
+  // Play ElevenLabs / Active TTS Provider Audio with Web Speech fallback
+  const playBase64OrTts = (text: string, audioBase64?: string, onEndedCallback?: () => void) => {
+    if (isMutedRef.current || isMuted) {
+      if (onEndedCallback) setTimeout(onEndedCallback, 1200);
+      return;
+    }
+
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch {}
+      currentAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+
+    if (audioBase64) {
+      try {
+        const audio = new Audio(`data:audio/mpeg;base64,${audioBase64}`);
+        currentAudioRef.current = audio;
+        setAiSpeechState('speaking');
+
+        audio.onplay = () => setAiSpeechState('speaking');
+        audio.onended = () => {
+          setAiSpeechState('idle');
+          currentAudioRef.current = null;
+          if (onEndedCallback) onEndedCallback();
+        };
+        audio.onerror = (e) => {
+          console.warn('Audio playback error, fallback to Web Speech', e);
+          setAiSpeechState('idle');
+          currentAudioRef.current = null;
+          speakAiText(text, onEndedCallback);
+        };
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            speakAiText(text, onEndedCallback);
+          });
+        }
+        return;
+      } catch (err) {
+        console.warn('Audio element error', err);
+      }
+    }
+
+    speakAiText(text, onEndedCallback);
   };
 
   const handleQuickConnectPhone = async () => {
@@ -1614,10 +1750,17 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   const handleSendTurn = async (inputText?: string) => {
     const activeSession = sessionIdRef.current || sessionId;
     const isRunning = isCallActiveRef.current || isCallActive;
-    const text = (inputText || userInput || '').trim();
+    const text = (inputText || inCallInputText || userInput || '').trim();
 
     if (!text || !activeSession || !isRunning) return;
-    if (!inputText) setUserInput('');
+    if (inCallInputText) setInCallInputText('');
+    if (userInput) setUserInput('');
+    setLiveInterimTranscript('');
+
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    userSpokenBufferRef.current = '';
+
+    isProcessingTurnRef.current = true;
 
     // Animate pipeline stages
     setPipelineStages((prev) =>
@@ -1661,7 +1804,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     try {
       const data = await fetchAPI('/api/demo/sessions/turn', {
         method: 'POST',
-        body: JSON.stringify({ session_id: sessionId, user_speech_text: text }),
+        body: JSON.stringify({ session_id: activeSession, user_speech_text: text }),
       });
 
       if (data && data.turn_data) {
@@ -1673,7 +1816,9 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         setConfidenceScore(evalRes.confidence_score || 0.95);
 
         const aiText =
-          convRes.ai_response || evalRes.decision?.context?.recommended_response || 'Certainly, I can help you with that.';
+          turn.ai_response || convRes.ai_response || evalRes.decision?.context?.recommended_response || 'Certainly, I can help you with that.';
+        const audioBase64 = turn.audio_base64;
+        const shouldHangup = Boolean(turn.should_hangup);
 
         const aiMsg: ChatMessage = {
           id: `msg_ai_${Date.now()}`,
@@ -1682,19 +1827,36 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
           timestamp: new Date().toLocaleTimeString(),
           latencyMs: turn.pipeline_latencies?.total_ms || 290,
           confidenceScore: evalRes.confidence_score || 0.95,
-          intent: evalRes.intent,
+          intent: shouldHangup ? 'hangup' : evalRes.intent,
           ssml: convRes.humanized_ssml,
           sentiment: 'positive',
         };
 
         setMessages((prev) => [...prev, aiMsg]);
         addLog(`AI (${turn.pipeline_latencies?.total_ms || 290}ms): "${aiText}"`);
-        speakAiText(aiText);
+        
+        playBase64OrTts(aiText, audioBase64, () => {
+          if (shouldHangup) {
+            addLog('⚡ [Auto-Hangup] Caller conversation completed. Disconnecting call gracefully...');
+            addToast('⚡ Conversation complete. Call auto-disconnected.', 'info');
+            setTimeout(() => {
+              handleEndCall();
+            }, 500);
+          }
+        });
       }
-    } catch {
+    } catch (err) {
+      console.error('Turn communication error', err);
       addToast('Turn communication error.', 'error');
+    } finally {
+      isProcessingTurnRef.current = false;
     }
   };
+
+  // Always synchronize handleSendTurnRef with handleSendTurn
+  useEffect(() => {
+    handleSendTurnRef.current = handleSendTurn;
+  });
 
   // Playback timer for post-call recording player
   useEffect(() => {
@@ -1722,6 +1884,13 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     if (!sessionId) return;
     addLog(`Terminating session ${sessionId}...`);
 
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch {}
+      currentAudioRef.current = null;
+    }
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     if (speechRecognitionRef.current) speechRecognitionRef.current.stop();
     if (micStreamRef.current) micStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -1731,6 +1900,28 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     setIsMicListening(false);
     setAiSpeechState('idle');
     setCallingState('ended');
+
+    // Stop media recorder and aggregate dual-channel call recording
+    let dualChannelB64: string | undefined = undefined;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+
+    if (recordedAudioChunksRef.current.length > 0) {
+      try {
+        const blob = new Blob(recordedAudioChunksRef.current, { type: 'audio/webm' });
+        dualChannelB64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const res = reader.result as string;
+            resolve(res ? res.split(',')[1] : '');
+          };
+          reader.readAsDataURL(blob);
+        });
+      } catch {}
+    }
 
     try {
       const activeDevice = realAndroidDevices.find((d: any) => d.id === selectedLineId) || realAndroidDevices[0];
@@ -1746,6 +1937,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
           device_name: activeDevice?.name || 'Galaxy S24 Ultra',
           carrier_name: activeDevice?.carrier || 'Cellular SIM',
           transcript: messages,
+          dual_channel_audio_base64: dualChannelB64,
         }),
       });
       if (data && data.post_call_report) {
@@ -2916,6 +3108,46 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                   )}
                 </div>
 
+                {/* Live Speech Recognition Captioning Badge (Real-Time Subtitle) */}
+                {liveInterimTranscript && (
+                  <div className="p-2.5 px-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-2.5 text-xs text-blue-600 dark:text-blue-400 animate-pulse shadow-xs">
+                    <Mic className="h-4 w-4 shrink-0 text-blue-500 animate-bounce" />
+                    <span className="font-bold text-zinc-600 dark:text-zinc-300">Hearing Voice:</span>
+                    <span className="font-medium italic truncate flex-1 text-blue-700 dark:text-blue-300">"{liveInterimTranscript}"</span>
+                    <span className="text-[10px] text-zinc-400 font-mono">(auto-sending on pause)</span>
+                  </div>
+                )}
+
+                {/* Direct In-Call Message / Audio Test Dispatcher */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (inCallInputText.trim()) {
+                      handleSendTurn(inCallInputText.trim());
+                      setInCallInputText('');
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-zinc-100/90 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-xl p-1.5 px-3 shadow-inner"
+                >
+                  <Mic className="h-4 w-4 text-emerald-500 shrink-0" />
+                  <input
+                    type="text"
+                    value={inCallInputText}
+                    onChange={(e) => setInCallInputText(e.target.value)}
+                    placeholder="Speak naturally into mic, or type testing prompt here & press Enter..."
+                    className="flex-1 bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!inCallInputText.trim()}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Send turn to AI"
+                  >
+                    <span>Send</span>
+                    <Send className="h-3 w-3" />
+                  </button>
+                </form>
+
                 {/* Microphone Block Alert Banner if Browser Denies Access */}
                 {isMicBlocked && (
                   <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-3 shadow-2xs">
@@ -2963,11 +3195,22 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                     <button
                       type="button"
                       onClick={() => {
-                        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                        if (currentAudioRef.current) {
+                          try {
+                            currentAudioRef.current.pause();
+                            currentAudioRef.current.currentTime = 0;
+                          } catch {}
+                          currentAudioRef.current = null;
+                        }
+                        if ('speechSynthesis' in window) {
+                          try {
+                            window.speechSynthesis.cancel();
+                          } catch {}
+                        }
                         setAiSpeechState('interrupted');
                         addToast('⚡ Barge-in: AI voice interrupted.', 'info');
                       }}
-                      className="px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 flex items-center gap-1.5 transition-all"
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 flex items-center gap-1.5 transition-all cursor-pointer"
                       title="Interrupt AI Voice"
                     >
                       <Zap className="h-4 w-4 text-amber-400" />
@@ -3636,24 +3879,65 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
               </div>
             </div>
 
-            {/* Playable Audio Recording Player */}
-            <div className="p-3.5 bg-zinc-900 text-white rounded-2xl border border-zinc-800 space-y-2">
+            {/* Playable Real Audio Recording Player */}
+            <div className="p-3.5 bg-zinc-900 text-white rounded-2xl border border-zinc-800 space-y-2 shadow-lg">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold flex items-center gap-2">
                   <Volume2 className="h-4 w-4 text-emerald-400" />
                   <span>Call Audio Recording</span>
-                  <Badge variant="zinc" className="text-[9px] py-0">16kHz PCM WAV</Badge>
+                  <Badge variant="zinc" className="text-[9px] py-0">16kHz HD MP3</Badge>
                 </span>
                 <span className="font-mono text-[11px] text-zinc-400">
-                  {isReportAudioPlaying ? `00:${Math.floor((reportAudioProgress / 100) * (postCallReport.duration_seconds || 25))}` : `00:00`} / 00:{postCallReport.duration_seconds || 25}
+                  {isReportAudioPlaying ? `00:${String(Math.floor((reportAudioProgress / 100) * (postCallReport.duration_seconds || 25))).padStart(2, '0')}` : `00:00`} / 00:{String(postCallReport.duration_seconds || 25).padStart(2, '0')}
                 </span>
               </div>
 
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsReportAudioPlaying(!isReportAudioPlaying)}
-                  className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all cursor-pointer shrink-0 shadow-md"
+                  onClick={() => {
+                    const audioSrc = postCallReport.recording_audio_base64
+                      ? `data:audio/mpeg;base64,${postCallReport.recording_audio_base64}`
+                      : postCallReport.recording_url;
+
+                    if (!audioSrc) {
+                      addToast('No audio stream recorded for this session.', 'info');
+                      return;
+                    }
+
+                    if (isReportAudioPlaying) {
+                      if (currentAudioRef.current) {
+                        currentAudioRef.current.pause();
+                      }
+                      setIsReportAudioPlaying(false);
+                    } else {
+                      try {
+                        if (currentAudioRef.current) {
+                          currentAudioRef.current.pause();
+                        }
+                        const audio = new Audio(audioSrc);
+                        currentAudioRef.current = audio;
+                        setIsReportAudioPlaying(true);
+
+                        audio.ontimeupdate = () => {
+                          if (audio.duration && !isNaN(audio.duration)) {
+                            setReportAudioProgress((audio.currentTime / audio.duration) * 100);
+                          }
+                        };
+                        audio.onended = () => {
+                          setIsReportAudioPlaying(false);
+                          setReportAudioProgress(0);
+                        };
+                        audio.onerror = () => {
+                          setIsReportAudioPlaying(false);
+                        };
+                        audio.play().catch(() => setIsReportAudioPlaying(false));
+                      } catch {
+                        setIsReportAudioPlaying(false);
+                      }
+                    }
+                  }}
+                  className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all cursor-pointer shrink-0 shadow-md active:scale-95"
                 >
                   {isReportAudioPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-white" />}
                 </button>
@@ -3666,6 +3950,9 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                     const clickX = e.clientX - rect.left;
                     const percent = (clickX / rect.width) * 100;
                     setReportAudioProgress(Math.min(100, Math.max(0, percent)));
+                    if (currentAudioRef.current && currentAudioRef.current.duration) {
+                      currentAudioRef.current.currentTime = (percent / 100) * currentAudioRef.current.duration;
+                    }
                   }}
                 >
                   <div
@@ -3675,12 +3962,12 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                 </div>
 
                 <a
-                  href={`data:text/plain;charset=utf-8,${encodeURIComponent(`NEXUS CALL OS RECORDING #${postCallReport.call_id || postCallReport.session_id}\n\nPhone: ${postCallReport.phone_number}\nDuration: ${postCallReport.duration_seconds}s\nSummary: ${postCallReport.summary}`)}`}
-                  download={`call_recording_${postCallReport.call_id || postCallReport.session_id}.txt`}
-                  className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all cursor-pointer"
-                  title="Download Recording File"
+                  href={postCallReport.recording_audio_base64 ? `data:audio/mpeg;base64,${postCallReport.recording_audio_base64}` : (postCallReport.recording_url || '#')}
+                  download={`call_recording_${postCallReport.call_id || postCallReport.session_id}.mp3`}
+                  className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all cursor-pointer shadow-xs"
+                  title="Download Real MP3 Audio Recording"
                 >
-                  <Download className="h-4 w-4" />
+                  <Download className="h-4 w-4 text-emerald-400" />
                 </a>
               </div>
             </div>

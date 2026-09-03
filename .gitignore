@@ -35,6 +35,9 @@ DerivedData/
 scratch/
 uploads/cache/
 uploads/.recycle_bin/
+uploads/recordings/*.mp3
+!uploads/recordings/.gitkeep
+
 
 
 

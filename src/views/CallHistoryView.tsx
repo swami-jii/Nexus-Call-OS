@@ -69,18 +69,75 @@ export const CallHistoryView: React.FC = () => {
     loadLogs();
   }, []);
 
+  const historyAudioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     if (selectedCall) {
       setNotesText(selectedCall.summary || 'Call summary not available');
+      if (historyAudioRef.current) {
+        try {
+          historyAudioRef.current.pause();
+        } catch {}
+        historyAudioRef.current = null;
+      }
       setIsPlaying(false);
       setAudioProgress(0);
       setCurrentTimeSec(0);
     }
   }, [selectedCall?.id]);
 
-  // Simulated audio playback ticker
+  // Audio Playback & Progress handler
+  const toggleHistoryAudioPlay = () => {
+    if (!selectedCall) return;
+
+    if (isPlaying) {
+      if (historyAudioRef.current) {
+        historyAudioRef.current.pause();
+      }
+      setIsPlaying(false);
+      return;
+    }
+
+    let recUrl = selectedCall.recording_url;
+    if (!recUrl || recUrl.includes('api.nexuscalling.com')) {
+      recUrl = `/api/demo/recordings/${selectedCall.id}.mp3`;
+    }
+
+    try {
+      if (historyAudioRef.current) {
+        historyAudioRef.current.pause();
+        historyAudioRef.current = null;
+      }
+
+      const audio = new Audio(recUrl);
+      historyAudioRef.current = audio;
+      setIsPlaying(true);
+
+      audio.ontimeupdate = () => {
+        if (audio.duration && !isNaN(audio.duration)) {
+          setCurrentTimeSec(Math.floor(audio.currentTime));
+          setAudioProgress((audio.currentTime / audio.duration) * 100);
+        }
+      };
+      audio.onended = () => {
+        setIsPlaying(false);
+        setAudioProgress(0);
+        setCurrentTimeSec(0);
+        historyAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        console.warn('Real recording audio not reachable, falling back to visual playback timer');
+      };
+
+      audio.play().catch(() => {});
+    } catch {
+      setIsPlaying(true);
+    }
+  };
+
+  // Fallback timer when real audio element is buffering or unavailable
   useEffect(() => {
-    if (isPlaying && selectedCall) {
+    if (isPlaying && selectedCall && !historyAudioRef.current) {
       const duration = selectedCall.durationSeconds || 60;
       timerRef.current = setInterval(() => {
         setCurrentTimeSec((prev) => {
@@ -107,8 +164,33 @@ export const CallHistoryView: React.FC = () => {
     setAudioProgress(val);
     if (selectedCall) {
       const dur = selectedCall.durationSeconds || 60;
-      setCurrentTimeSec(Math.floor((val / 100) * dur));
+      const targetSec = Math.floor((val / 100) * dur);
+      setCurrentTimeSec(targetSec);
+      if (historyAudioRef.current && historyAudioRef.current.duration) {
+        historyAudioRef.current.currentTime = (val / 100) * historyAudioRef.current.duration;
+      }
     }
+  };
+
+  const handleDownloadMp3 = () => {
+    if (!selectedCall) return;
+    let recUrl = selectedCall.recording_url;
+    if (!recUrl || recUrl.includes('api.nexuscalling.com')) {
+      recUrl = `/api/demo/recordings/${selectedCall.id}.mp3`;
+    }
+
+    const a = document.createElement('a');
+    a.href = recUrl;
+    a.download = `call_recording_${selectedCall.id}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    addToast({
+      type: 'success',
+      title: 'Downloading Recording',
+      description: `Downloading call_recording_${selectedCall.id}.mp3`,
+    });
   };
 
   const handleOpenInspect = (log: CallLog) => {
@@ -451,13 +533,7 @@ export const CallHistoryView: React.FC = () => {
                   <Button
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-7.5 px-3 rounded-xl flex items-center gap-1.5 shadow-md hover:scale-102 transition-transform cursor-pointer"
-                    onClick={() => {
-                      addToast({
-                        type: 'success',
-                        title: 'Downloading Recording',
-                        description: `Downloading call_recording_${selectedCall.id}.mp3`,
-                      });
-                    }}
+                    onClick={handleDownloadMp3}
                   >
                     <Download className="h-3.5 w-3.5" />
                     <span>Download MP3</span>
@@ -468,7 +544,7 @@ export const CallHistoryView: React.FC = () => {
                 <div className="flex items-center gap-3 pt-1">
                   <button
                     type="button"
-                    onClick={() => setIsPlaying(!isPlaying)}
+                    onClick={toggleHistoryAudioPlay}
                     className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white flex items-center justify-center shrink-0 transition-all shadow-lg shadow-emerald-950/40 cursor-pointer active:scale-95 hover:scale-105"
                   >
                     {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
