@@ -278,7 +278,7 @@ export const GlobalLanguagePicker: React.FC<GlobalLanguagePickerProps> = ({
                           {group.country}
                         </span>
                         <span className="text-[10px] text-zinc-400 font-mono hidden sm:inline truncate">
-                          ({group.dialCode} • {group.currencySymbol})
+                          ({group.currencySymbol} • {group.countryCode})
                         </span>
                       </div>
 
@@ -335,7 +335,7 @@ export const GlobalLanguagePicker: React.FC<GlobalLanguagePickerProps> = ({
 
                           <div className="flex items-center justify-between gap-1 text-[9px] text-zinc-500 pt-1 border-t border-zinc-100 dark:border-zinc-800/60 w-full">
                             <span className="truncate">
-                              {lang.currency} • {lang.dialCode}
+                              {lang.currency} • {lang.locale}
                             </span>
                             {isSelected ? (
                               <span className="text-cyan-600 dark:text-cyan-400 font-bold flex items-center gap-0.5 shrink-0">

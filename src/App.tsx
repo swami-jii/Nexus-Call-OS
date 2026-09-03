@@ -154,9 +154,9 @@ export default function App() {
       case 'conversation-engine':
         return <ConversationEngineView />;
       case 'demo-studio':
-        return <DemoCallStudioView />;
+        return <DemoCallStudioView onNavigate={setCurrentScreen} />;
       case 'android-gateway':
-        return <AndroidGatewayView />;
+        return <AndroidGatewayView onNavigate={setCurrentScreen} />;
       case 'mobile-gateway':
         return <MobileGatewayView onNavigate={setCurrentScreen} />;
       default:

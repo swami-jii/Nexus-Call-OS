@@ -18,6 +18,8 @@ import { useToast } from '../components/ui/Toast';
 import { CommandPaletteSelect, SelectOption } from '../components/ui/CommandPaletteSelect';
 import { GlobalLanguagePicker } from '../components/integrations/GlobalLanguagePicker';
 import {
+  GLOBAL_COUNTRY_CODES_CATALOG,
+  GlobalCountryCodeItem,
   GLOBAL_LANGUAGES_CATALOG,
   GLOBAL_COUNTRY_CATALOG,
   GlobalLanguageItem,
@@ -34,6 +36,7 @@ export type ConfigCategoryTab =
   | 'vision_doc'
   | 'business_types'
   | 'languages'
+  | 'country_codes'
   | 'business_policies'
   | 'voice_profiles'
   | 'prompt_templates'
@@ -1773,6 +1776,23 @@ export const DEFAULT_BUSINESS_RULES_ITEMS: Record<string, any[]> = {
       scope: 'Global Workspace'
     }
   ],
+  country_codes: GLOBAL_COUNTRY_CODES_CATALOG.map((c: any) => ({
+    id: c.id || `country_${c.iso2.toLowerCase()}`,
+    name: `${c.name} (${c.dialCode})`,
+    display_name: `${c.flag} ${c.name} (${c.dialCode})`,
+    country_name: c.name,
+    country: c.name,
+    dial_code: c.dialCode,
+    dialCode: c.dialCode,
+    iso2: c.iso2,
+    iso3: c.iso3,
+    flag: c.flag,
+    region: c.region,
+    carrier_route: c.carrierRoute || 'Direct PSTN / GSM Route',
+    description: `Official sovereign dial code for ${c.name} (${c.iso2}/${c.iso3}). Outbound E.164 cellular and PSTN trunk route.`,
+    status: c.isActive ? 'Active' : 'Draft',
+    scope: 'Global Workspace'
+  })),
   business_policies: [
     {
       id: 'pol_hipaa_01',
@@ -2673,6 +2693,23 @@ const getAuthToken = (): string => {
           if (k === 'call_routing' && parsed[k].length > 50) {
             return;
           }
+          if (k === 'country_codes') {
+            const uniqueMap = new Map<string, any>();
+            parsed[k].forEach((item: any) => {
+              const iso = (item.iso2 || item.countryCode || '').toUpperCase();
+              if (iso && !uniqueMap.has(iso)) {
+                const catMatch = GLOBAL_COUNTRY_CODES_CATALOG.find(c => c.iso2.toUpperCase() === iso);
+                uniqueMap.set(iso, {
+                  ...item,
+                  iso2: iso,
+                  name: item.name || item.country_name || catMatch?.name || 'Country',
+                  region: catMatch?.region || item.region || 'Asia'
+                });
+              }
+            });
+            merged[k] = Array.from(uniqueMap.values());
+            return;
+          }
           merged[k] = parsed[k];
         }
       });
@@ -2703,7 +2740,7 @@ const getAuthToken = (): string => {
 
   // Interactive Setup & Documentation Guide Modal State
   const [isDocsGuideModalOpen, setIsDocsGuideModalOpen] = useState(false);
-  const [docsGuideCategory, setDocsGuideCategory] = useState<'llm' | 'stt' | 'voice' | 'embeddings' | 'vision_doc' | 'telephony_providers' | 'sip_providers' | 'gsm_gateways' | 'call_routing' | 'dispositions' | 'business_types' | 'languages' | 'business_policies' | 'working_hours' | 'timezones' | 'departments' | 'custom_fields' | 'knowledge_collections' | 'prompt_templates' | 'webhooks' | 'variables'>('llm');
+  const [docsGuideCategory, setDocsGuideCategory] = useState<'llm' | 'stt' | 'voice' | 'embeddings' | 'vision_doc' | 'telephony_providers' | 'sip_providers' | 'gsm_gateways' | 'call_routing' | 'dispositions' | 'business_types' | 'languages' | 'country_codes' | 'business_policies' | 'working_hours' | 'timezones' | 'departments' | 'custom_fields' | 'knowledge_collections' | 'prompt_templates' | 'webhooks' | 'variables'>('llm');
 
   // LLM Search, Filter & Sort State
   const [llmSearchQuery, setLlmSearchQuery] = useState('');
@@ -4166,6 +4203,15 @@ const getAuthToken = (): string => {
   const [bAfterHoursAction, setBAfterHoursAction] = useState('Voicemail');
   const [bIsDstEnabled, setBIsDstEnabled] = useState(false);
 
+  // Country Dial Codes specific state:
+  const [bCountryName, setBCountryName] = useState('India');
+  const [bDialCode, setBDialCode] = useState('+91');
+  const [bIso2, setBIso2] = useState('IN');
+  const [bIso3, setBIso3] = useState('IND');
+  const [bFlag, setBFlag] = useState('🇮🇳');
+  const [bRegion, setBRegion] = useState<'Asia' | 'Africa' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica' | 'Global'>('Asia');
+  const [bCarrierRoute, setBCarrierRoute] = useState('Direct PSTN / GSM Route');
+
   // Languages specific state:
   const [bLocale, setBLocale] = useState('hi-IN');
   const [bCurrency, setBCurrency] = useState('INR (₹)');
@@ -4197,9 +4243,13 @@ const getAuthToken = (): string => {
 
   const handleSaveGroup2Record = async (addAnother = false) => {
     console.warn('[REAL-SAVE] handler entered (handleSaveGroup2Record)');
-    if (!bName.trim()) {
+    const effectiveName = bName.trim() || (activeTab === 'country_codes' ? `${bCountryName.trim()} (${bDialCode.trim()})` : '');
+    if (!effectiveName) {
       addToast({ type: 'error', title: 'Validation Error', description: 'Record Name is required.' });
       return;
+    }
+    if (!bName.trim()) {
+      setBName(effectiveName);
     }
 
     const list = customItems[activeTab] || [];
@@ -4266,6 +4316,14 @@ const getAuthToken = (): string => {
       is_rtl: bIsRtl,
       telephone_format: bTelephoneFormat,
       fallback_language: bFallbackLanguage,
+      country_name: bCountryName.trim() || bName.trim(),
+      dial_code: bDialCode.trim(),
+      dialCode: bDialCode.trim(),
+      iso2: bIso2.trim().toUpperCase(),
+      iso3: bIso3.trim().toUpperCase(),
+      flag: bFlag.trim() || '🌐',
+      region: bRegion,
+      carrier_route: bCarrierRoute,
       policy_category: finalPolicyCategory,
       policy_type: bPolicyType,
       execution_time: bExecutionTime,
@@ -4289,10 +4347,12 @@ const getAuthToken = (): string => {
 
     await persistRecordToBackend(newRecord, activeTab);
 
+    window.dispatchEvent(new CustomEvent('nexus_business_rules_updated'));
+
     addToast({
       type: 'success',
       title: editingGenericId ? 'Rule Updated' : 'Rule Created',
-      description: `SSOT Record "${bName.trim()}" saved successfully.`
+      description: `SSOT Record "${effectiveName}" saved successfully.`
     });
 
     if (addAnother) {
@@ -8298,6 +8358,7 @@ const getAuthToken = (): string => {
     { tab: 'departments', label: 'Departments & Teams', group: 'business', icon: <Building2 className="h-3.5 w-3.5" />, description: 'Reusable organizational units, extension routing, and queue priorities.' },
     { tab: 'working_hours', label: 'Business Hours', group: 'business', icon: <Clock className="h-3.5 w-3.5" />, description: 'Reusable schedules, working days, lunch breaks, and 24/7 hotline rules.' },
     { tab: 'languages', label: 'Languages & Localization', group: 'business', icon: <Globe className="h-3.5 w-3.5" />, description: 'Supported conversation languages, locales, timezones, currency, and date formats.' },
+    { tab: 'country_codes', label: 'Country Dial Codes', group: 'business', icon: <PhoneCall className="h-3.5 w-3.5" />, description: '243+ Sovereign country dial codes, ISO 3166-1 alpha-2/3 identifiers, and outbound carrier routing.' },
     { tab: 'business_policies', label: 'Business Policies', group: 'business', icon: <ShieldCheck className="h-3.5 w-3.5" />, description: 'Reusable call recording, consent, retry, escalation, and transfer policies.' },
 
     // Group 3: Telephony & SIMs (5 Core Enterprise Subtabs)
@@ -9151,7 +9212,14 @@ const getAuthToken = (): string => {
       setCfNewOptionInput('');
       setCfDefaultValue('');
       setCfStatus('Active');
-    } else if (['business_types', 'departments', 'working_hours', 'languages', 'business_policies'].includes(cat)) {
+    } else if (['business_types', 'departments', 'working_hours', 'languages', 'country_codes', 'business_policies'].includes(cat)) {
+      setBCountryName('India');
+      setBDialCode('+91');
+      setBIso2('IN');
+      setBIso3('IND');
+      setBFlag('🇮🇳');
+      setBRegion('India');
+      setBCarrierRoute('Direct PSTN / GSM Route');
       setBName('');
       setBDisplayName('');
       setBCategory('General Healthcare / Hospital');
@@ -9386,8 +9454,15 @@ const getAuthToken = (): string => {
       return;
     }
 
-    if (['business_types', 'departments', 'working_hours', 'languages', 'business_policies'].includes(activeTab)) {
+    if (['business_types', 'departments', 'working_hours', 'languages', 'country_codes', 'business_policies'].includes(activeTab)) {
       if (isEdit && typeof cred === 'object') {
+        setBCountryName(cred.country_name || cred.name || 'India');
+        setBDialCode(cred.dial_code || cred.dialCode || '+91');
+        setBIso2(cred.iso2 || 'IN');
+        setBIso3(cred.iso3 || 'IND');
+        setBFlag(cred.flag || '🇮🇳');
+        setBRegion(cred.region || 'India');
+        setBCarrierRoute(cred.carrier_route || cred.carrierRoute || 'Direct PSTN / GSM Route');
         setBName(cred.name || cred.display_name || '');
         setBDisplayName(cred.display_name || cred.name || '');
         setBCategory(cred.category || 'General Healthcare / Hospital');
@@ -13061,6 +13136,87 @@ const getAuthToken = (): string => {
     );
   };
 
+  const handleImportAllCountryCodes = async () => {
+    const all243 = GLOBAL_COUNTRY_CODES_CATALOG.map((c: any) => ({
+      id: c.id || `country_${c.iso2.toLowerCase()}`,
+      name: `${c.name} (${c.dialCode})`,
+      display_name: `${c.flag} ${c.name} (${c.dialCode})`,
+      country_name: c.name,
+      country: c.name,
+      dial_code: c.dialCode,
+      dialCode: c.dialCode,
+      iso2: c.iso2,
+      iso3: c.iso3,
+      flag: c.flag,
+      region: c.region,
+      carrier_route: c.carrierRoute || 'Direct PSTN / GSM Route',
+      description: `Official sovereign dial code for ${c.name} (${c.iso2}/${c.iso3}). E.164 outbound routing.`,
+      status: 'Active',
+      scope: 'Global Workspace'
+    }));
+
+    setCustomItems(prev => {
+      const nextState = { ...prev, country_codes: all243 };
+      try {
+        localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    });
+
+    window.dispatchEvent(new CustomEvent('nexus_business_rules_updated'));
+
+    try {
+      const token = getAuthToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch('/api/credentials/bulk-sync', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ category: 'country_codes', items: all243 })
+      });
+    } catch (e) {
+      console.warn('Backend bulk sync fallback', e);
+    }
+
+    addToast({
+      type: 'success',
+      title: '243 Country Codes Added',
+      description: 'All 243 sovereign country dial codes saved to workspace and SQLite database table!'
+    });
+  };
+
+  const handleRemoveAllCountryCodes = async () => {
+    setCustomItems(prev => {
+      const nextState = { ...prev, country_codes: [] };
+      try {
+        localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+      } catch (e) {}
+      return nextState;
+    });
+
+    window.dispatchEvent(new CustomEvent('nexus_business_rules_updated'));
+
+    try {
+      const token = getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch('/api/credentials/category/country_codes', {
+        method: 'DELETE',
+        headers
+      });
+    } catch (e) {
+      console.warn('Backend category delete fallback', e);
+    }
+
+    addToast({
+      type: 'info',
+      title: 'Country Codes Cleared',
+      description: 'All country dial codes removed from workspace and SQLite database.'
+    });
+  };
+
   const renderGenericCategoryTab = (categoryKey: ConfigCategoryTab, title: string, description: string) => {
     if (categoryKey === 'variables') {
       return renderVariablesCategoryTab(title, description);
@@ -13079,8 +13235,9 @@ const getAuthToken = (): string => {
       const typeStr = String(item.provider_type || item.category || '').toLowerCase();
       const countryStr = String(item.country || '').toLowerCase();
       const hostStr = String(item.base_url || item.sip_host || item.account_sid || item.endpoint_url || '').toLowerCase();
+      const dialStr = String(item.dial_code || item.dialCode || item.iso2 || item.iso3 || item.region || '').toLowerCase();
       const pricingStr = String(item.pricing_mode || item.cost_per_min || '').toLowerCase();
-      return nameStr.includes(q) || descStr.includes(q) || typeStr.includes(q) || countryStr.includes(q) || hostStr.includes(q) || pricingStr.includes(q);
+      return nameStr.includes(q) || descStr.includes(q) || typeStr.includes(q) || countryStr.includes(q) || hostStr.includes(q) || pricingStr.includes(q) || dialStr.includes(q);
     });
 
     // 2. Subset matching Category Filter (used for Pricing/Transport/Network counts)
@@ -13211,20 +13368,62 @@ const getAuthToken = (): string => {
         </div>
 
         {/* Universal Search, Filter & Sorting Bar for All Categories */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-50/60 dark:bg-zinc-950 p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 text-xs">
-          <div className="flex items-center gap-2 w-full sm:w-auto flex-1">
-            <div className="relative flex-1 max-w-md">
-              <input
-                type="text"
-                placeholder={`Search ${title.toLowerCase()} by provider, name, or country...`}
-                value={genericSearchQuery}
-                onChange={(e) => setGenericSearchQuery(e.target.value)}
-                className="w-full pl-3 pr-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:border-blue-500"
-              />
-            </div>
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 bg-zinc-50/60 dark:bg-zinc-950 p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 text-xs">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <input
+              type="text"
+              placeholder={`Search ${title.toLowerCase()} by provider, name, or country...`}
+              value={genericSearchQuery}
+              onChange={(e) => setGenericSearchQuery(e.target.value)}
+              className="w-full pl-3 pr-3 py-1.5 h-[34px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:border-blue-500"
+            />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+          <div className="flex items-center gap-2 w-full md:w-auto flex-wrap sm:flex-nowrap justify-start md:justify-end">
+            {categoryKey === 'country_codes' && (
+              (customItems['country_codes'] || []).length > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleRemoveAllCountryCodes}
+                  className="h-[34px] px-3 py-1.5 bg-rose-50/80 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/60 font-semibold text-xs rounded-lg cursor-pointer shadow-2xs shrink-0 whitespace-nowrap flex items-center gap-1.5 transition-all"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                  <span>Remove All ({(customItems['country_codes'] || []).length})</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleImportAllCountryCodes}
+                  className="h-[34px] px-3 py-1.5 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 font-semibold text-xs rounded-lg cursor-pointer shadow-2xs shrink-0 whitespace-nowrap flex items-center gap-1.5 transition-all"
+                >
+                  <Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>Add All 243 Sovereign Codes</span>
+                </button>
+              )
+            )}
+            {/* Dedicated 7 Continents Filter for Country Codes */}
+            {categoryKey === 'country_codes' && (() => {
+              const allCodes = (customItems['country_codes'] && customItems['country_codes'].length > 0)
+                ? customItems['country_codes']
+                : GLOBAL_COUNTRY_CODES_CATALOG;
+              return (
+                <select
+                  value={genericCategoryFilter}
+                  onChange={(e) => setGenericCategoryFilter(e.target.value)}
+                  className="px-2.5 py-1.5 h-[34px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                >
+                  <option value="all">All Continents ({allCodes.length})</option>
+                  <option value="Asia">🌏 Asia ({allCodes.filter((i: any) => String(i.region).toLowerCase() === 'asia').length})</option>
+                  <option value="Africa">🌍 Africa ({allCodes.filter((i: any) => String(i.region).toLowerCase() === 'africa').length})</option>
+                  <option value="Europe">🇪🇺 Europe ({allCodes.filter((i: any) => String(i.region).toLowerCase() === 'europe').length})</option>
+                  <option value="North America">🌎 North America ({allCodes.filter((i: any) => String(i.region).toLowerCase() === 'north america').length})</option>
+                  <option value="South America">🌎 South America ({allCodes.filter((i: any) => String(i.region).toLowerCase() === 'south america').length})</option>
+                  <option value="Oceania">🦘 Australia & Oceania ({allCodes.filter((i: any) => String(i.region).toLowerCase() === 'oceania').length})</option>
+                  <option value="Antarctica">🧊 Antarctica ({allCodes.filter((i: any) => String(i.region).toLowerCase() === 'antarctica').length})</option>
+                </select>
+              );
+            })()}
+
             {/* Dynamic Category Filter */}
             {categoryKey === 'telephony_providers' ? (
               <select
@@ -13434,6 +13633,7 @@ const getAuthToken = (): string => {
             if (catKey === 'prompt_templates') return { icon: <BookOpen className="h-5 w-5" />, smIcon: <BookOpen className="h-4 w-4" />, style: 'bg-blue-100/80 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400' };
             if (catKey === 'working_hours') return { icon: <Clock className="h-5 w-5" />, smIcon: <Clock className="h-4 w-4" />, style: 'bg-amber-100/80 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400' };
             if (catKey === 'languages') return { icon: <Globe className="h-5 w-5" />, smIcon: <Globe className="h-4 w-4" />, style: 'bg-cyan-100/80 text-cyan-600 dark:bg-cyan-950/60 dark:text-cyan-400' };
+            if (catKey === 'country_codes') return { icon: <PhoneCall className="h-5 w-5" />, smIcon: <PhoneCall className="h-4 w-4" />, style: 'bg-emerald-100/80 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400' };
             if (catKey === 'business_policies') return { icon: <ShieldCheck className="h-5 w-5" />, smIcon: <ShieldCheck className="h-4 w-4" />, style: 'bg-emerald-100/80 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400' };
             if (catKey === 'departments') return { icon: <Users className="h-5 w-5" />, smIcon: <Users className="h-4 w-4" />, style: 'bg-indigo-100/80 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400' };
             if (catKey === 'telephony_providers') return { icon: <PhoneCall className="h-5 w-5" />, smIcon: <PhoneCall className="h-4 w-4" />, style: 'bg-blue-100/80 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400' };
@@ -13819,6 +14019,34 @@ const getAuthToken = (): string => {
               );
             }
 
+            if (categoryKey === 'country_codes') {
+              return (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[10px]">
+                  {(item.dial_code || item.dialCode) && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-mono font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shadow-2xs">
+                      <span>{item.flag || '🌐'}</span>
+                      <span>{item.dial_code || item.dialCode}</span>
+                    </span>
+                  )}
+                  {item.iso2 && (
+                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-mono font-bold border border-blue-200 dark:border-blue-800">
+                      ISO: {item.iso2}{item.iso3 ? ` / ${item.iso3}` : ''}
+                    </span>
+                  )}
+                  {item.region && (
+                    <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 font-semibold border border-purple-200 dark:border-purple-800">
+                      🌍 {item.region}
+                    </span>
+                  )}
+                  {item.carrier_route && (
+                    <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold border border-zinc-200 dark:border-zinc-700">
+                      ⚡ {item.carrier_route}
+                    </span>
+                  )}
+                </div>
+              );
+            }
+
             if (categoryKey === 'languages') {
               return (
                 <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[10px]">
@@ -13837,9 +14065,9 @@ const getAuthToken = (): string => {
                       📅 {String(item.date_format).split(' ')[0]}
                     </span>
                   )}
-                  {item.telephone_format && (
-                    <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 font-mono font-semibold border border-purple-200 dark:border-purple-800">
-                      📞 {item.telephone_format}
+                  {item.time_format && (
+                    <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 font-semibold border border-purple-200 dark:border-purple-800">
+                      ⏱️ {String(item.time_format).split(' ')[0]}
                     </span>
                   )}
                 </div>
@@ -16782,8 +17010,10 @@ const getAuthToken = (): string => {
                           ? `${editingGenericId ? 'Edit' : 'Configure'} Department & Queue Routing Profile`
                           : activeTab === 'working_hours'
                             ? `${editingGenericId ? 'Edit' : 'Configure'} Operating Hours & Shifts Schedule`
-                            : activeTab === 'languages'
-                              ? `${editingGenericId ? 'Edit' : 'Configure'} Language, Currency & Localization Profile`
+                            : activeTab === 'country_codes'
+                              ? `${editingGenericId ? 'Edit' : 'Configure'} Sovereign Country Dial Code & Outbound Route`
+                              : activeTab === 'languages'
+                                ? `${editingGenericId ? 'Edit' : 'Configure'} Language, Currency & Localization Profile`
                               : activeTab === 'business_policies'
                                 ? `${editingGenericId ? 'Edit' : 'Configure'} Enterprise Business Policy & Guardrail`
                                 : `${editingGenericId ? 'Edit' : 'Add New'} ${(activeTab || 'Category').replace(/_/g, ' ').toUpperCase()} Configuration`}
@@ -16803,8 +17033,10 @@ const getAuthToken = (): string => {
                       ? "Set up department extensions, transfer strategies, queue priorities, and warm hand-off rules."
                       : activeTab === 'working_hours'
                         ? "Define working days, morning/evening shifts, timezone rules, 24/7 hotline toggles, and after-hours voicemail actions."
-                        : activeTab === 'languages'
-                          ? "Set up supported spoken languages, currency symbols, number formats, date formatting, and regional telephony formats."
+                        : activeTab === 'country_codes'
+                          ? "Register sovereign country dial codes, ISO 3166-1 alpha-2/3 identifiers, national telephony formats, and carrier routing priorities."
+                          : activeTab === 'languages'
+                            ? "Set up supported spoken languages, currency symbols, number formats, date formatting, and regional telephony formats."
                           : activeTab === 'business_policies'
                             ? "Define call recording consent, privacy compliance, max call duration limits, and violation enforcement rules."
                             : "Connect enterprise AI providers with automatic model configuration and live API key model fetching."}
@@ -16834,7 +17066,7 @@ const getAuthToken = (): string => {
               >
                 Cancel
               </Button>
-              {['business_types', 'departments', 'working_hours', 'languages', 'business_policies', 'knowledge_collections', 'prompt_templates', 'webhooks', 'variables', 'custom_fields'].includes(activeTab) ? (
+              {['business_types', 'departments', 'working_hours', 'languages', 'country_codes', 'business_policies', 'knowledge_collections', 'prompt_templates', 'webhooks', 'variables', 'custom_fields'].includes(activeTab) ? (
                 <>
                   <Button
                     variant="outline"
@@ -17268,7 +17500,7 @@ const getAuthToken = (): string => {
                 </div>
               </div>
             </div>
-          ) : ['business_types', 'departments', 'working_hours', 'languages', 'business_policies'].includes(activeTab) ? (
+          ) : ['business_types', 'departments', 'working_hours', 'languages', 'country_codes', 'business_policies'].includes(activeTab) ? (
             <div className="space-y-4 text-xs">
               {/* SECTION 1: BASIC INFORMATION */}
               <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-3">
@@ -17615,6 +17847,198 @@ const getAuthToken = (): string => {
                 </div>
               )}
 
+              {activeTab === 'country_codes' && (
+                <div className="space-y-3">
+                  {/* Dynamic Interactive Country Live Preview Banner */}
+                  <div className="p-3.5 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-blue-950/40 rounded-xl border border-emerald-300 dark:border-emerald-700/60 flex items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-3xl leading-none shrink-0 drop-shadow-sm">{bFlag || '🌐'}</span>
+                      <div className="min-w-0">
+                        <div className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
+                          <span>{bCountryName || 'Select Sovereign Country'}</span>
+                          <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-emerald-600 text-white font-bold">{bDialCode || '+91'}</span>
+                        </div>
+                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-0.5 truncate">
+                          ISO: {bIso2 || 'IN'} / {bIso3 || 'IND'} • Region: {bRegion || 'India'} • Route: {bCarrierRoute || 'Direct PSTN'}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge variant="emerald" size="sm" className="font-mono text-[10px] shrink-0 font-bold">Live Synced ✓</Badge>
+                  </div>
+
+                  {/* Quick Auto-Select from 243 Sovereign Catalog */}
+                  <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-800 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300 text-xs">
+                        <Globe className="h-4 w-4 text-emerald-600" />
+                        <span>⚡ 1-Click Country Auto-Fill (243+ Sovereign Nations)</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 rounded-full font-bold">243 Countries Directory</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                      Kisi bhi country ko select karte hi Dial Code, ISO Alpha-2/3, Flag Emoji, Region aur Outbound Route automatically fill ho jate hain:
+                    </p>
+                    <CommandPaletteSelect
+                      label="Select Sovereign Country Catalog"
+                      value={bIso2}
+                      onChange={(selectedIso) => {
+                        const matched = GLOBAL_COUNTRY_CODES_CATALOG.find(c => c.iso2 === selectedIso);
+                        if (matched) {
+                          setBName(`${matched.name} (${matched.dialCode})`);
+                          setBDisplayName(`${matched.flag} ${matched.name} (${matched.dialCode})`);
+                          setBCountryName(matched.name);
+                          setBDialCode(matched.dialCode);
+                          setBIso2(matched.iso2);
+                          setBIso3(matched.iso3);
+                          setBFlag(matched.flag);
+                          setBRegion(matched.region as any);
+                          setBCarrierRoute(matched.carrierRoute || 'Direct PSTN / GSM Route');
+                          setBInternalCode(`BUS-CC-${matched.iso2}-${matched.dialCode.replace(/\D/g, '')}`);
+                          setBDescription(`Official sovereign dial code for ${matched.name} (${matched.iso2}/${matched.iso3}). Direct E.164 outbound routing.`);
+                        }
+                      }}
+                      options={GLOBAL_COUNTRY_CODES_CATALOG.map(c => ({
+                        value: c.iso2,
+                        label: `${c.flag} ${c.name} (${c.dialCode})`,
+                        description: `ISO: ${c.iso2}/${c.iso3} • Region: ${c.region} • ${c.carrierRoute || 'PSTN Route'}`
+                      }))}
+                      placeholder="Search 243 countries (e.g. India, United States, UAE, France, Germany)..."
+                      align="left"
+                    />
+                  </div>
+
+                  {/* Manual Field Customization Panel */}
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 flex items-center justify-between">
+                      <span>📞 2. Telephony Dial Code &amp; ISO Specifications</span>
+                      <span className="text-[10px] text-emerald-600 font-mono">Fine-tune Country Code</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Country Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. India"
+                          value={bCountryName}
+                          onChange={(e) => {
+                            setBCountryName(e.target.value);
+                            if (!bName || bName.includes('(')) {
+                              setBName(`${e.target.value} (${bDialCode})`);
+                              setBDisplayName(`${bFlag} ${e.target.value} (${bDialCode})`);
+                            }
+                          }}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                          International Dial Code <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. +91 or +1 684"
+                          value={bDialCode}
+                          onChange={(e) => {
+                            setBDialCode(e.target.value);
+                            setBName(`${bCountryName} (${e.target.value})`);
+                            setBDisplayName(`${bFlag} ${bCountryName} (${e.target.value})`);
+                          }}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Flag Emoji
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 🇮🇳 or 🇺🇸"
+                          value={bFlag}
+                          onChange={(e) => {
+                            setBFlag(e.target.value);
+                            setBDisplayName(`${e.target.value} ${bCountryName} (${bDialCode})`);
+                          }}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-base text-center font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                          ISO Alpha-2 Code (2-Letter)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. IN"
+                          value={bIso2}
+                          maxLength={2}
+                          onChange={(e) => setBIso2(e.target.value.toUpperCase())}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono font-bold uppercase"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                          ISO Alpha-3 Code (3-Letter)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. IND"
+                          value={bIso3}
+                          maxLength={3}
+                          onChange={(e) => setBIso3(e.target.value.toUpperCase())}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono font-bold uppercase"
+                        />
+                      </div>
+
+                      <div>
+                        <CommandPaletteSelect
+                          label="Geographic Region"
+                          value={bRegion}
+                          onChange={(val) => setBRegion(val as any)}
+                          options={[
+                            { value: 'Asia', label: '🌏 Asia' },
+                            { value: 'Africa', label: '🌍 Africa' },
+                            { value: 'Europe', label: '🇪🇺 Europe' },
+                            { value: 'North America', label: '🌎 North America' },
+                            { value: 'South America', label: '🌎 South America' },
+                            { value: 'Oceania', label: '🦘 Australia & Oceania' },
+                            { value: 'Antarctica', label: '🧊 Antarctica' },
+                            { value: 'Global', label: '🌐 Global' }
+                          ]}
+                          placeholder="Select region..."
+                          align="right"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <CommandPaletteSelect
+                        label="Default Outbound Carrier Route"
+                        value={bCarrierRoute}
+                        onChange={(val) => setBCarrierRoute(val)}
+                        options={[
+                          { value: 'Direct PSTN / GSM Route', label: '⚡ Direct PSTN / GSM Route (Companion SIM Zero-Charge)' },
+                          { value: 'Twilio Cloud Carrier Route', label: '☁️ Twilio Cloud Carrier Route' },
+                          { value: 'Telnyx Elastic SIP Route', label: '🔌 Telnyx Elastic SIP Route' },
+                          { value: 'Exotel Indian PSTN Trunk', label: '🇮🇳 Exotel Indian PSTN Trunk' },
+                          { value: 'Android Cellular Gateway SIM 1', label: '📱 Android Cellular Gateway SIM 1' },
+                          { value: 'Custom Carrier SIP Trunk', label: '🌐 Custom Enterprise SIP Trunk' }
+                        ]}
+                        placeholder="Select default route..."
+                        align="left"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'languages' && (
                 <div className="space-y-3">
                   {/* Global Country & Language Explorer Accordion Picker */}
@@ -17707,25 +18131,25 @@ const getAuthToken = (): string => {
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                          Telephone Number Dial Format
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. +91 (India PSTN)"
-                          value={bTelephoneFormat}
-                          onChange={(e) => setBTelephoneFormat(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono font-semibold"
-                        />
-                      </div>
-                      <div>
                         <CommandPaletteSelect
                           label="Time Format"
                           value={bTimeFormat}
                           onChange={(val) => setBTimeFormat(val)}
                           options={TIME_FORMAT_OPTIONS.map(t => ({ value: t, label: t }))}
                           placeholder="Search time formats..."
-                          align="right"
+                          align="left"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Fallback Spoken Language
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. English (United States)"
+                          value={bFallbackLanguage}
+                          onChange={(e) => setBFallbackLanguage(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-semibold"
                         />
                       </div>
                     </div>
@@ -21294,6 +21718,58 @@ const getAuthToken = (): string => {
                     <li><strong>Domain Jargon &amp; Vocabulary:</strong> Define specialized acronyms so speech engines parse technical terms accurately.</li>
                     <li><strong>Compliance Grounding:</strong> Automatically applies industry regulations (e.g. HIPAA for Healthcare, PCI-DSS for Finance).</li>
                   </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {docsGuideCategory === 'country_codes' && (
+            <div className="space-y-3.5 p-4 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                <PhoneCall className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Country Dial Codes &amp; Telephony Carrier Routing Guide</h4>
+              </div>
+
+              <div className="space-y-3 text-zinc-700 dark:text-zinc-300">
+                <div>
+                  <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">🎯 Project Role &amp; Purpose:</p>
+                  <p className="text-[11px] leading-relaxed mt-0.5">
+                    The Country Dial Codes directory is the <strong>Single Source of Truth (SSOT)</strong> for all 243 sovereign nations and international dial codes (parsed directly from official AT&amp;T global telephony specifications). It configures phone dialer prefix normalization, outbound E.164 carrier route assignment, and cellular gateway trunk priorities across Live Call Studio and automated voice campaigns.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1.5">
+                  <h5 className="font-bold text-zinc-900 dark:text-zinc-100 text-xs flex items-center gap-1.5">
+                    💡 Project me Kaise Kaamyab Hoga &amp; Real Example:
+                  </h5>
+                  <p className="text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                    <strong>Kahan Use Hoga?</strong> Live Call Studio softphone dialer, outbound cellular campaigns, aur international call routing rules me.
+                  </p>
+                  <p className="text-[11px] text-zinc-700 dark:text-zinc-300">
+                    <strong>Real Example:</strong> Jab aap Call Studio me <code>+971</code> (UAE) ya <code>+1</code> (USA) ya <code>+91</code> (India) select karte hain, dialer automatically format apply karta hai aur designated cellular SIM ya SIP carrier route se call connect karta hai.
+                  </p>
+                  <p className="text-[11px] text-zinc-800 dark:text-zinc-200 font-semibold">
+                    🚀 <strong>Kyu Zaroori hai?</strong> Guarantees 100% compliant international dialing without manual prefix entry and enables custom carrier routing per territory.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs pt-1">🛠️ Step-by-Step Setup Instructions:</p>
+                  <ul className="list-disc pl-4 text-[11px] space-y-1.5 mt-1">
+                    <li><strong>1-Click Quick Select:</strong> Dropdown se koi bhi country (e.g. 🇮🇳 India, 🇦🇪 UAE, 🇺🇸 United States) select karein — Dial Code, ISO Alpha-2/3, Flag aur Region automatic fill ho jate hain.</li>
+                    <li><strong>Add All 243 Codes:</strong> Toolbar me &quot;⚡ Add All 243 Sovereign Codes&quot; button par click karke ek hi click me saare 243 global country codes workspace me apply karein.</li>
+                    <li><strong>Custom Carrier Trunk:</strong> Har country ke liye direct PSTN / GSM Route, Twilio Cloud SIP Trunk, ya Android Gateway SIM assign karein.</li>
+                    <li><strong>Call Studio Auto-Sync:</strong> Saved country codes Live Call Studio keypad aur international language catalog me instantly synchronize ho jate hain.</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs pt-1">🔗 International Telephony Standards &amp; ITU-T Specifications:</p>
+                  <div className="flex flex-wrap gap-2 text-[11px] mt-1">
+                    <a href="https://www.itu.int/rec/T-REC-E.164" target="_blank" rel="noreferrer" className="px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-blue-600 font-semibold hover:underline flex items-center gap-1">ITU-T E.164 Dialing Spec ↗</a>
+                    <a href="https://en.wikipedia.org/wiki/List_of_country_calling_codes" target="_blank" rel="noreferrer" className="px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-blue-600 font-semibold hover:underline flex items-center gap-1">Country Calling Codes (AT&amp;T / ITU) ↗</a>
+                    <a href="https://www.iso.org/iso-3166-country-codes.html" target="_blank" rel="noreferrer" className="px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-blue-600 font-semibold hover:underline flex items-center gap-1">ISO 3166-1 Alpha 2/3 Codes ↗</a>
+                  </div>
                 </div>
               </div>
             </div>

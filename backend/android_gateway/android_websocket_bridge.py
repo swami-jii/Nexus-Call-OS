@@ -9,7 +9,7 @@ authenticated device handshakes, ping/pong keepalive, and telemetry streaming.
 import json
 import time
 import logging
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, Optional, Set, List
 from fastapi import WebSocket, WebSocketDisconnect
 
 from backend.android_gateway.device_registry import DeviceRegistry
@@ -21,9 +21,9 @@ class AndroidWebSocketBridgeServer:
     """Manages active authenticated WebSocket connections with native companion apps."""
 
     def __init__(self, device_registry: Optional[DeviceRegistry] = None):
-        self.device_registry = device_registry or DeviceRegistry()
+        self.device_registry: DeviceRegistry = device_registry or DeviceRegistry()
         self._active_connections: Dict[str, WebSocket] = {}
-        self._audio_buffers: Dict[str, list] = {}
+        self._audio_buffers: Dict[str, List[bytes]] = {}
         self._authenticated_devices: Set[str] = set()
 
     async def connect(
@@ -38,7 +38,19 @@ class AndroidWebSocketBridgeServer:
         # If token provided via query/header, authenticate or auto-register new device
         if device_token:
             dev = self.device_registry.get_device(device_id)
-            if not dev:
+            if dev:
+                auth_dev = self.device_registry.authenticate_device(device_id, device_token)
+                if not auth_dev:
+                    await websocket.send_json({
+                        "event": "AUTH_ERROR",
+                        "type": "AUTH_ERROR",
+                        "error": "Invalid or unauthorized device token",
+                        "timestamp": time.time(),
+                    })
+                    await websocket.close(code=4001)
+                    return False
+                dev = auth_dev
+            else:
                 dev = self.device_registry.register_device(
                     device_id=device_id,
                     name="Android Companion Phone",
@@ -54,6 +66,7 @@ class AndroidWebSocketBridgeServer:
             logger.info(f"[AndroidWSBridge] Device {device_id} ({dev.name}) authenticated & connected.")
             await websocket.send_json({
                 "event": "AUTH_SUCCESS",
+                "type": "AUTH_SUCCESS",
                 "device_id": device_id,
                 "organization_id": dev.organization_id,
                 "workspace_id": dev.workspace_id,
@@ -83,8 +96,9 @@ class AndroidWebSocketBridgeServer:
         if isinstance(raw_data, bytes):
             if device_id not in self._authenticated_devices:
                 return {"type": "error", "error": "Unauthenticated audio frame rejected"}
-            buffer = self._audio_buffers.get(device_id, [])
-            buffer.append(raw_data)
+            if device_id not in self._audio_buffers:
+                self._audio_buffers[device_id] = []
+            self._audio_buffers[device_id].append(raw_data)
             return {
                 "type": "audio_frame",
                 "device_id": device_id,
@@ -92,10 +106,16 @@ class AndroidWebSocketBridgeServer:
                 "timestamp": time.time(),
             }
 
-        # Text JSON Control Event
-        try:
-            event = json.loads(raw_data)
-        except Exception:
+        # Text / JSON Control Event
+        if isinstance(raw_data, dict):
+            event: Dict[str, Any] = raw_data
+        elif isinstance(raw_data, str):
+            try:
+                parsed = json.loads(raw_data)
+                event = parsed if isinstance(parsed, dict) else {"event": "unknown"}
+            except Exception:
+                event = {"event": "unknown"}
+        else:
             event = {"event": "unknown"}
 
         event_name = event.get("event")
@@ -111,7 +131,18 @@ class AndroidWebSocketBridgeServer:
             auto_delay = event.get("auto_answer_delay_sec", 3)
 
             dev = self.device_registry.get_device(device_id)
-            if not dev:
+            if dev:
+                if token and dev.device_token_hash:
+                    auth_dev = self.device_registry.authenticate_device(device_id, token)
+                    if not auth_dev:
+                        return {
+                            "event": "AUTH_ERROR",
+                            "type": "AUTH_ERROR",
+                            "error": "Invalid or unauthorized device token",
+                            "timestamp": time.time(),
+                        }
+                    dev = auth_dev
+            else:
                 dev = self.device_registry.register_device(
                     device_id=device_id,
                     name=dev_name,

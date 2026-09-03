@@ -52,11 +52,25 @@ def resolve_credential_key(db: Session, org_id: str, user_id: str, provider_name
     p_name = provider_name.lower().strip()
     possible_names = [p_name]
     if "google" in p_name or "gemini" in p_name:
-        possible_names = ["google", "google_cloud", "gemini", "google_ai_studio", "google ai studio"]
+        possible_names = ["google", "google_cloud", "gemini", "google_ai_studio", "google ai studio", "google_tts", "google-tts"]
     elif "anthropic" in p_name or "claude" in p_name:
         possible_names = ["anthropic", "claude", "anthropic claude", "anthropic_claude", "claude_vision"]
     elif "openai" in p_name or "gpt" in p_name:
         possible_names = ["openai", "openai_tts", "openai_whisper", "openai_embeddings"]
+    elif "elevenlabs" in p_name or "eleven" in p_name:
+        possible_names = ["elevenlabs", "eleven_labs", "eleven-labs", "elevenlabs_conversational", "elevenlabs conversational"]
+    elif "cartesia" in p_name:
+        possible_names = ["cartesia", "cartesia_sonic", "cartesia-sonic", "cartesia sonic"]
+    elif "deepgram" in p_name:
+        possible_names = ["deepgram", "deepgram_aura", "deepgram-aura", "deepgram aura", "deepgram_nova", "deepgram-nova"]
+    elif "playht" in p_name or "play_ht" in p_name:
+        possible_names = ["playht", "play_ht", "play-ht", "play.ht"]
+    elif "fish" in p_name:
+        possible_names = ["fish_audio", "fish-audio", "fishaudio", "fish audio"]
+    elif "lmnt" in p_name:
+        possible_names = ["lmnt", "lmnt_speech", "lmnt-speech", "lmnt speech"]
+    elif "minimax" in p_name:
+        possible_names = ["minimax", "minimax_speech", "minimax-speech", "minimax speech"]
     elif "groq" in p_name:
         possible_names = ["groq", "groq_whisper", "groq_llama_vision"]
     elif "deepseek" in p_name:
@@ -70,7 +84,13 @@ def resolve_credential_key(db: Session, org_id: str, user_id: str, provider_name
     elif "ollama" in p_name:
         possible_names = ["ollama", "ollama_local", "ollama local engine"]
     elif "azure" in p_name:
-        possible_names = ["azure", "azure_speech", "azure_openai"]
+        possible_names = ["azure", "azure_speech", "azure_openai", "azure-speech"]
+    elif "cerebras" in p_name:
+        possible_names = ["cerebras"]
+    elif "sambanova" in p_name:
+        possible_names = ["sambanova"]
+    elif "cohere" in p_name:
+        possible_names = ["cohere"]
 
     user_cred = db.query(ProviderCredential).filter(
         ProviderCredential.organization_id == org_id,
@@ -93,10 +113,16 @@ def resolve_credential_key(db: Session, org_id: str, user_id: str, provider_name
         "elevenlabs": ["ELEVENLABS_API_KEY", "XI_API_KEY"],
         "cartesia": ["CARTESIA_API_KEY"],
         "deepgram": ["DEEPGRAM_API_KEY"],
+        "deepgram_aura": ["DEEPGRAM_API_KEY"],
+        "playht": ["PLAYHT_API_KEY"],
+        "fish_audio": ["FISH_AUDIO_API_KEY"],
+        "lmnt": ["LMNT_API_KEY"],
+        "minimax": ["MINIMAX_API_KEY"],
         "google": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
         "google_cloud": ["GOOGLE_CLOUD_API_KEY", "GEMINI_API_KEY"],
         "gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
         "google_ai_studio": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        "google_tts": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
         "openai": ["OPENAI_API_KEY"],
         "openai_tts": ["OPENAI_API_KEY"],
         "azure": ["AZURE_SPEECH_KEY", "AZURE_OPENAI_KEY"],
@@ -108,12 +134,15 @@ def resolve_credential_key(db: Session, org_id: str, user_id: str, provider_name
         "deepseek": ["DEEPSEEK_API_KEY"],
         "cohere": ["COHERE_API_KEY"],
         "together": ["TOGETHER_API_KEY"],
-        "mistral": ["MISTRAL_API_KEY"]
+        "mistral": ["MISTRAL_API_KEY"],
+        "cerebras": ["CEREBRAS_API_KEY"],
+        "sambanova": ["SAMBANOVA_API_KEY"]
     }
-    for env_var in env_keys.get(p_name, []):
-        val = os.getenv(env_var, "")
-        if val:
-            return val
+    for alias in possible_names:
+        for env_var in env_keys.get(alias, []):
+            val = os.getenv(env_var, "")
+            if val:
+                return val
 
     return ""
 
@@ -133,6 +162,31 @@ def _ensure_provider_credential_columns(db: Session):
         for col_name, col_type in cols_to_add:
             try:
                 db.execute(text(f"ALTER TABLE provider_credentials ADD COLUMN {col_name} {col_type};"))
+                db.commit()
+            except Exception:
+                db.rollback()
+        for tbl in set(SUBTAB_TABLE_MAP.values()):
+            try:
+                db.execute(text(f"""
+                    CREATE TABLE IF NOT EXISTS {tbl} (
+                        id VARCHAR(64) PRIMARY KEY,
+                        organization_id VARCHAR(36),
+                        user_id VARCHAR(36),
+                        provider_name VARCHAR(100),
+                        display_name VARCHAR(255),
+                        plain_key VARCHAR(255),
+                        encrypted_key TEXT,
+                        base_url VARCHAR(255),
+                        primary_model VARCHAR(100),
+                        selection_strategy VARCHAR(50) DEFAULT 'dynamic',
+                        api_version VARCHAR(50) DEFAULT 'v1',
+                        metadata_json TEXT,
+                        status VARCHAR(50) DEFAULT 'Active',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(organization_id, provider_name)
+                    );
+                """))
                 db.commit()
             except Exception:
                 db.rollback()
@@ -159,6 +213,8 @@ async def list_all_categories(
         "departments": "group2_business_rules__4_departments",
         "business_policies": "group2_business_rules__5_business_policies",
         "time_zones": "group2_business_rules__5_time_zones",
+        "country_codes": "group2_business_rules__6_country_codes",
+        "country_dial_codes": "group2_business_rules__6_country_codes",
         "telephony_carriers": "group3_telephony_sims__1_telephony_carriers",
         "telephony_providers": "group3_telephony_sims__1_telephony_carriers",
         "sip_trunks": "group3_telephony_sims__2_sip_trunks",
@@ -590,6 +646,8 @@ SUBTAB_TABLE_MAP: dict[str, str] = {
     "timezones": "group2_business_rules__5_time_zones",
     "time_zones": "group2_business_rules__5_time_zones",
     "business_policies": "group2_business_rules__5_business_policies",
+    "country_codes": "group2_business_rules__6_country_codes",
+    "country_dial_codes": "group2_business_rules__6_country_codes",
     "telephony_carriers": "group3_telephony_sims__1_telephony_carriers",
     "telephony_providers": "group3_telephony_sims__1_telephony_carriers",
     "sip_trunks": "group3_telephony_sims__2_sip_trunks",
@@ -722,6 +780,138 @@ async def delete_credential(
         logger.warning(f"Error deleting WebhookSubscription: {e}")
 
     return {"status": "success", "message": "Record removed."}
+
+
+@router.post("/bulk-sync")
+async def bulk_sync_credentials(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk insert or synchronize a full list of items for any category directly into SQLite database."""
+    _ensure_provider_credential_columns(db)
+    category = str(payload.get("category", "")).strip()
+    items = payload.get("items", [])
+    if not category or not isinstance(items, list):
+        raise HTTPException(status_code=400, detail="category and items list are required.")
+
+    org_id = current_user.organization_id or "default_org"
+    u_id = current_user.id or "default_user"
+    tbl = SUBTAB_TABLE_MAP.get(category)
+
+    saved_count = 0
+    for item in items:
+        item_id = str(item.get("id") or item.get("name") or generate_uuid())
+        p_name = str(item.get("country_name") or item.get("name") or item.get("display_name") or item_id)
+        disp_name = str(item.get("display_name") or item.get("name") or p_name)
+        dial_or_key = str(item.get("dial_code") or item.get("dialCode") or item.get("plain_key") or "")
+        iso_or_url = str(f"{item.get('iso2', '')}/{item.get('iso3', '')}" if item.get('iso2') else item.get('base_url', ''))
+        region_or_model = str(item.get("region") or item.get("carrier_route") or item.get("primary_model") or "")
+        meta_str = json.dumps(item)
+
+        # 1. Save / Update in provider_credentials
+        existing = db.query(ProviderCredential).filter(
+            ProviderCredential.organization_id == org_id,
+            ProviderCredential.category == category,
+            (ProviderCredential.provider_name == p_name) | (ProviderCredential.id == item_id)
+        ).first()
+
+        if existing:
+            existing.display_name = disp_name
+            existing.plain_key = dial_or_key
+            existing.encrypted_key = encrypt_secret(dial_or_key) if dial_or_key else ""
+            existing.base_url = iso_or_url
+            existing.primary_model = region_or_model
+            existing.metadata_json = meta_str
+            existing.status = "Active"
+            target_cred = existing
+        else:
+            new_c = ProviderCredential(
+                id=item_id,
+                organization_id=org_id,
+                user_id=u_id,
+                category=category,
+                provider_name=p_name,
+                display_name=disp_name,
+                plain_key=dial_or_key,
+                encrypted_key=encrypt_secret(dial_or_key) if dial_or_key else "",
+                base_url=iso_or_url,
+                primary_model=region_or_model,
+                metadata_json=meta_str,
+                status="Active"
+            )
+            db.add(new_c)
+            target_cred = new_c
+
+        db.commit()
+
+        # 2. Mirror into dedicated subtab table (e.g. group2_business_rules__6_country_codes)
+        if tbl:
+            try:
+                db.execute(text(f"""
+                    INSERT INTO {tbl} (
+                        id, organization_id, user_id, provider_name, display_name,
+                        plain_key, encrypted_key, base_url, primary_model, metadata_json, status
+                    ) VALUES (
+                        :id, :organization_id, :user_id, :provider_name, :display_name,
+                        :plain_key, :encrypted_key, :base_url, :primary_model, :metadata_json, 'Active'
+                    )
+                    ON CONFLICT(organization_id, provider_name) DO UPDATE SET
+                        id=excluded.id,
+                        display_name=excluded.display_name,
+                        plain_key=excluded.plain_key,
+                        encrypted_key=excluded.encrypted_key,
+                        base_url=excluded.base_url,
+                        primary_model=excluded.primary_model,
+                        metadata_json=excluded.metadata_json,
+                        status='Active'
+                """), {
+                    "id": item_id,
+                    "organization_id": org_id,
+                    "user_id": u_id,
+                    "provider_name": p_name,
+                    "display_name": disp_name,
+                    "plain_key": dial_or_key,
+                    "encrypted_key": encrypt_secret(dial_or_key) if dial_or_key else "",
+                    "base_url": iso_or_url,
+                    "primary_model": region_or_model,
+                    "metadata_json": meta_str
+                })
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        saved_count += 1
+
+    return {"status": "success", "message": f"Successfully bulk synchronized {saved_count} records for {category}.", "count": saved_count}
+
+
+@router.delete("/category/{category_name}")
+async def delete_all_category_records(
+    category_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete all records for an entire category from provider_credentials and dedicated subtab table."""
+    org_id = current_user.organization_id or "default_org"
+    tbl = SUBTAB_TABLE_MAP.get(category_name)
+
+    # 1. Delete from provider_credentials
+    db.query(ProviderCredential).filter(
+        ProviderCredential.organization_id == org_id,
+        ProviderCredential.category == category_name
+    ).delete(synchronize_session=False)
+
+    # 2. Delete from dedicated subtab table
+    if tbl:
+        try:
+            db.execute(text(f"DELETE FROM {tbl} WHERE organization_id = :org_id"), {"org_id": org_id})
+            db.commit()
+        except Exception:
+            db.rollback()
+
+    db.commit()
+    return {"status": "success", "message": f"All records for category '{category_name}' have been removed from database."}
 
 @router.post("/test")
 async def test_connection(

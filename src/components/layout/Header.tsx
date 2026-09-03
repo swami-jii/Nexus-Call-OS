@@ -77,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
       unauthorized: 'Unauthorized Access',
       'conversation-engine': 'Conversation Engine Observability',
       'demo-studio': 'Live Call Studio & Control Center',
-      'android-gateway': 'Android GSM Gateway & Device Manager',
+      'android-gateway': 'Pair & Apps GSM Gateway & Device Manager',
       'mobile-gateway': 'Nexus Mobile SIM Gateway App',
       'session-expired': 'Session Expired Preview',
     };

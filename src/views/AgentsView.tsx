@@ -27,6 +27,15 @@ import {
   ChevronDown,
   ChevronUp,
   Variable,
+  Brain,
+  Volume2,
+  BookOpen,
+  Smartphone,
+  ShieldCheck,
+  Layers,
+  Settings2,
+  SlidersHorizontal,
+  Bot,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -40,17 +49,33 @@ import { CommandPaletteSelect, SelectOption } from '../components/ui/CommandPale
 import { Agent } from '../types';
 import { agentRepository } from '../repository';
 import { useToast } from '../components/ui/Toast';
+import { useBusinessRules, LanguageItem } from '../context/BusinessRulesContext';
 import { fetchAPI } from '../lib/api';
+import { GLOBAL_LANGUAGES_CATALOG, getLanguageSamplePrompt } from '../data/globalLanguagesCatalog';
 
-const AgentPromptTagDropdownPanel: React.FC<{
+interface AgentPromptTagDropdownPanelProps {
   title: string;
   count: number;
   subtitle: string;
   icon: React.ReactNode;
   theme: 'amber' | 'blue';
   items: Array<{ tag: string; label: string; group?: string }>;
-  onInsert: (tag: string) => void;
-}> = ({ title, count, subtitle, icon, theme, items, onInsert }) => {
+  selectedTags?: string[];
+  onToggleTag?: (tag: string) => void;
+  onInsert?: (tag: string) => void;
+}
+
+const AgentPromptTagDropdownPanel: React.FC<AgentPromptTagDropdownPanelProps> = ({
+  title,
+  count,
+  subtitle,
+  icon,
+  theme,
+  items,
+  selectedTags = [],
+  onToggleTag,
+  onInsert,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -63,6 +88,7 @@ const AgentPromptTagDropdownPanel: React.FC<{
   );
 
   const isAmber = theme === 'amber';
+  const handleAction = onToggleTag || onInsert;
 
   return (
     <div
@@ -154,27 +180,32 @@ const AgentPromptTagDropdownPanel: React.FC<{
               />
             </div>
             <span className="text-[10px] text-zinc-400 font-medium shrink-0">
-              Click tag to insert into prompt
+              Click tag to toggle in calling context
             </span>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap max-h-36 overflow-y-auto pr-1">
-            {filteredItems.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => onInsert(item.tag)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono border transition-all cursor-pointer flex items-center gap-1.5 ${
-                  isAmber
-                    ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-800 font-semibold'
-                    : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 font-semibold'
-                }`}
-                title={`Click to insert ${item.tag} (${item.label})`}
-              >
-                <span>+{item.tag}</span>
-                <span className="text-[10px] opacity-75 font-sans">({item.label})</span>
-              </button>
-            ))}
+            {filteredItems.map((item, idx) => {
+              const isSelected = selectedTags.includes(item.tag);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleAction?.(item.tag)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono border transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs'
+                      : isAmber
+                      ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-800 font-semibold'
+                      : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 font-semibold'
+                  }`}
+                  title={`${isSelected ? 'Click to remove' : 'Click to connect'} ${item.tag} (${item.label})`}
+                >
+                  <span>{isSelected ? `✓ ${item.tag}` : `+${item.tag}`}</span>
+                  <span className="text-[10px] opacity-80 font-sans">({item.label})</span>
+                </button>
+              );
+            })}
             {filteredItems.length === 0 && (
               <div className="py-2 text-center text-xs text-zinc-400 italic w-full">
                 No matching tags found.
@@ -186,36 +217,297 @@ const AgentPromptTagDropdownPanel: React.FC<{
     </div>
   );
 };
-import { useBusinessRules } from '../context/BusinessRulesContext';
 
 // ==========================================
 // DYNAMIC ENTERPRISE PROVIDER REGISTRIES
 // True Dynamic Provider Registry — Zero Hardcoded Models/Providers
 
-export const LANGUAGE_GROUPS = [
-  { category: '✨ Smart Multilingual AI', languages: ['Auto-Detect (Caller Language Match)', 'Hinglish (Hindi + English Mix)'] },
-  { category: '🇮🇳 Indian Scheduled & Regional', languages: ['हिन्दी (Hindi)', 'English (India)', 'বাংলা (Bengali)', 'मराठी (Marathi)', 'ગુજરાતી (Gujarati)', 'தமிழ் (Tamil)', 'తెలుగు (Telugu)', 'ಕನ್ನಡ (Kannada)', 'മലയാളം (Malayalam)', 'ਪੰਜਾਬੀ (Punjabi)', 'اردو (Urdu)', 'ଓଡ଼ିଆ (Odia)'] },
-  { category: '🌐 Global International', languages: ['English (US)', 'English (UK)', 'Español (Spanish)', 'Français (French)', 'Deutsch (German)', 'العربية (Arabic)', '日本語 (Japanese)', '中文 (Chinese)', 'Português (Portuguese)', 'Italiano (Italian)', 'Nederlands (Dutch)', 'Bahasa Indonesia'] },
-];
+// Dynamic Global Languages & Localization Catalog Provider
+export function languageOptions(workspaceLanguages: LanguageItem[] = []): SelectOption[] {
+  const options: SelectOption[] = [];
 
-export function languageOptions(): SelectOption[] {
-  return LANGUAGE_GROUPS.flatMap((g) =>
-    g.languages.map((lang) => ({ value: lang, label: lang, group: g.category }))
+  // Group 1: Configured Workspace Languages (from API & Integrations)
+  if (workspaceLanguages && workspaceLanguages.length > 0) {
+    workspaceLanguages.forEach((l) => {
+      const displayLabel = l.flag ? `${l.flag} ${l.name}` : l.name;
+      options.push({
+        value: l.name,
+        label: `${displayLabel} (Active Workspace)`,
+        group: '⭐ Configured Workspace Languages',
+        description: `${l.locale || 'Universal'} · ${l.currency || 'Standard Currency'}`
+      });
+    });
+  }
+
+  // Group 2: Smart Multilingual AI
+  options.push(
+    {
+      value: 'Auto-Detect (Caller Language Match)',
+      label: '✨ Auto-Detect (Caller Language Match)',
+      group: '✨ Smart Multilingual AI',
+      description: 'Real-time adaptive language switching based on incoming caller speech'
+    },
+    {
+      value: 'Hinglish (Hindi + English Mix)',
+      label: '🇮🇳 Hinglish (Hindi + English Mix)',
+      group: '✨ Smart Multilingual AI',
+      description: 'Natural conversational blend of Hindi & English for Indian callers'
+    }
   );
+
+  // Group 3: 🇮🇳 Indian Scheduled & Regional Languages (All 28+ Languages)
+  const indianLangs = GLOBAL_LANGUAGES_CATALOG.filter((l) => l.region === 'India');
+  indianLangs.forEach((l) => {
+    const formattedVal = l.name.toLowerCase() === l.nativeName.toLowerCase() 
+      ? l.name 
+      : `${l.nativeName} (${l.name})`;
+    options.push({
+      value: formattedVal,
+      label: `${l.flag} ${formattedVal}`,
+      group: '🇮🇳 Indian Scheduled & Regional (28+)',
+      description: `${l.locale} · ${l.speakers || 'Regional Language'}`
+    });
+  });
+
+  // Helper for international regions (cleanly avoids duplicate country names like Australia (Australia))
+  const formatLangItem = (l: (typeof GLOBAL_LANGUAGES_CATALOG)[0], groupName: string) => {
+    let baseName = l.name;
+    if (!baseName.includes(`(${l.country})`) && !baseName.includes(` ${l.country}`) && l.country !== 'India') {
+      baseName = `${l.name} (${l.country})`;
+    }
+    
+    const hasDistinctNative = l.nativeName && l.nativeName !== l.name && !baseName.includes(l.nativeName);
+    const displayLabel = hasDistinctNative 
+      ? `${l.flag} ${baseName} - ${l.nativeName}`
+      : `${l.flag} ${baseName}`;
+
+    options.push({
+      value: baseName,
+      label: displayLabel,
+      group: groupName,
+      description: `${l.locale} · ${l.currency || l.dialCode || l.speakers || l.country}`
+    });
+  };
+
+  // Group 4: 🌏 Asia-Pacific
+  GLOBAL_LANGUAGES_CATALOG.filter((l) => l.region === 'Asia-Pacific').forEach((l) =>
+    formatLangItem(l, '🌏 Asia-Pacific')
+  );
+
+  // Group 5: 🇪🇺 Europe
+  GLOBAL_LANGUAGES_CATALOG.filter((l) => l.region === 'Europe').forEach((l) =>
+    formatLangItem(l, '🇪🇺 Europe')
+  );
+
+  // Group 6: 🌍 Middle East & Africa
+  GLOBAL_LANGUAGES_CATALOG.filter((l) => l.region === 'Middle East & Africa').forEach((l) =>
+    formatLangItem(l, '🌍 Middle East & Africa')
+  );
+
+  // Group 7: 🌎 Americas & Oceania
+  GLOBAL_LANGUAGES_CATALOG.filter((l) => l.region === 'Americas & Oceania').forEach((l) =>
+    formatLangItem(l, '🌎 Americas & Oceania')
+  );
+
+  return options;
 }
 
-export function formatVoiceName(voice: string): string {
+export function getLanguagePreviewGreeting(langStr: string = ''): string {
+  return getLanguageSamplePrompt(langStr);
+}
+
+/**
+ * Dynamically scores and determines if a voice model is optimal / native for the selected language.
+ * Completely zero-hardcoding approach matching dynamic metadata (accent, locale, labels, name, descriptions).
+ */
+export function isVoiceLanguageMatch(voice: any, targetLanguage: string): { isMatch: boolean; matchBadge?: string; score: number } {
+  if (!targetLanguage) return { isMatch: true, score: 50 };
+  const tLang = targetLanguage.toLowerCase().trim();
+  
+  const accent = (voice.accent || '').toLowerCase();
+  const label = (voice.label || '').toLowerCase();
+  const name = (voice.name || '').toLowerCase();
+  const desc = (voice.description || '').toLowerCase();
+  const category = (voice.category || '').toLowerCase();
+  const id = (voice.id || '').toLowerCase();
+  const fullText = `${label} ${name} ${accent} ${desc} ${category} ${id}`;
+
+  // 1. Indian scheduled & regional language matching
+  if (tLang.includes('hindi') || tLang.includes('हिन्दी') || tLang.includes('hi-in') || tLang.includes('hinglish')) {
+    if (fullText.includes('indian') || fullText.includes('hindi') || fullText.includes('hi-in') || fullText.includes('delhi')) {
+      return { isMatch: true, matchBadge: '🎯 Native Hindi / Indian Accent', score: 100 };
+    }
+  }
+  if (tLang.includes('bengali') || tLang.includes('বাংলা') || tLang.includes('bn-in') || tLang.includes('bn-bd')) {
+    if (fullText.includes('bengali') || fullText.includes('bangla') || fullText.includes('bn-in') || fullText.includes('kolkata') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Bengali Match', score: 100 };
+    }
+  }
+  if (tLang.includes('tamil') || tLang.includes('தமிழ்') || tLang.includes('ta-in')) {
+    if (fullText.includes('tamil') || fullText.includes('ta-in') || fullText.includes('chennai') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Tamil Match', score: 100 };
+    }
+  }
+  if (tLang.includes('telugu') || tLang.includes('తెలుగు') || tLang.includes('te-in')) {
+    if (fullText.includes('telugu') || fullText.includes('te-in') || fullText.includes('hyderabad') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Telugu Match', score: 100 };
+    }
+  }
+  if (tLang.includes('marathi') || tLang.includes('मराठी') || tLang.includes('mr-in')) {
+    if (fullText.includes('marathi') || fullText.includes('mr-in') || fullText.includes('mumbai') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Marathi Match', score: 100 };
+    }
+  }
+  if (tLang.includes('gujarati') || tLang.includes('ગુજરાતી') || tLang.includes('gu-in')) {
+    if (fullText.includes('gujarati') || fullText.includes('gu-in') || fullText.includes('ahmedabad') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Gujarati Match', score: 100 };
+    }
+  }
+  if (tLang.includes('punjabi') || tLang.includes('ਪੰਜਾਬੀ') || tLang.includes('pa-in')) {
+    if (fullText.includes('punjabi') || fullText.includes('pa-in') || fullText.includes('punjab') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Punjabi Match', score: 100 };
+    }
+  }
+  if (tLang.includes('urdu') || tLang.includes('اردو') || tLang.includes('ur-in') || tLang.includes('ur-pk')) {
+    if (fullText.includes('urdu') || fullText.includes('ur-in') || fullText.includes('pakistani') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Urdu Match', score: 100 };
+    }
+  }
+  if (tLang.includes('kannada') || tLang.includes('ಕನ್ನಡ') || tLang.includes('kn-in')) {
+    if (fullText.includes('kannada') || fullText.includes('kn-in') || fullText.includes('bengaluru') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Kannada Match', score: 100 };
+    }
+  }
+  if (tLang.includes('malayalam') || tLang.includes('മലയാളം') || tLang.includes('ml-in')) {
+    if (fullText.includes('malayalam') || fullText.includes('ml-in') || fullText.includes('kerala') || fullText.includes('indian')) {
+      return { isMatch: true, matchBadge: '🎯 Native Malayalam Match', score: 100 };
+    }
+  }
+
+  // 2. Global languages matching
+  if (tLang.includes('spanish') || tLang.includes('español') || tLang.includes('es-es') || tLang.includes('es-mx') || tLang.includes('es-ar')) {
+    if (fullText.includes('spanish') || fullText.includes('español') || fullText.includes('mexican') || fullText.includes('castilian') || fullText.includes('es-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Spanish Match', score: 100 };
+    }
+  }
+  if (tLang.includes('french') || tLang.includes('français') || tLang.includes('fr-fr') || tLang.includes('fr-ca')) {
+    if (fullText.includes('french') || fullText.includes('français') || fullText.includes('paris') || fullText.includes('quebec') || fullText.includes('fr-')) {
+      return { isMatch: true, matchBadge: '🎯 Native French Match', score: 100 };
+    }
+  }
+  if (tLang.includes('german') || tLang.includes('deutsch') || tLang.includes('de-de') || tLang.includes('de-ch')) {
+    if (fullText.includes('german') || fullText.includes('deutsch') || fullText.includes('berlin') || fullText.includes('de-')) {
+      return { isMatch: true, matchBadge: '🎯 Native German Match', score: 100 };
+    }
+  }
+  if (tLang.includes('italian') || tLang.includes('italiano') || tLang.includes('it-it')) {
+    if (fullText.includes('italian') || fullText.includes('italiano') || fullText.includes('rome') || fullText.includes('it-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Italian Match', score: 100 };
+    }
+  }
+  if (tLang.includes('japanese') || tLang.includes('日本語') || tLang.includes('ja-jp')) {
+    if (fullText.includes('japanese') || fullText.includes('tokyo') || fullText.includes('ja-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Japanese Match', score: 100 };
+    }
+  }
+  if (tLang.includes('chinese') || tLang.includes('中文') || tLang.includes('mandarin') || tLang.includes('zh-cn') || tLang.includes('cantonese')) {
+    if (fullText.includes('chinese') || fullText.includes('mandarin') || fullText.includes('cantonese') || fullText.includes('zh-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Chinese Match', score: 100 };
+    }
+  }
+  if (tLang.includes('arabic') || tLang.includes('العربية') || tLang.includes('ar-sa') || tLang.includes('ar-ae')) {
+    if (fullText.includes('arabic') || fullText.includes('gulf') || fullText.includes('egypt') || fullText.includes('ar-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Arabic Match', score: 100 };
+    }
+  }
+  if (tLang.includes('russian') || tLang.includes('русский') || tLang.includes('ru-ru')) {
+    if (fullText.includes('russian') || fullText.includes('moscow') || fullText.includes('ru-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Russian Match', score: 100 };
+    }
+  }
+  if (tLang.includes('portuguese') || tLang.includes('português') || tLang.includes('pt-br') || tLang.includes('pt-pt')) {
+    if (fullText.includes('portuguese') || fullText.includes('brazilian') || fullText.includes('lisbon') || fullText.includes('pt-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Portuguese Match', score: 100 };
+    }
+  }
+  if (tLang.includes('korean') || tLang.includes('한국어') || tLang.includes('ko-kr')) {
+    if (fullText.includes('korean') || fullText.includes('seoul') || fullText.includes('ko-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Korean Match', score: 100 };
+    }
+  }
+  if (tLang.includes('māori') || tLang.includes('maori') || tLang.includes('mi-nz')) {
+    if (fullText.includes('māori') || fullText.includes('maori') || fullText.includes('new zealand') || fullText.includes('kiwi') || fullText.includes('mi-')) {
+      return { isMatch: true, matchBadge: '🎯 Native Māori Match', score: 100 };
+    }
+  }
+  if (tLang.includes('australia') || tLang.includes('en-au')) {
+    if (fullText.includes('australian') || fullText.includes('aussie') || fullText.includes('en-au')) {
+      return { isMatch: true, matchBadge: '🎯 Australian Accent Match', score: 100 };
+    }
+  }
+
+  // 3. Multilingual Ultra-Natural Neural TTS tier (e.g. ElevenLabs, Cartesia, OpenAI, Fish Audio)
+  if (fullText.includes('multilingual') || fullText.includes('turbo') || fullText.includes('sonic') || fullText.includes('elevenlabs') || fullText.includes('openai') || fullText.includes('conversational')) {
+    return { isMatch: true, matchBadge: '✨ Multilingual AI Engine', score: 60 };
+  }
+
+  return { isMatch: false, score: 20 };
+}
+
+export interface DynamicVoiceMeta {
+  id: string;
+  name: string;
+  label: string;
+  gender: 'female' | 'male' | 'neutral' | 'unknown';
+  rawGender?: string;
+  accent: string;
+  provider: string;
+  providerName?: string;
+  category?: string;
+  preview_url?: string;
+  description?: string;
+  stability?: number;
+  similarity?: number;
+}
+
+export function getCleanProviderName(rawName?: string): string {
+  if (!rawName) return 'Voice';
+  // Remove parenthesized suffixes like (Ultra Fast Stream), (Configured), etc.
+  let clean = rawName.replace(/\s*\([^)]*\)/g, '').replace(/^Local\s+/i, '').trim();
+  // Clean generic suffixes if preceded by specific provider name
+  clean = clean.replace(/\s+(Conversational\s+TTS|Realtime\s+TTS|Speech\s+TTS|Speech\s+Synthesizer|Voice\s+TTS|TTS|Engine|Server)$/i, '').trim();
+  return clean || rawName;
+}
+
+const KNOWN_VOICE_MAP: Record<string, { name: string; provider: string }> = {
+  'hpp4J3VqNfWAUOO0d1Us': { name: 'Bella', provider: 'ElevenLabs' },
+  'pNInz6obpgDQGcFmaJgB': { name: 'Adam', provider: 'ElevenLabs' },
+  '21m00Tcm4TlvDq8ikWAM': { name: 'Rachel', provider: 'ElevenLabs' },
+  'AZnzlk1XvdvUeBnXmlld': { name: 'Domi', provider: 'ElevenLabs' },
+  'EXAVITQu4vr4xnSDxMaL': { name: 'Bella', provider: 'ElevenLabs' },
+  'ErXwobaYiN019PkySvjV': { name: 'Antoni', provider: 'ElevenLabs' },
+  'MF3mGyEYCl7XYWbV9V6O': { name: 'Elli', provider: 'ElevenLabs' },
+  'TxGEqnHWrfWFTfGW9XjX': { name: 'Josh', provider: 'ElevenLabs' },
+  'VR6AewLTigWG4xSOukaG': { name: 'Arnold', provider: 'ElevenLabs' },
+  'YoZ06aMxZJJ28mfd3POQ': { name: 'Sam', provider: 'ElevenLabs' },
+  'XB0fDUnXU5powFXDhCwa': { name: 'Charlotte', provider: 'ElevenLabs' },
+  'JBFqnCBsd6RMkjVDRZzb': { name: 'George', provider: 'ElevenLabs' },
+};
+
+export function formatVoiceName(voice: string, catalog?: Record<string, DynamicVoiceMeta>): string {
   if (!voice) return 'Default Voice';
-  if (voice === '21m00Tcm4TlvDq8ikWAM') return 'ElevenLabs – Rachel';
-  if (voice === 'AZnzlk1XvdvUeBnXmlld') return 'ElevenLabs – Domi';
-  if (voice === 'EXAVITQu4vr4xnSDxMaL') return 'ElevenLabs – Bella';
-  if (voice === 'ErXwobaYiN019PkySvjV') return 'ElevenLabs – Antoni';
-  if (voice === 'MF3mGyEYCl7XYWbV9V6O') return 'ElevenLabs – Elli';
-  if (voice === 'TxGEqnHWrfWFTfGW9XjX') return 'ElevenLabs – Josh';
-  if (voice === 'VR6AewLTigWG4xSOukaG') return 'ElevenLabs – Arnold';
-  if (voice === 'pNInz6obpgDQGcFmaJgB') return 'ElevenLabs – Adam';
-  if (voice.length > 22 && !voice.includes(' ')) return `Voice (${voice.slice(0, 10)}...)`;
-  return voice;
+  if (KNOWN_VOICE_MAP[voice]) {
+    return `${KNOWN_VOICE_MAP[voice].name} (${KNOWN_VOICE_MAP[voice].provider})`;
+  }
+  if (catalog && catalog[voice]) {
+    const meta = catalog[voice];
+    const rawLabel = meta.label || meta.name || voice;
+    const baseName = rawLabel.split(' - ')[0].trim();
+    const provName = getCleanProviderName(meta.providerName || meta.category || meta.provider);
+    return `${baseName} (${provName})`;
+  }
+  if (voice.includes('–') || (voice.includes(' - ') && voice.length < 30)) return voice;
+  return voice.length > 20 ? `${voice.slice(0, 10)}...` : voice;
 }
 
 interface AgentsViewProps {
@@ -234,6 +526,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createModalTab, setCreateModalTab] = useState<'identity' | 'voice' | 'language' | 'prompt' | 'rules' | 'telephony'>('identity');
+  const [editModalTab, setEditModalTab] = useState<'identity' | 'voice' | 'language' | 'prompt' | 'rules' | 'telephony'>('identity');
+
+  // Dynamic Global Voice Catalog Cache across all providers
+  const [dynamicVoiceCatalog, setDynamicVoiceCatalog] = useState<Record<string, DynamicVoiceMeta>>({});
 
   // Dynamic Provider & Model Registry State
   const [llmProviders, setLlmProviders] = useState<SelectOption[]>([]);
@@ -242,7 +539,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
   const [selectedVoiceProvider, setSelectedVoiceProvider] = useState('');
 
   const [llmModels, setLlmModels] = useState<SelectOption[]>([]);
-  const [voiceModels, setVoiceModels] = useState<SelectOption[]>([]);
+  const [voiceModels, setVoiceModels] = useState<(SelectOption & DynamicVoiceMeta)[]>([]);
   const [isModelsLoading, setIsModelsLoading] = useState(false);
   const [isVoicesLoading, setIsVoicesLoading] = useState(false);
   const [llmProviderLimitation, setLlmProviderLimitation] = useState<string | null>(null);
@@ -315,15 +612,53 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       try {
         const res = await fetchAPI(`/api/providers/voices?provider=${selectedVoiceProvider}`);
         if (res.voices && res.voices.length > 0) {
-          setVoiceModels(res.voices.map((v: any) => ({
-            value: v.id,
-            label: v.label,
-            description: `${v.gender} · ${v.accent}`
-          })));
-          setNewAgentData(prev => ({ ...prev, voice: prev.voice || res.voices[0].id }));
+          const provLabel = voiceProviders.find(p => p.value === selectedVoiceProvider)?.label?.replace(' (Configured)', '') || selectedVoiceProvider;
+
+          const mapped: (SelectOption & DynamicVoiceMeta)[] = res.voices.map((v: any) => {
+            const rawG = String(v.gender || '').trim();
+            const gLower = rawG.toLowerCase();
+            const normGender: 'female' | 'male' | 'neutral' | 'unknown' =
+              gLower === 'female' || gLower === 'feminine' || gLower === 'woman' ? 'female' :
+              gLower === 'male' || gLower === 'masculine' || gLower === 'man' ? 'male' :
+              gLower === 'neutral' ? 'neutral' : 'unknown';
+
+            return {
+              value: v.id,
+              id: v.id,
+              name: v.name || v.label || v.id,
+              label: v.label || v.name || v.id,
+              gender: normGender,
+              rawGender: rawG,
+              accent: v.accent || 'Universal',
+              category: v.category || provLabel,
+              provider: selectedVoiceProvider,
+              preview_url: v.preview_url || '',
+              description: `${rawG || 'Voice'} · ${v.accent || 'Universal'} (${v.category || provLabel})`,
+            };
+          });
+
+          setVoiceModels(mapped);
+
+          // Merge into global dynamic voice catalog
+          const newEntries: Record<string, DynamicVoiceMeta> = {};
+          mapped.forEach(m => {
+            newEntries[m.id] = m;
+          });
+          setDynamicVoiceCatalog(prev => ({ ...prev, ...newEntries }));
+
+          // Update newAgentData default if current voice not in list
+          setNewAgentData(prev => ({
+            ...prev,
+            voice: prev.voice && mapped.some(m => m.value === prev.voice) ? prev.voice : (mapped[0]?.value || '')
+          }));
+
+          // In edit mode, update voice to first available if current empty or switching providers
+          setEditAgentData(prev => ({
+            ...prev,
+            voice: prev.voice && mapped.some(m => m.value === prev.voice) ? prev.voice : (mapped[0]?.value || prev.voice)
+          }));
         } else {
           setVoiceModels([]);
-          setNewAgentData(prev => ({ ...prev, voice: '' }));
         }
       } catch (err) {
         setVoiceModels([]);
@@ -332,7 +667,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       }
     };
     fetchVoices();
-  }, [selectedVoiceProvider]);
+  }, [selectedVoiceProvider, voiceProviders]);
 
   useEffect(() => {
     if (!testVoiceProvider) return;
@@ -342,12 +677,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       try {
         const res = await fetchAPI(`/api/providers/voices?provider=${testVoiceProvider}`);
         if (res.voices && res.voices.length > 0) {
-          setTestVoiceModels(res.voices.map((v: any) => ({
+          const mapped = res.voices.map((v: any) => ({
             value: v.id,
-            label: v.label,
-            description: `${v.gender} · ${v.accent}`
-          })));
-          setTestVoiceModel(res.voices[0].label);
+            label: v.label || v.name || v.id,
+            description: `${v.gender || 'Voice'} · ${v.accent || 'Universal'}`
+          }));
+          setTestVoiceModels(mapped);
+          setTestVoiceModel(mapped[0]?.value || '');
         } else {
           setTestVoiceModels([]);
           setTestVoiceModel('');
@@ -407,6 +743,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
     businessTypeId: 'bt_1',
     departmentId: 'dep_1',
     workingHoursId: 'wh_1',
+    sttProvider: 'faster_whisper',
+    knowledgeBaseId: '',
+    assignedGsmLine: 'samsung-sm-a507fn-01',
+    autoRecord: true,
   });
 
   // Edit Form State
@@ -423,7 +763,34 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
     businessTypeId: 'bt_1',
     departmentId: 'dep_1',
     workingHoursId: 'wh_1',
+    sttProvider: 'faster_whisper',
+    knowledgeBaseId: '',
+    assignedGsmLine: 'samsung-sm-a507fn-01',
+    autoRecord: true,
   });
+
+  const { customKnowledgeCollections, customGsmDevices } = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('nexus_custom_items');
+      const parsed = saved ? JSON.parse(saved) : {};
+      return {
+        customKnowledgeCollections: parsed.knowledge_collections || [
+          { id: 'kb_1', name: 'Clinical FAQ & Pricing Docs', chunk_count: 142 },
+          { id: 'kb_2', name: 'Company Policy & SLA Handbook', chunk_count: 89 },
+          { id: 'kb_3', name: 'Sales Catalog & Inventory Guide', chunk_count: 210 },
+        ],
+        customGsmDevices: parsed.android_devices || [
+          { id: 'samsung-sm-a507fn-01', name: 'Samsung SM-A507FN (Jio 4G SIM)', sim_number: '+91 78275 45502' },
+          { id: 'android-primary', name: 'Primary Mobile Gateway (+91 98765 43210)', sim_number: '+91 98765 43210' },
+        ],
+      };
+    } catch {
+      return {
+        customKnowledgeCollections: [],
+        customGsmDevices: [],
+      };
+    }
+  }, []);
 
   const { promptDataFieldTags, promptVariableTags } = useMemo(() => {
     const dataFields: { tag: string; label: string; group: string }[] = [];
@@ -487,6 +854,134 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
     return { promptDataFieldTags: dataFields, promptVariableTags: variables };
   }, [isCreateModalOpen, isEditModalOpen]);
 
+  // Gender & Smart Language Filter State for Voice Engine
+  const [voiceGenderFilter, setVoiceGenderFilter] = useState<'all' | 'female' | 'male'>('all');
+  const [smartLanguageFilter, setSmartLanguageFilter] = useState<boolean>(true);
+
+  const activeLanguage = isEditModalOpen ? editAgentData.language : newAgentData.language;
+
+  const filteredVoiceModels = useMemo(() => {
+    // 1. Gender Filter
+    let pool = voiceModels;
+    if (voiceGenderFilter !== 'all') {
+      pool = pool.filter((v: any) => {
+        if (v.gender && (v.gender === 'female' || v.gender === 'male')) {
+          return v.gender === voiceGenderFilter;
+        }
+        const rawG = String(v.rawGender || '').toLowerCase();
+        if (voiceGenderFilter === 'female') {
+          if (rawG === 'female' || rawG === 'feminine' || rawG === 'woman') return true;
+          if (rawG === 'male' || rawG === 'masculine' || rawG === 'man') return false;
+          const text = `${v.label} ${v.description || ''}`.toLowerCase();
+          return /female|woman|girl|feminine|lady/i.test(text);
+        }
+        if (voiceGenderFilter === 'male') {
+          if (rawG === 'male' || rawG === 'masculine' || rawG === 'man') return true;
+          if (rawG === 'female' || rawG === 'feminine' || rawG === 'woman') return false;
+          const text = `${v.label} ${v.description || ''}`.toLowerCase();
+          return !/female|woman|girl|feminine|lady/i.test(text) && /\bmale\b|man|boy|masculine|gentleman/i.test(text);
+        }
+        return true;
+      });
+    }
+
+    // 2. Language Matching & Priority Scoring
+    const cleanLangName = activeLanguage ? activeLanguage.split(' (')[0].replace(/^[^\w\s]+/g, '').trim() : 'Selected Language';
+
+    const scored = pool.map((v: any) => {
+      const match = isVoiceLanguageMatch(v, activeLanguage);
+      const groupName = match.score >= 100
+        ? `⭐ Recommended for ${cleanLangName}`
+        : match.score >= 60
+        ? `🌐 Multilingual AI (Supports ${cleanLangName})`
+        : '🎙️ Other Accent Voices';
+
+      return {
+        ...v,
+        group: groupName,
+        description: match.matchBadge ? `${match.matchBadge} · ${v.accent || 'Universal'}` : v.description,
+        score: match.score
+      };
+    });
+
+    // Auto-sort highest matching native voices first
+    if (smartLanguageFilter) {
+      scored.sort((a, b) => b.score - a.score);
+    }
+
+    return scored;
+  }, [voiceModels, voiceGenderFilter, activeLanguage, smartLanguageFilter, isEditModalOpen]);
+
+  const handleSelectGenderFilter = (gender: 'all' | 'female' | 'male', isEdit: boolean) => {
+    setVoiceGenderFilter(gender);
+    const currentVoice = isEdit ? editAgentData.voice : newAgentData.voice;
+
+    let pool = voiceModels;
+    if (gender !== 'all') {
+      pool = voiceModels.filter((v: any) => {
+        if (v.gender && (v.gender === 'female' || v.gender === 'male')) {
+          return v.gender === gender;
+        }
+        const rawG = String(v.rawGender || '').toLowerCase();
+        if (gender === 'female') {
+          if (rawG === 'female' || rawG === 'feminine') return true;
+          if (rawG === 'male' || rawG === 'masculine') return false;
+          return /female|woman|girl|feminine|lady/i.test(`${v.label} ${v.description || ''}`);
+        }
+        if (gender === 'male') {
+          if (rawG === 'male' || rawG === 'masculine') return true;
+          if (rawG === 'female' || rawG === 'feminine') return false;
+          const t = `${v.label} ${v.description || ''}`.toLowerCase();
+          return !/female|woman|girl|feminine|lady/i.test(t) && /\bmale\b|man|boy|masculine|gentleman/i.test(t);
+        }
+        return true;
+      });
+    }
+
+    const voiceStillValid = pool.some(v => v.value === currentVoice);
+    if (!voiceStillValid && pool.length > 0) {
+      if (isEdit) {
+        setEditAgentData((prev) => ({ ...prev, voice: pool[0].value }));
+      } else {
+        setNewAgentData((prev) => ({ ...prev, voice: pool[0].value }));
+      }
+    }
+  };
+
+  const handleLanguageChange = (lang: string, isEdit: boolean) => {
+    const newPreview = getLanguagePreviewGreeting(lang);
+    setPreviewText(newPreview);
+
+    if (isEdit) {
+      setEditAgentData((prev) => ({ ...prev, language: lang }));
+    } else {
+      setNewAgentData((prev) => ({ ...prev, language: lang }));
+    }
+  };
+
+  const getConnectedTags = (promptStr?: string): string[] => {
+    if (!promptStr) return [];
+    const matches = promptStr.match(/\{\{[^}]+\}\}/g);
+    return matches ? Array.from(new Set(matches)) : [];
+  };
+
+  const handleToggleTag = (tag: string, isEdit: boolean) => {
+    const currentPrompt = isEdit ? (editAgentData.systemPrompt || '') : (newAgentData.systemPrompt || '');
+    let updatedPrompt: string;
+    if (currentPrompt.includes(tag)) {
+      updatedPrompt = currentPrompt.replace(tag, '').replace(/\s+/g, ' ').trim();
+      addToast('info', `Disconnected ${tag} from Calling Context`);
+    } else {
+      updatedPrompt = `${currentPrompt} ${tag}`.trim();
+      addToast('success', `Connected ${tag} to Live Calling Context`);
+    }
+    if (isEdit) {
+      setEditAgentData((prev) => ({ ...prev, systemPrompt: updatedPrompt }));
+    } else {
+      setNewAgentData((prev) => ({ ...prev, systemPrompt: updatedPrompt }));
+    }
+  };
+
   const loadAgents = async () => {
     try {
       setIsLoading(true);
@@ -515,45 +1010,192 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
           fetchAPI('/api/credentials').catch(() => ({ credentials: [] }))
         ]);
 
+        let customItems: Record<string, any[]> = {};
+        try {
+          const saved = localStorage.getItem('nexus_custom_items');
+          if (saved) customItems = JSON.parse(saved);
+        } catch (e) {}
+
+        const customVoiceList = customItems['voice'] || customItems['voice_profiles'] || [];
+        const customLlmList = customItems['llm'] || [];
+
         const configuredCreds = credsRes.credentials || [];
         const configuredLlmIds = new Set(configuredCreds.filter((c: any) => c.category === 'llm').map((c: any) => c.provider.toLowerCase()));
         const configuredVoiceIds = new Set(configuredCreds.filter((c: any) => c.category === 'voice').map((c: any) => c.provider.toLowerCase()));
 
-        let llms: SelectOption[] = [];
-        let voices: SelectOption[] = [];
+        // Merge backend providers with user custom/local hardware engines
+        const allRawLlms = [...(providersRes.llm || [])];
+        customLlmList.forEach((c: any) => {
+          const id = c.id || c.provider;
+          if (id && !allRawLlms.some(p => p.id === id)) {
+            allRawLlms.push({
+              id,
+              name: c.name || c.display_name || id,
+              description: c.description || (c.is_local ? 'Local Hardware LLM Engine' : 'Custom LLM Provider'),
+              category: c.is_local ? 'local' : 'cloud'
+            });
+          }
+        });
 
-        if (providersRes.llm) {
-          const rawLlms = providersRes.llm;
-          const filteredLlms = configuredLlmIds.size > 0 
-            ? rawLlms.filter((p: any) => configuredLlmIds.has(p.id.toLowerCase()))
-            : rawLlms;
-          llms = filteredLlms.map((p: any) => ({
-            value: p.id,
-            label: `${p.name} (Configured)`,
-            description: p.description
-          }));
-          setLlmProviders(llms.length > 0 ? llms : rawLlms.map((p: any) => ({ value: p.id, label: p.name, description: p.description })));
+        const allRawVoices = [...(providersRes.voice || [])];
+        customVoiceList.forEach((c: any) => {
+          const id = c.id || c.provider;
+          if (id && !allRawVoices.some(p => p.id === id)) {
+            allRawVoices.push({
+              id,
+              name: c.name || c.display_name || id,
+              description: c.description || (c.is_local ? 'Local Hardware Voice Engine' : 'Custom Voice Synthesizer'),
+              category: c.is_local ? 'local' : 'cloud'
+            });
+          }
+        });
+
+        // Helper to get canonical provider key for zero-duplication guarantee
+        const getCanonicalProviderKey = (item: any): string => {
+          const raw = `${item.provider || ''} ${item.id || ''} ${item.name || ''} ${item.display_name || ''}`.toLowerCase();
+          if (raw.includes('elevenlabs') || raw.includes('eleven_labs') || raw.includes('eleven')) return 'elevenlabs';
+          if (raw.includes('deepgram') || raw.includes('aura')) return 'deepgram';
+          if (raw.includes('cartesia')) return 'cartesia';
+          if (raw.includes('openai') || raw.includes('gpt')) return 'openai';
+          if (raw.includes('google') || raw.includes('gemini')) return 'google';
+          if (raw.includes('anthropic') || raw.includes('claude')) return 'anthropic';
+          if (raw.includes('groq')) return 'groq';
+          if (raw.includes('ollama')) return 'ollama';
+          if (raw.includes('playht')) return 'playht';
+          if (raw.includes('fish')) return 'fish_audio';
+          if (raw.includes('minimax')) return 'minimax';
+          if (raw.includes('lmnt')) return 'lmnt';
+          if (raw.includes('piper')) return 'piper';
+          if (raw.includes('coqui')) return 'coqui';
+          if (raw.includes('openrouter')) return 'openrouter';
+          if (raw.includes('deepseek')) return 'deepseek';
+          if (raw.includes('azure')) return 'azure';
+          return (item.provider || item.id || item.name || '').toLowerCase().trim();
+        };
+
+        // 1. Gather all configured LLM engines from backend credentials & API Integrations with ZERO duplicates
+        const llmMap = new Map<string, any>();
+        const allBackendLlms = Array.isArray(credsRes.llm) ? credsRes.llm : configuredCreds.filter((c: any) => c.category === 'llm');
+        
+        allBackendLlms.forEach((c: any) => {
+          const pKey = getCanonicalProviderKey(c);
+          const pId = c.provider || c.id || pKey;
+          const backendMatch = (providersRes.llm || []).find((p: any) => getCanonicalProviderKey(p) === pKey);
+          llmMap.set(pKey, {
+            id: pId,
+            name: c.display_name || backendMatch?.name || c.name || pId.replace(/_/g, ' ').toUpperCase(),
+            description: backendMatch?.description || (c.is_owner ? 'Dedicated User API Integration' : 'Workspace Active LLM Engine')
+          });
+        });
+
+        customLlmList.forEach((c: any) => {
+          const pKey = getCanonicalProviderKey(c);
+          if (!llmMap.has(pKey)) {
+            const pId = c.id || c.provider || pKey;
+            llmMap.set(pKey, {
+              id: pId,
+              name: c.name || c.display_name || pId,
+              description: c.description || (c.is_local ? 'Local Hardware LLM Engine' : 'Custom LLM Engine')
+            });
+          }
+        });
+
+        const activeLlmItems = Array.from(llmMap.values());
+        const finalLlmList = activeLlmItems.length > 0 ? activeLlmItems : (providersRes.llm || []);
+        const llms: SelectOption[] = finalLlmList.map((p: any) => ({
+          value: p.id,
+          label: activeLlmItems.length > 0 ? `${p.name} (Configured)` : p.name,
+          description: p.description
+        }));
+
+        // 2. Gather all configured Voice engines from backend credentials & API Integrations with ZERO duplicates
+        const voiceMap = new Map<string, any>();
+        const allBackendVoices = Array.isArray(credsRes.voice) ? credsRes.voice : configuredCreds.filter((c: any) => c.category === 'voice' || c.category === 'tts');
+
+        allBackendVoices.forEach((c: any) => {
+          const pKey = getCanonicalProviderKey(c);
+          const pId = c.provider || c.id || pKey;
+          const backendMatch = (providersRes.voice || []).find((p: any) => getCanonicalProviderKey(p) === pKey);
+          voiceMap.set(pKey, {
+            id: pId,
+            name: c.display_name || backendMatch?.name || c.name || pId.replace(/_/g, ' ').toUpperCase(),
+            description: backendMatch?.description || (c.is_owner ? 'Dedicated User API Integration' : 'Workspace Active Voice Engine')
+          });
+        });
+
+        customVoiceList.forEach((c: any) => {
+          const pKey = getCanonicalProviderKey(c);
+          if (!voiceMap.has(pKey)) {
+            const pId = c.id || c.provider || pKey;
+            voiceMap.set(pKey, {
+              id: pId,
+              name: c.name || c.display_name || pId,
+              description: c.description || (c.is_local ? 'Local Hardware Voice Engine' : 'Custom Voice Synthesizer')
+            });
+          }
+        });
+
+        const activeVoiceItems = Array.from(voiceMap.values());
+        const finalVoiceList = activeVoiceItems.length > 0 ? activeVoiceItems : (providersRes.voice || []);
+        const voices: SelectOption[] = finalVoiceList.map((p: any) => ({
+          value: p.id,
+          label: activeVoiceItems.length > 0 ? `${p.name} (Configured)` : p.name,
+          description: p.description
+        }));
+
+        setLlmProviders(llms);
+        setVoiceProviders(voices);
+
+        // Set default selected provider
+        const firstLlm = llms[0]?.value || '';
+        const firstVoice = voices[0]?.value || '';
+
+        if (firstLlm && !selectedLLMProvider) setSelectedLLMProvider(firstLlm);
+        if (firstVoice && !selectedVoiceProvider) setSelectedVoiceProvider(firstVoice);
+
+        // Pre-fetch voices from active voice providers to populate dynamic global catalog
+        const voiceProvidersToFetch = voices.slice(0, 10);
+        const catalogEntries: Record<string, DynamicVoiceMeta> = {};
+
+        await Promise.all(
+          voiceProvidersToFetch.map(async (vp: any) => {
+            const vpId = vp.value || vp.id;
+            try {
+              const vRes = await fetchAPI(`/api/providers/voices?provider=${vpId}`);
+              if (vRes.voices && Array.isArray(vRes.voices)) {
+                vRes.voices.forEach((v: any) => {
+                  const rawG = String(v.gender || '').trim();
+                  const gLower = rawG.toLowerCase();
+                  const normGender: 'female' | 'male' | 'neutral' | 'unknown' =
+                    gLower === 'female' || gLower === 'feminine' || gLower === 'woman' ? 'female' :
+                    gLower === 'male' || gLower === 'masculine' || gLower === 'man' ? 'male' :
+                    gLower === 'neutral' ? 'neutral' : 'unknown';
+
+                  const pName = vp.label?.replace(' (Configured)', '') || v.category || vpId;
+                  catalogEntries[v.id] = {
+                    id: v.id,
+                    name: v.name || v.label || v.id,
+                    label: v.label || v.name || v.id,
+                    gender: normGender,
+                    rawGender: rawG,
+                    accent: v.accent || 'Universal',
+                    provider: vpId,
+                    providerName: pName,
+                    category: pName,
+                    preview_url: v.preview_url,
+                    description: v.description,
+                  };
+                });
+              }
+            } catch (e) {
+              // Ignore individual provider error
+            }
+          })
+        );
+
+        if (Object.keys(catalogEntries).length > 0) {
+          setDynamicVoiceCatalog(prev => ({ ...prev, ...catalogEntries }));
         }
-
-        if (providersRes.voice) {
-          const rawVoices = providersRes.voice;
-          const filteredVoices = configuredVoiceIds.size > 0
-            ? rawVoices.filter((p: any) => configuredVoiceIds.has(p.id.toLowerCase()))
-            : rawVoices;
-          voices = filteredVoices.map((p: any) => ({
-            value: p.id,
-            label: `${p.name} (Configured)`,
-            description: p.description
-          }));
-          setVoiceProviders(voices.length > 0 ? voices : rawVoices.map((p: any) => ({ value: p.id, label: p.name, description: p.description })));
-        }
-
-        // Set default selected provider (configured first, or first in list)
-        const firstLlm = llms.find(p => configuredLlmIds.has(p.value.toLowerCase()))?.value || llms[0]?.value || '';
-        const firstVoice = voices.find(p => configuredVoiceIds.has(p.value.toLowerCase()))?.value || voices[0]?.value || '';
-
-        if (firstLlm) setSelectedLLMProvider(firstLlm);
-        if (firstVoice) setSelectedVoiceProvider(firstVoice);
 
       } catch (err) {
         console.error('Failed to fetch provider lists', err);
@@ -561,6 +1203,16 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
     };
     fetchProviders();
     loadAgents();
+
+    const handleSync = () => {
+      fetchProviders();
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('nexus_business_rules_updated', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('nexus_business_rules_updated', handleSync);
+    };
   }, []);
 
   const handleSendChatMessage = async () => {
@@ -699,6 +1351,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
 
   const handleOpenEditModal = (agent: Agent) => {
     setSelectedAgent(agent);
+    setEditModalTab('identity');
+    setVoiceGenderFilter('all');
     setEditAgentData({
       name: agent.name,
       role: agent.role,
@@ -709,7 +1363,31 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       systemPrompt: agent.systemPrompt,
       temperature: agent.temperature,
       maxDurationSeconds: agent.maxDurationSeconds,
+      businessTypeId: (agent as any).businessTypeId || 'bt_1',
+      departmentId: (agent as any).departmentId || 'dep_1',
+      workingHoursId: (agent as any).workingHoursId || 'wh_1',
+      sttProvider: (agent as any).sttProvider || 'faster_whisper',
+      knowledgeBaseId: (agent as any).knowledgeBaseId || '',
+      assignedGsmLine: (agent as any).assignedGsmLine || 'samsung-sm-a507fn-01',
+      autoRecord: (agent as any).autoRecord ?? true,
     });
+
+    if (agent.llmModel && llmProviders.length > 0) {
+      const modelLower = agent.llmModel.toLowerCase();
+      const match = llmProviders.find(p => modelLower.includes(p.value.toLowerCase()) || p.value.toLowerCase().includes(modelLower.split('-')[0]) || p.label.toLowerCase().includes(modelLower.split('-')[0]));
+      if (match) setSelectedLLMProvider(match.value);
+    }
+
+    if (agent.voice) {
+      const catalogEntry = dynamicVoiceCatalog[agent.voice];
+      if (catalogEntry && catalogEntry.provider) {
+        setSelectedVoiceProvider(catalogEntry.provider);
+      } else if (voiceProviders.length > 0 && !selectedVoiceProvider) {
+        setSelectedVoiceProvider(voiceProviders[0].value);
+      }
+    }
+
+    setPreviewText(getLanguagePreviewGreeting(agent.language || 'English (India)'));
     setIsEditModalOpen(true);
   };
 
@@ -813,7 +1491,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       header: 'Voice & Engine Stack',
       render: (row) => (
         <div className="text-xs">
-          <div className="font-semibold text-zinc-800 dark:text-zinc-200">{row.voice}</div>
+          <div className="font-semibold text-zinc-800 dark:text-zinc-200">{formatVoiceName(row.voice, dynamicVoiceCatalog)}</div>
           <div className="text-[11px] text-zinc-400 font-mono">{row.llmModel}</div>
         </div>
       ),
@@ -1074,24 +1752,42 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
                     </Badge>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-1.5 text-xs">
-                    <div className="flex justify-between text-zinc-500">
-                      <span className="flex items-center gap-1.5">
-                        <Mic className="h-3.5 w-3.5 text-blue-500" /> Voice Engine:
+                  <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2 text-zinc-500 min-w-0">
+                      <span className="flex items-center gap-1.5 shrink-0 whitespace-nowrap text-zinc-500 font-medium">
+                        <Mic className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                        <span>Voice Engine:</span>
                       </span>
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">{formatVoiceName(agent.voice)}</span>
+                      <span
+                        className="font-semibold text-zinc-800 dark:text-zinc-200 text-right truncate min-w-0"
+                        title={formatVoiceName(agent.voice, dynamicVoiceCatalog)}
+                      >
+                        {formatVoiceName(agent.voice, dynamicVoiceCatalog)}
+                      </span>
                     </div>
-                    <div className="flex justify-between text-zinc-500">
-                      <span className="flex items-center gap-1.5">
-                        <Cpu className="h-3.5 w-3.5 text-purple-500" /> LLM Model:
+                    <div className="flex items-center justify-between gap-2 text-zinc-500 min-w-0">
+                      <span className="flex items-center gap-1.5 shrink-0 whitespace-nowrap text-zinc-500 font-medium">
+                        <Cpu className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                        <span>LLM Model:</span>
                       </span>
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">{agent.llmModel}</span>
+                      <span
+                        className="font-semibold font-mono text-zinc-800 dark:text-zinc-200 text-right truncate min-w-0 text-[11px]"
+                        title={agent.llmModel}
+                      >
+                        {agent.llmModel}
+                      </span>
                     </div>
-                    <div className="flex justify-between text-zinc-500">
-                      <span className="flex items-center gap-1.5">
-                        <Globe className="h-3.5 w-3.5 text-emerald-500" /> Language:
+                    <div className="flex items-center justify-between gap-2 text-zinc-500 min-w-0">
+                      <span className="flex items-center gap-1.5 shrink-0 whitespace-nowrap text-zinc-500 font-medium">
+                        <Globe className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        <span>Language:</span>
                       </span>
-                      <span className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300">{agent.language}</span>
+                      <span
+                        className="font-medium text-zinc-700 dark:text-zinc-300 text-right truncate min-w-0"
+                        title={agent.language}
+                      >
+                        {agent.language}
+                      </span>
                     </div>
                   </div>
 
@@ -1309,21 +2005,24 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
                 Model Info
               </h4>
               <div className="p-3.5 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2.5 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">LLM Model</span>
-                  <span className="font-semibold font-mono text-zinc-800 dark:text-zinc-200 text-[11px]">
+                <div className="flex justify-between items-center gap-2 min-w-0">
+                  <span className="text-zinc-500 shrink-0 whitespace-nowrap">LLM Model</span>
+                  <span className="font-semibold font-mono text-zinc-800 dark:text-zinc-200 text-[11px] text-right truncate min-w-0">
                     {selectedAgent?.llmModel || 'Gemini 1.5 Flash'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">Voice Engine</span>
-                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 text-[11px]">
-                    {selectedAgent?.voice || 'Rachel'}
+                <div className="flex justify-between items-center gap-2 min-w-0">
+                  <span className="text-zinc-500 shrink-0 whitespace-nowrap">Voice Engine</span>
+                  <span 
+                    className="font-semibold text-zinc-800 dark:text-zinc-200 text-[11px] text-right truncate min-w-0"
+                    title={formatVoiceName(selectedAgent?.voice || '', dynamicVoiceCatalog)}
+                  >
+                    {formatVoiceName(selectedAgent?.voice || '', dynamicVoiceCatalog)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">Language</span>
-                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 text-[11px]">
+                <div className="flex justify-between items-center gap-2 min-w-0">
+                  <span className="text-zinc-500 shrink-0 whitespace-nowrap">Language</span>
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 text-[11px] text-right truncate min-w-0">
                     {selectedAgent?.language || 'English (US)'}
                   </span>
                 </div>
@@ -1868,398 +2567,364 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel (SDR Receptionist)', description: 'ElevenLabs • US Neutral Female', gender: 'Female', accent: 'US Neutral', engine: 'ElevenLabs', status: 'Active', stability: 0.45, similarity: 0.85 },
-              { id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi (Executive Support)', description: 'ElevenLabs • UK Professional Female', gender: 'Female', accent: 'UK Professional', engine: 'ElevenLabs', status: 'Active', stability: 0.50, similarity: 0.80 },
-              { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Soft Support)', description: 'ElevenLabs • US Soft Female', gender: 'Female', accent: 'US Soft', engine: 'ElevenLabs', status: 'Active', stability: 0.40, similarity: 0.75 },
-              { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni (Deep Sales)', description: 'ElevenLabs • US Deep Male', gender: 'Male', accent: 'US Executive', engine: 'ElevenLabs', status: 'Active', stability: 0.55, similarity: 0.85 },
-              { id: 'aura-stella-en', name: 'Stella (Conversational Realtime)', description: 'Deepgram Aura • Telephony Female', gender: 'Female', accent: 'US English', engine: 'Deepgram Aura', status: 'Active', stability: 0.50, similarity: 0.90 },
-              { id: 'sonic-latest', name: 'Sonic (Ultra Fast Stream)', description: 'Cartesia Sonic • Low Latency <100ms', gender: 'Female', accent: 'Multilingual', engine: 'Cartesia', status: 'Active', stability: 0.45, similarity: 0.85 },
-            ].map((vp) => (
-              <Card key={vp.id} className="p-4 space-y-3 hover:border-blue-500/50 transition-all border-zinc-200 dark:border-zinc-800 shadow-2xs">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
-                      <Mic className="h-4 w-4" />
+            {(Object.values(dynamicVoiceCatalog) as DynamicVoiceMeta[]).length > 0 ? (
+              (Object.values(dynamicVoiceCatalog) as DynamicVoiceMeta[]).map((vp) => (
+                <Card key={vp.id} className="p-4 space-y-3 hover:border-blue-500/50 transition-all border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+                        <Mic className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs text-zinc-900 dark:text-zinc-100">{vp.label || vp.name}</h4>
+                        <span className="text-[10px] text-zinc-500 font-mono block">{vp.category || vp.provider}</span>
+                      </div>
+                    </div>
+                    <Badge variant={vp.gender === 'female' ? 'default' : (vp.gender === 'male' ? 'primary' : 'secondary')} size="sm">
+                      {vp.rawGender || (vp.gender ? vp.gender.toUpperCase() : 'VOICE')}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal line-clamp-2">
+                    {vp.description || `${vp.category || vp.provider} • ${vp.rawGender || vp.gender} • ${vp.accent}`}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-zinc-50 dark:bg-zinc-900 p-2 rounded-lg font-mono">
+                    <div>
+                      <span className="text-zinc-400 block">Accent</span>
+                      <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate block">{vp.accent || 'Universal'}</span>
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs text-zinc-900 dark:text-zinc-100">{vp.name}</h4>
-                      <span className="text-[10px] text-zinc-500 font-mono block">{vp.engine}</span>
+                      <span className="text-zinc-400 block">Provider</span>
+                      <span className="font-semibold text-zinc-800 dark:text-zinc-200 uppercase truncate block">{vp.provider}</span>
                     </div>
                   </div>
-                  <Badge variant="success" size="sm">{vp.status}</Badge>
-                </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal">{vp.description}</p>
-                <div className="grid grid-cols-2 gap-2 text-[10px] bg-zinc-50 dark:bg-zinc-900 p-2 rounded-lg font-mono">
-                  <div>
-                    <span className="text-zinc-400 block">Stability</span>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{vp.stability}</span>
+                  <div className="pt-1 flex items-center justify-between gap-2">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      className="w-full justify-center text-[11px]"
+                      onClick={() => {
+                        setTestVoiceProvider(vp.provider);
+                        setTestVoiceModel(vp.id);
+                        setActiveTab('voice_test');
+                        addToast('info', `Loaded voice profile '${vp.label || vp.name}' in Voice Studio`);
+                      }}
+                    >
+                      Test Profile Audio
+                    </Button>
                   </div>
-                  <div>
-                    <span className="text-zinc-400 block">Similarity</span>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{vp.similarity}</span>
-                  </div>
-                </div>
-                <div className="pt-1 flex items-center justify-between gap-2">
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    className="w-full justify-center text-[11px]"
-                    onClick={() => {
-                      setTestVoiceModel(vp.id);
-                      setActiveTab('voice_test');
-                      addToast('info', `Loaded voice profile '${vp.name}' in Voice Studio`);
-                    }}
-                  >
-                    Test Profile Audio
-                  </Button>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))
+            ) : (
+              <div className="col-span-full py-8 text-center text-sm text-zinc-500">
+                Loading voice profiles from connected providers...
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* CREATE AGENT MODAL — Enterprise Command-Palette Dropdowns */}
-      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create New AI Agent" maxWidth="4xl">
-        <form onSubmit={handleCreateAgent} className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center">
-                    1
-                  </span>
-                  Agent Identity
-                </CardTitle>
-                
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
-                    Agent Name <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    value={newAgentData.name}
-                    onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
-                    placeholder="e.g. Rachel – Inbound Support Lead"
-                    className="text-sm h-10"
-                    required
-                  />
-                </div>
+      {/* CREATE AGENT MODAL */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Create New AI Voice Agent"
+        description="Configure agent persona, language model, voice settings, and CRM data integration."
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleCreateAgent} className="space-y-4">
+          {/* Agent Identity */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Agent Name *"
+              placeholder="e.g. Nikita"
+              value={newAgentData.name}
+              onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
+              required
+            />
+            <Input
+              label="Role / Persona"
+              placeholder="e.g. Customer Support Specialist"
+              value={newAgentData.role}
+              onChange={(e) => setNewAgentData({ ...newAgentData, role: e.target.value })}
+            />
+          </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
-                    Role / Persona
-                  </label>
-                  <Input
-                    value={newAgentData.role}
-                    onChange={(e) => setNewAgentData({ ...newAgentData, role: e.target.value })}
-                    placeholder="e.g. Customer Support Specialist"
-                    className="text-sm h-10"
-                  />
+          {/* Language Model Engine */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CommandPaletteSelect
+              label="LLM Provider"
+              options={llmProviders}
+              value={selectedLLMProvider}
+              onChange={(provId) => setSelectedLLMProvider(provId)}
+              placeholder="Select LLM provider..."
+              id="create-llm-provider"
+            />
+            <div className="relative">
+              <CommandPaletteSelect
+                label="Model"
+                options={llmModels}
+                value={newAgentData.llmModel}
+                onChange={(modelId) => setNewAgentData((prev) => ({ ...prev, llmModel: modelId }))}
+                placeholder={isModelsLoading ? 'Loading models...' : 'Select model...'}
+                id="create-llm-model"
+              />
+              {llmProviderLimitation && (
+                <div className="absolute top-14 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-1.5 rounded-md border border-red-200 dark:border-red-800/30 z-10">
+                  {llmProviderLimitation}
                 </div>
-              </Card>
-
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center">
-                    2
-                  </span>
-                  Language Model Engine
-                </CardTitle>
-
-              <div className="grid grid-cols-2 gap-4">
-                <CommandPaletteSelect
-                  label="LLM Provider"
-                  options={llmProviders}
-                  value={selectedLLMProvider}
-                  onChange={(provId) => setSelectedLLMProvider(provId)}
-                  placeholder="Select LLM provider..."
-                  id="create-llm-provider"
-                />
-                <div className="relative">
-                  <CommandPaletteSelect
-                    label="Model"
-                    options={llmModels}
-                    value={newAgentData.llmModel}
-                    onChange={(modelId) => setNewAgentData((prev) => ({ ...prev, llmModel: modelId }))}
-                    placeholder={isModelsLoading ? 'Loading models...' : 'Select model...'}
-                    id="create-llm-model"
-                  />
-                  {llmProviderLimitation && (
-                    <div className="absolute top-16 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-2 rounded-md border border-red-200 dark:border-red-800/30 z-10">
-                      {llmProviderLimitation}
-                    </div>
-                  )}
-                </div>
-              </div>
-              </Card>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-4">
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center">
-                    3
-                  </span>
-                  Voice Engine
-                </CardTitle>
-              <div className="grid grid-cols-2 gap-4">
-                <CommandPaletteSelect
-                  label="Voice Provider"
-                  options={voiceProviders}
-                  value={selectedVoiceProvider}
-                  onChange={(vpId) => setSelectedVoiceProvider(vpId)}
-                  placeholder="Select voice provider..."
-                  id="create-voice-provider"
-                />
-                <div className="relative">
-                  <CommandPaletteSelect
-                    label="Voice"
-                    options={voiceModels}
-                    value={newAgentData.voice}
-                    onChange={(voiceId) => setNewAgentData((prev) => ({ ...prev, voice: voiceId }))}
-                    placeholder={isVoicesLoading ? 'Loading voices...' : 'Select voice...'}
-                    id="create-voice"
-                  />
-                  {voiceProviderLimitation && (
-                    <div className="absolute top-16 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-2 rounded-md border border-red-200 dark:border-red-800/30 z-10">
-                      {voiceProviderLimitation}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="space-y-2 mt-2 mb-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
-                    Custom Preview Sample Text
-                  </label>
-                  <Input
-                    value={previewText}
-                    onChange={(e) => setPreviewText(e.target.value)}
-                    placeholder="Enter custom text to test voice..."
-                    className="text-xs h-8"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  isLoading={isPreviewing}
-                  leftIcon={isPreviewing ? undefined : <Mic className="h-3 w-3" />}
-                  onClick={async () => {
-                    const voiceId = newAgentData.voice;
-                    if (!voiceId) return;
-                    setIsPreviewing(true);
-                    setPreviewError(null);
-                    const sampleText = previewText.trim() || 'Hello, I am ready to handle your calls.';
-                    try {
-                      const res = await fetch('/api/providers/voices/preview', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ provider: selectedVoiceProvider, voice_id: voiceId, text: sampleText }),
-                      });
-                      if (res.ok) {
-                        const blob = await res.blob();
-                        const audio = new Audio(URL.createObjectURL(blob));
-                        await audio.play();
-                      } else {
-                        const utterance = new SpeechSynthesisUtterance(sampleText);
-                        window.speechSynthesis.speak(utterance);
-                      }
-                    } catch (err: any) {
-                      try {
-                        const utterance = new SpeechSynthesisUtterance(sampleText);
-                        window.speechSynthesis.speak(utterance);
-                      } catch (e) {
-                        setPreviewError('Voice preview playback failed.');
-                      }
-                    } finally {
-                      setIsPreviewing(false);
-                    }
-                  }}
-                  className="h-7 text-[11px] w-full"
-                >
-                  ▶ Preview Voice
-                </Button>
-                {previewError && <span className="text-[10px] text-red-500 block text-center mt-1">{previewError}</span>}
-              </div>
-              </Card>
-
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm mt-4">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-600 flex items-center justify-center">
-                    4
-                  </span>
-                  Language &amp; Settings
-                </CardTitle>
-                <div className="grid grid-cols-2 gap-4">
-                  <CommandPaletteSelect
-                    label="Language"
-                    options={languageOptions()}
-                    value={newAgentData.language}
-                    onChange={(lang) => setNewAgentData((prev) => ({ ...prev, language: lang }))}
-                    placeholder="Select language..."
-                    id="create-language"
-                  />
-                  
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
-                      Temperature
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="1"
-                      value={newAgentData.temperature}
-                      onChange={(e) => setNewAgentData({ ...newAgentData, temperature: parseFloat(e.target.value) })}
-                      className="text-sm h-10"
-                    />
-                  </div>
-                </div>
-              </Card>
+              )}
             </div>
           </div>
 
-          {/* SSOT Business & Rules Section */}
-          <Card className="p-4 space-y-4 border-blue-200/80 dark:border-blue-900/50 bg-blue-50/30 dark:bg-blue-950/20 shadow-xs">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <span className="h-5 w-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                  SSOT
-                </span>
-                <span>Business &amp; Rules Configuration</span>
-              </CardTitle>
+          {/* Voice Engine */}
+          <div className="space-y-3 p-3.5 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  Voice Engine Settings
+                </label>
+                {Boolean(newAgentData.language) && (
+                  <button
+                    type="button"
+                    onClick={() => setSmartLanguageFilter((prev) => !prev)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                      smartLanguageFilter
+                        ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                        : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                    }`}
+                    title="Toggle smart language optimization for voices"
+                  >
+                    <span>✨ Best for {(newAgentData.language || 'English').split(' (')[0].replace(/^[^\w\s]+/g, '').trim() || 'English'}</span>
+                    <span className={`text-[9px] px-1 rounded ${smartLanguageFilter ? 'bg-amber-200/80 dark:bg-amber-800 text-amber-900 dark:text-amber-100' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
+                      {smartLanguageFilter ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                )}
+              </div>
+              {/* Voice Gender Filter */}
+              <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={() => handleSelectGenderFilter('all', false)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    voiceGenderFilter === 'all'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectGenderFilter('female', false)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    voiceGenderFilter === 'female'
+                      ? 'bg-pink-500 text-white shadow-xs'
+                      : 'text-zinc-500 hover:text-pink-600 dark:hover:text-pink-300'
+                  }`}
+                >
+                  <span>👩 Female</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectGenderFilter('male', false)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    voiceGenderFilter === 'male'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-zinc-500 hover:text-blue-600 dark:hover:text-blue-300'
+                  }`}
+                >
+                  <span>👨 Male</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <CommandPaletteSelect
+                label="Voice Provider"
+                options={voiceProviders}
+                value={selectedVoiceProvider}
+                onChange={(vpId) => setSelectedVoiceProvider(vpId)}
+                placeholder="Select voice provider..."
+                id="create-voice-provider"
+              />
+              <div className="relative">
+                <CommandPaletteSelect
+                  label={`Voice (${filteredVoiceModels.length} ${voiceGenderFilter === 'all' ? 'Total' : voiceGenderFilter.toUpperCase()})`}
+                  options={filteredVoiceModels}
+                  value={newAgentData.voice}
+                  onChange={(voiceId) => setNewAgentData((prev) => ({ ...prev, voice: voiceId }))}
+                  placeholder={isVoicesLoading ? 'Loading voices...' : 'Select voice...'}
+                  id="create-voice"
+                />
+                {voiceProviderLimitation && (
+                  <div className="absolute top-14 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-1.5 rounded-md border border-red-200 dark:border-red-800/30 z-10">
+                    {voiceProviderLimitation}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <div className="flex-1">
+                <Input
+                  value={previewText}
+                  onChange={(e) => setPreviewText(e.target.value)}
+                  placeholder="Enter custom preview sample text..."
+                  className="text-xs h-8"
+                />
+              </div>
               <Button
                 type="button"
-                variant="outline"
                 size="xs"
-                className="text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800"
-                onClick={() => {
-                  const updatedPrompt = buildAgentSystemPromptWithRules(newAgentData.systemPrompt, newAgentData.businessTypeId, newAgentData.departmentId);
-                  setNewAgentData(prev => ({ ...prev, systemPrompt: updatedPrompt }));
-                  addToast('success', 'Injected Business Rules & Compliance Guardrails into System Prompt');
+                variant="outline"
+                isLoading={isPreviewing}
+                leftIcon={isPreviewing ? undefined : <Mic className="h-3 w-3" />}
+                onClick={async () => {
+                  const voiceId = newAgentData.voice;
+                  if (!voiceId) {
+                    addToast('warning', 'Please select a voice model first.');
+                    return;
+                  }
+                  setIsPreviewing(true);
+                  setPreviewError(null);
+                  const sampleText = previewText.trim() || 'Hello, I am ready to handle your calls.';
+                  try {
+                    const res = await fetch('/api/providers/voices/preview', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        provider: selectedVoiceProvider,
+                        voice_id: voiceId,
+                        text: sampleText,
+                        language: newAgentData.language,
+                      }),
+                    });
+                    if (res.ok) {
+                      const blob = await res.blob();
+                      const audio = new Audio(URL.createObjectURL(blob));
+                      await audio.play();
+                    } else {
+                      const utterance = new SpeechSynthesisUtterance(sampleText);
+                      window.speechSynthesis.speak(utterance);
+                    }
+                  } catch (err: any) {
+                    try {
+                      const utterance = new SpeechSynthesisUtterance(sampleText);
+                      window.speechSynthesis.speak(utterance);
+                    } catch (e) {
+                      setPreviewError('Voice preview playback failed.');
+                    }
+                  } finally {
+                    setIsPreviewing(false);
+                  }
                 }}
+                className="h-8 text-xs shrink-0"
               >
-                ⚡ Apply SSOT Rules to System Prompt
+                ▶ Preview Voice
               </Button>
             </div>
+            {previewError && <span className="text-[10px] text-red-500 block text-center">{previewError}</span>}
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div>
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Business Vertical</label>
-                <select
-                  value={newAgentData.businessTypeId}
-                  onChange={(e) => {
-                    const btId = e.target.value;
-                    const selectedBt = businessTypes.find(b => b.id === btId || b.name === btId);
-                    setNewAgentData(prev => ({
-                      ...prev,
-                      businessTypeId: btId,
-                      language: selectedBt?.default_language || prev.language
-                    }));
-                  }}
-                  className="w-full h-9 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-xs"
-                >
-                  {businessTypes.map(bt => (
-                    <option key={bt.id} value={bt.id}>{bt.name} ({bt.category || 'General'})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Target Department</label>
-                <select
-                  value={newAgentData.departmentId}
-                  onChange={(e) => setNewAgentData(prev => ({ ...prev, departmentId: e.target.value }))}
-                  className="w-full h-9 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-xs"
-                >
-                  {departments.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.extension || '#101'})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Operating Hours Profile</label>
-                <select
-                  value={newAgentData.workingHoursId}
-                  onChange={(e) => setNewAgentData(prev => ({ ...prev, workingHoursId: e.target.value }))}
-                  className="w-full h-9 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-xs"
-                >
-                  {workingHours.map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-              </div>
+          {/* Language & Settings */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CommandPaletteSelect
+              label="Language"
+              badge={`${GLOBAL_LANGUAGES_CATALOG.length} Languages`}
+              options={languageOptions(languages)}
+              value={newAgentData.language}
+              onChange={(lang) => handleLanguageChange(lang, false)}
+              placeholder="Select language..."
+              id="create-language"
+            />
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                Temperature (Creativity)
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="1"
+                value={newAgentData.temperature}
+                onChange={(e) => setNewAgentData({ ...newAgentData, temperature: parseFloat(e.target.value) })}
+                className="text-xs h-9"
+              />
             </div>
-          </Card>
+          </div>
 
-          {/* Full Width Row */}
-          <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-            <CardTitle className="text-sm font-bold flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="h-5 w-5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center">
-                  5
+          {/* CRM & Dynamic Variables Integration */}
+          <div className="space-y-2.5 p-3.5 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block">
+                  CRM Schema &amp; Dynamic Variables
                 </span>
-                <span>System Instructions</span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Select fields to connect live caller data to the agent
+                </span>
               </div>
-              <span className="text-[10px] text-zinc-400 font-normal">
-                Click any tag below to insert into prompt
-              </span>
-            </CardTitle>
+              {getConnectedTags(newAgentData.systemPrompt).length > 0 && (
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  {getConnectedTags(newAgentData.systemPrompt).length} Connected
+                </span>
+              )}
+            </div>
 
-            {/* Separate Collapsible Dropdown Panels for Data Fields and Variables in Prompts */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <AgentPromptTagDropdownPanel
                 title="CRM Data Fields"
                 count={promptDataFieldTags.length}
-                subtitle="Schema attributes & fields (e.g. {{contact.alternate_phone}}, {{contact.insurance_carrier}})"
-                icon={<Sliders className="h-4 w-4" />}
+                subtitle="Customer attributes (e.g. {{contact.alternate_phone}})"
+                icon={<Sliders className="h-3.5 w-3.5" />}
                 theme="amber"
                 items={promptDataFieldTags}
-                onInsert={(tag) => {
-                  const current = newAgentData.systemPrompt || '';
-                  setNewAgentData({ ...newAgentData, systemPrompt: `${current} ${tag}`.trim() });
-                  addToast(`Inserted ${tag} into prompt`, 'info');
-                }}
+                selectedTags={getConnectedTags(newAgentData.systemPrompt)}
+                onToggleTag={(tag) => handleToggleTag(tag, false)}
               />
 
               <AgentPromptTagDropdownPanel
                 title="Workspace Dynamic Variables"
                 count={promptVariableTags.length}
-                subtitle="Dynamic workspace variables & tokens (e.g. {{appointment_date}}, {{company_name}})"
-                icon={<Variable className="h-4 w-4" />}
+                subtitle="Dynamic workspace variables (e.g. {{appointment_date}})"
+                icon={<Variable className="h-3.5 w-3.5" />}
                 theme="blue"
                 items={promptVariableTags}
-                onInsert={(tag) => {
-                  const current = newAgentData.systemPrompt || '';
-                  setNewAgentData({ ...newAgentData, systemPrompt: `${current} ${tag}`.trim() });
-                  addToast(`Inserted ${tag} into prompt`, 'info');
-                }}
+                selectedTags={getConnectedTags(newAgentData.systemPrompt)}
+                onToggleTag={(tag) => handleToggleTag(tag, false)}
               />
             </div>
 
-            <div>
-              <Textarea
-                rows={5}
-                value={newAgentData.systemPrompt}
-                onChange={(e) => setNewAgentData({ ...newAgentData, systemPrompt: e.target.value })}
-                className="font-mono text-sm"
-                placeholder="Enter base prompt directive... e.g. Hello {{contact.name}}, your registered insurance is {{contact.dental_insurance_carrier}}."
-              />
-            </div>
-          </Card>
+            {getConnectedTags(newAgentData.systemPrompt).length > 0 && (
+              <div className="pt-2 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold text-zinc-500 shrink-0">Connected:</span>
+                {getConnectedTags(newAgentData.systemPrompt).map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800/80"
+                  >
+                    <span>✓ {tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTag(tag, false)}
+                      className="text-emerald-600 hover:text-red-500 font-bold ml-0.5 cursor-pointer"
+                      title={`Disconnect ${tag}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-3 pt-5 border-t border-zinc-200 dark:border-zinc-800">
-            <Button variant="outline" size="md" type="button" onClick={() => setIsCreateModalOpen(false)}>
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <Button variant="outline" type="button" onClick={() => setIsCreateModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="md" type="submit">
+            <Button variant="primary" type="submit">
               Save &amp; Provision Agent
             </Button>
           </div>
@@ -2267,269 +2932,306 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       </Modal>
 
       {/* EDIT AGENT MODAL */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Edit Agent: ${selectedAgent?.name}`} maxWidth="4xl">
-        <form onSubmit={handleUpdateAgent} className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center">
-                    1
-                  </span>
-                  Agent Identity
-                </CardTitle>
-                
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
-                    Agent Name <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    value={editAgentData.name}
-                    onChange={(e) => setEditAgentData({ ...editAgentData, name: e.target.value })}
-                    className="text-sm h-10"
-                    required
-                  />
-                </div>
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title={`Edit AI Voice Agent: ${selectedAgent?.name || ''}`}
+        description="Configure agent persona, language model, voice settings, and CRM data integration."
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleUpdateAgent} className="space-y-4">
+          {/* Agent Identity */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Agent Name *"
+              value={editAgentData.name}
+              onChange={(e) => setEditAgentData({ ...editAgentData, name: e.target.value })}
+              required
+            />
+            <Input
+              label="Role / Persona"
+              placeholder="e.g. Customer Support Specialist"
+              value={editAgentData.role}
+              onChange={(e) => setEditAgentData({ ...editAgentData, role: e.target.value })}
+            />
+          </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
-                    Role / Persona
-                  </label>
-                  <Input
-                    value={editAgentData.role}
-                    onChange={(e) => setEditAgentData({ ...editAgentData, role: e.target.value })}
-                    className="text-sm h-10"
-                  />
+          {/* Language Model Engine */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CommandPaletteSelect
+              label="LLM Provider"
+              options={llmProviders}
+              value={selectedLLMProvider}
+              onChange={(provId) => setSelectedLLMProvider(provId)}
+              placeholder="Select LLM provider..."
+              id="edit-llm-provider"
+            />
+            <div className="relative">
+              <CommandPaletteSelect
+                label="Model"
+                options={llmModels}
+                value={editAgentData.llmModel}
+                onChange={(modelId) => setEditAgentData((prev) => ({ ...prev, llmModel: modelId }))}
+                placeholder={isModelsLoading ? 'Loading models...' : 'Select model...'}
+                id="edit-llm-model"
+              />
+              {llmProviderLimitation && (
+                <div className="absolute top-14 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-1.5 rounded-md border border-red-200 dark:border-red-800/30 z-10">
+                  {llmProviderLimitation}
                 </div>
-              </Card>
-
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center">
-                    2
-                  </span>
-                  Language Model Engine
-                </CardTitle>
-
-              <div className="grid grid-cols-2 gap-4">
-                <CommandPaletteSelect
-                  label="LLM Provider"
-                  options={llmProviders}
-                  value={selectedLLMProvider}
-                  onChange={(provId) => setSelectedLLMProvider(provId)}
-                  placeholder="Select LLM provider..."
-                  id="edit-llm-provider"
-                />
-                <div className="relative">
-                  <CommandPaletteSelect
-                    label="Model"
-                    options={llmModels}
-                    value={editAgentData.llmModel}
-                    onChange={(modelId) => setEditAgentData((prev) => ({ ...prev, llmModel: modelId }))}
-                    placeholder={isModelsLoading ? 'Loading models...' : 'Select model...'}
-                    id="edit-llm-model"
-                  />
-                  {llmProviderLimitation && (
-                    <div className="absolute top-16 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-2 rounded-md border border-red-200 dark:border-red-800/30 z-10">
-                      {llmProviderLimitation}
-                    </div>
-                  )}
-                </div>
-              </div>
-              </Card>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-4">
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center">
-                    3
-                  </span>
-                  Voice Engine
-                </CardTitle>
-              <div className="grid grid-cols-2 gap-4">
-                <CommandPaletteSelect
-                  label="Voice Provider"
-                  options={voiceProviders}
-                  value={selectedVoiceProvider}
-                  onChange={(vpId) => setSelectedVoiceProvider(vpId)}
-                  placeholder="Select voice provider..."
-                  id="edit-voice-provider"
-                />
-                <div className="relative">
-                  <CommandPaletteSelect
-                    label="Voice"
-                    options={voiceModels}
-                    value={editAgentData.voice}
-                    onChange={(voiceId) => setEditAgentData((prev) => ({ ...prev, voice: voiceId }))}
-                    placeholder={isVoicesLoading ? 'Loading voices...' : 'Select voice...'}
-                    id="edit-voice"
-                  />
-                  {voiceProviderLimitation && (
-                    <div className="absolute top-16 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-2 rounded-md border border-red-200 dark:border-red-800/30 z-10">
-                      {voiceProviderLimitation}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="space-y-2 mt-2 mb-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
-                    Custom Preview Sample Text
-                  </label>
-                  <Input
-                    value={previewText}
-                    onChange={(e) => setPreviewText(e.target.value)}
-                    placeholder="Enter custom text to test voice..."
-                    className="text-xs h-8"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  isLoading={isPreviewing}
-                  leftIcon={isPreviewing ? undefined : <Mic className="h-3 w-3" />}
-                  onClick={async () => {
-                    const voiceId = editAgentData.voice;
-                    if (!voiceId) return;
-                    setIsPreviewing(true);
-                    setPreviewError(null);
-                    const sampleText = previewText.trim() || 'Hello, I am ready to handle your calls.';
-                    try {
-                      const res = await fetch('/api/providers/voices/preview', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ provider: selectedVoiceProvider, voice_id: voiceId, text: sampleText }),
-                      });
-                      if (res.ok) {
-                        const blob = await res.blob();
-                        const audio = new Audio(URL.createObjectURL(blob));
-                        await audio.play();
-                      } else {
-                        const utterance = new SpeechSynthesisUtterance(sampleText);
-                        window.speechSynthesis.speak(utterance);
-                      }
-                    } catch (err: any) {
-                      try {
-                        const utterance = new SpeechSynthesisUtterance(sampleText);
-                        window.speechSynthesis.speak(utterance);
-                      } catch (e) {
-                        setPreviewError('Voice preview playback failed.');
-                      }
-                    } finally {
-                      setIsPreviewing(false);
-                    }
-                  }}
-                  className="h-7 text-[11px] w-full"
-                >
-                  ▶ Preview Voice
-                </Button>
-                {previewError && <span className="text-[10px] text-red-500 block text-center mt-1">{previewError}</span>}
-              </div>
-              </Card>
-
-              <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm mt-4">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 mb-2">
-                  <span className="h-5 w-5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-600 flex items-center justify-center">
-                    4
-                  </span>
-                  Language &amp; Settings
-                </CardTitle>
-                <div className="grid grid-cols-2 gap-4">
-                  <CommandPaletteSelect
-                    label="Language"
-                    options={languageOptions()}
-                    value={editAgentData.language}
-                    onChange={(lang) => setEditAgentData((prev) => ({ ...prev, language: lang }))}
-                    placeholder="Select language..."
-                    id="edit-language"
-                  />
-                  
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
-                      Temperature
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="1"
-                      value={editAgentData.temperature}
-                      onChange={(e) => setEditAgentData({ ...editAgentData, temperature: parseFloat(e.target.value) })}
-                      className="text-sm h-10"
-                    />
-                  </div>
-                </div>
-              </Card>
+              )}
             </div>
           </div>
 
-          {/* Full Width Row */}
-          <Card className="p-4 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-            <CardTitle className="text-sm font-bold flex items-center justify-between mb-2">
+          {/* Voice Engine */}
+          <div className="space-y-3 p-3.5 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <span className="h-5 w-5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center">
-                  5
-                </span>
-                <span>System Instructions</span>
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  Voice Engine Settings
+                </label>
+                {Boolean(editAgentData.language) && (
+                  <button
+                    type="button"
+                    onClick={() => setSmartLanguageFilter((prev) => !prev)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                      smartLanguageFilter
+                        ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                        : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                    }`}
+                    title="Toggle smart language optimization for voices"
+                  >
+                    <span>✨ Best for {(editAgentData.language || 'English').split(' (')[0].replace(/^[^\w\s]+/g, '').trim() || 'English'}</span>
+                    <span className={`text-[9px] px-1 rounded ${smartLanguageFilter ? 'bg-amber-200/80 dark:bg-amber-800 text-amber-900 dark:text-amber-100' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
+                      {smartLanguageFilter ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                )}
               </div>
-              <span className="text-[10px] text-zinc-400 font-normal">
-                Click any tag below to insert into prompt
-              </span>
-            </CardTitle>
+              {/* Voice Gender Filter */}
+              <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={() => handleSelectGenderFilter('all', true)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    voiceGenderFilter === 'all'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectGenderFilter('female', true)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    voiceGenderFilter === 'female'
+                      ? 'bg-pink-500 text-white shadow-xs'
+                      : 'text-zinc-500 hover:text-pink-600 dark:hover:text-pink-300'
+                  }`}
+                >
+                  <span>👩 Female</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectGenderFilter('male', true)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    voiceGenderFilter === 'male'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-zinc-500 hover:text-blue-600 dark:hover:text-blue-300'
+                  }`}
+                >
+                  <span>👨 Male</span>
+                </button>
+              </div>
+            </div>
 
-            {/* Separate Collapsible Dropdown Panels for Data Fields and Variables in Prompts */}
-            <div className="space-y-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <CommandPaletteSelect
+                label="Voice Provider"
+                options={voiceProviders}
+                value={selectedVoiceProvider}
+                onChange={(vpId) => setSelectedVoiceProvider(vpId)}
+                placeholder="Select voice provider..."
+                id="edit-voice-provider"
+              />
+              <div className="relative">
+                <CommandPaletteSelect
+                  label={`Voice (${filteredVoiceModels.length} ${voiceGenderFilter === 'all' ? 'Total' : voiceGenderFilter.toUpperCase()})`}
+                  options={filteredVoiceModels}
+                  value={editAgentData.voice}
+                  onChange={(voiceId) => setEditAgentData((prev) => ({ ...prev, voice: voiceId }))}
+                  placeholder={isVoicesLoading ? 'Loading voices...' : 'Select voice...'}
+                  id="edit-voice"
+                />
+                {voiceProviderLimitation && (
+                  <div className="absolute top-14 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-1.5 rounded-md border border-red-200 dark:border-red-800/30 z-10">
+                    {voiceProviderLimitation}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <div className="flex-1">
+                <Input
+                  value={previewText}
+                  onChange={(e) => setPreviewText(e.target.value)}
+                  placeholder="Enter custom preview sample text..."
+                  className="text-xs h-8"
+                />
+              </div>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                isLoading={isPreviewing}
+                leftIcon={isPreviewing ? undefined : <Mic className="h-3 w-3" />}
+                onClick={async () => {
+                  const voiceId = editAgentData.voice;
+                  if (!voiceId) {
+                    addToast('warning', 'Please select a voice model first.');
+                    return;
+                  }
+                  setIsPreviewing(true);
+                  setPreviewError(null);
+                  const sampleText = previewText.trim() || 'Hello, I am ready to handle your calls.';
+                  try {
+                    const res = await fetch('/api/providers/voices/preview', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        provider: selectedVoiceProvider,
+                        voice_id: voiceId,
+                        text: sampleText,
+                        language: editAgentData.language,
+                      }),
+                    });
+                    if (res.ok) {
+                      const blob = await res.blob();
+                      const audio = new Audio(URL.createObjectURL(blob));
+                      await audio.play();
+                    } else {
+                      const utterance = new SpeechSynthesisUtterance(sampleText);
+                      window.speechSynthesis.speak(utterance);
+                    }
+                  } catch (err: any) {
+                    try {
+                      const utterance = new SpeechSynthesisUtterance(sampleText);
+                      window.speechSynthesis.speak(utterance);
+                    } catch (e) {
+                      setPreviewError('Voice preview playback failed.');
+                    }
+                  } finally {
+                    setIsPreviewing(false);
+                  }
+                }}
+                className="h-8 text-xs shrink-0"
+              >
+                ▶ Preview Voice
+              </Button>
+            </div>
+            {previewError && <span className="text-[10px] text-red-500 block text-center">{previewError}</span>}
+          </div>
+
+          {/* Language & Settings */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CommandPaletteSelect
+              label="Language"
+              badge={`${GLOBAL_LANGUAGES_CATALOG.length} Languages`}
+              options={languageOptions(languages)}
+              value={editAgentData.language}
+              onChange={(lang) => handleLanguageChange(lang, true)}
+              placeholder="Select language..."
+              id="edit-language"
+            />
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                Temperature (Creativity)
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="1"
+                value={editAgentData.temperature}
+                onChange={(e) => setEditAgentData({ ...editAgentData, temperature: parseFloat(e.target.value) })}
+                className="text-xs h-9"
+              />
+            </div>
+          </div>
+
+          {/* CRM & Dynamic Variables Integration */}
+          <div className="space-y-2.5 p-3.5 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block">
+                  CRM Schema &amp; Dynamic Variables
+                </span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Select fields to connect live caller data to the agent
+                </span>
+              </div>
+              {getConnectedTags(editAgentData.systemPrompt).length > 0 && (
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  {getConnectedTags(editAgentData.systemPrompt).length} Connected
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <AgentPromptTagDropdownPanel
                 title="CRM Data Fields"
                 count={promptDataFieldTags.length}
-                subtitle="Schema attributes & fields (e.g. {{contact.alternate_phone}}, {{contact.insurance_carrier}})"
-                icon={<Sliders className="h-4 w-4" />}
+                subtitle="Customer attributes (e.g. {{contact.alternate_phone}})"
+                icon={<Sliders className="h-3.5 w-3.5" />}
                 theme="amber"
                 items={promptDataFieldTags}
-                onInsert={(tag) => {
-                  const current = editAgentData.systemPrompt || '';
-                  setEditAgentData({ ...editAgentData, systemPrompt: `${current} ${tag}`.trim() });
-                  addToast(`Inserted ${tag} into prompt`, 'info');
-                }}
+                selectedTags={getConnectedTags(editAgentData.systemPrompt)}
+                onToggleTag={(tag) => handleToggleTag(tag, true)}
               />
 
               <AgentPromptTagDropdownPanel
                 title="Workspace Dynamic Variables"
                 count={promptVariableTags.length}
-                subtitle="Dynamic workspace variables & tokens (e.g. {{appointment_date}}, {{company_name}})"
-                icon={<Variable className="h-4 w-4" />}
+                subtitle="Dynamic workspace variables (e.g. {{appointment_date}})"
+                icon={<Variable className="h-3.5 w-3.5" />}
                 theme="blue"
                 items={promptVariableTags}
-                onInsert={(tag) => {
-                  const current = editAgentData.systemPrompt || '';
-                  setEditAgentData({ ...editAgentData, systemPrompt: `${current} ${tag}`.trim() });
-                  addToast(`Inserted ${tag} into prompt`, 'info');
-                }}
+                selectedTags={getConnectedTags(editAgentData.systemPrompt)}
+                onToggleTag={(tag) => handleToggleTag(tag, true)}
               />
             </div>
 
-            <div>
-              <Textarea
-                rows={5}
-                value={editAgentData.systemPrompt}
-                onChange={(e) => setEditAgentData({ ...editAgentData, systemPrompt: e.target.value })}
-                className="font-mono text-sm"
-                placeholder="Enter base prompt directive... e.g. Hello {{contact.name}}, your registered insurance is {{contact.dental_insurance_carrier}}."
-              />
-            </div>
-          </Card>
+            {getConnectedTags(editAgentData.systemPrompt).length > 0 && (
+              <div className="pt-2 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold text-zinc-500 shrink-0">Connected:</span>
+                {getConnectedTags(editAgentData.systemPrompt).map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800/80"
+                  >
+                    <span>✓ {tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTag(tag, true)}
+                      className="text-emerald-600 hover:text-red-500 font-bold ml-0.5 cursor-pointer"
+                      title={`Disconnect ${tag}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-3 pt-5 border-t border-zinc-200 dark:border-zinc-800">
-            <Button variant="outline" size="md" type="button" onClick={() => setIsEditModalOpen(false)}>
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <Button variant="outline" type="button" onClick={() => setIsEditModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="md" type="submit">
+            <Button variant="primary" type="submit">
               Save Changes
             </Button>
           </div>

@@ -25,9 +25,10 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
 
     async def connect(self, connection_params: Dict[str, Any]) -> bool:
         self.device_id = connection_params.get("device_id", "android-primary")
+        ws_bridge, dev_registry = _ws_bridge_server, _device_registry
         
         # Verify device exists and is online
-        dev = _device_registry.get_device(self.device_id)
+        dev = dev_registry.get_device(self.device_id)
         if not dev:
             logger.warning(f"[AndroidAdapter] Device {self.device_id} not found in registry")
             return False
@@ -42,7 +43,8 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
         self.is_connected = False
         self.call_status = TelephonyCallStatus.COMPLETED
         if self.device_id:
-            dev = _device_registry.get_device(self.device_id)
+            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            dev = dev_registry.get_device(self.device_id)
             if dev and dev.active_session_id == self.session_id:
                 dev.active_session_id = None
         return True
@@ -50,7 +52,8 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
     async def answer_call(self) -> bool:
         self.call_status = TelephonyCallStatus.IN_PROGRESS
         if self.device_id:
-            ws = _ws_bridge_server._active_connections.get(self.device_id)
+            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            ws = ws_bridge._active_connections.get(self.device_id)
             if ws:
                 try:
                     await ws.send_json({"event": "ANSWER", "session_id": self.session_id})
@@ -62,13 +65,14 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
         self.is_connected = False
         self.call_status = TelephonyCallStatus.COMPLETED
         if self.device_id:
-            ws = _ws_bridge_server._active_connections.get(self.device_id)
+            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            ws = ws_bridge._active_connections.get(self.device_id)
             if ws:
                 try:
                     await ws.send_json({"event": "HANGUP", "session_id": self.session_id, "reason": reason})
                 except Exception as e:
                     logger.warning(f"Error sending HANGUP to companion: {e}")
-            dev = _device_registry.get_device(self.device_id)
+            dev = dev_registry.get_device(self.device_id)
             if dev and dev.active_session_id == self.session_id:
                 dev.active_session_id = None
         return True
@@ -85,20 +89,23 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
         """Streams outbound AI speech PCM payload to companion device AudioTrack."""
         if not self.device_id or not self.is_connected:
             return False
-        return await _ws_bridge_server.send_audio_frame(self.device_id, pcm_payload)
+        ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+        return await ws_bridge.send_audio_frame(self.device_id, pcm_payload)
 
     async def receive_audio(self) -> Optional[bytes]:
         """Pops the oldest inbound PCM audio frame received from companion microphone."""
         if not self.device_id:
             return None
-        buffer = _ws_bridge_server._audio_buffers.get(self.device_id)
+        ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+        buffer = ws_bridge._audio_buffers.get(self.device_id)
         if buffer and len(buffer) > 0:
             return buffer.pop(0)
         return None
 
     async def send_dtmf(self, digits: str) -> bool:
         if self.device_id:
-            ws = _ws_bridge_server._active_connections.get(self.device_id)
+            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            ws = ws_bridge._active_connections.get(self.device_id)
             if ws:
                 try:
                     await ws.send_json({"event": "DTMF", "session_id": self.session_id, "digits": digits})

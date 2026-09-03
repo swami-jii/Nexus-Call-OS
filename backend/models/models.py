@@ -461,6 +461,20 @@ class BusinessPolicy(Base):
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
 
 
+class CountryCode(Base):
+    __tablename__ = "group2_business_rules__6_country_codes"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    provider_name = Column(String(100), nullable=False)
+    display_name = Column(String(255), nullable=True)
+    plain_key = Column(String(255), nullable=True)
+    base_url = Column(String(255), nullable=True)
+    primary_model = Column(String(100), nullable=True)
+    status = Column(String(50), default="Active")
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
 class WebhookSubscription(Base):
     __tablename__ = "webhook_subscriptions"
 

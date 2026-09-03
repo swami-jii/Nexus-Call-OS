@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'campaigns', label: 'AI Campaigns', icon: <Megaphone className="h-4 w-4" /> },
         { id: 'contacts', label: 'Contacts', icon: <Users className="h-4 w-4" /> },
         { id: 'phone-numbers', label: 'Phone Numbers', icon: <Phone className="h-4 w-4" /> },
-        { id: 'android-gateway', label: 'Android GSM Gateway', icon: <Smartphone className="h-4 w-4" />, badge: 'Free' },
+        { id: 'android-gateway', label: 'Pair & Apps GSM Gateway', icon: <Smartphone className="h-4 w-4" />, badge: 'Free' },
         { id: 'workflows', label: 'Voice Workflows', icon: <GitFork className="h-4 w-4" /> },
       ],
     },

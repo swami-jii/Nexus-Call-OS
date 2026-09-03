@@ -71,6 +71,25 @@ export interface LanguageItem {
   status?: string;
 }
 
+export interface CountryCodeItem {
+  id: string;
+  name: string;
+  display_name?: string;
+  country_name?: string;
+  country?: string;
+  dial_code?: string;
+  dialCode?: string;
+  iso2?: string;
+  iso3?: string;
+  flag?: string;
+  region?: string;
+  carrier_route?: string;
+  carrierRoute?: string;
+  description?: string;
+  status?: string;
+  scope?: string;
+}
+
 export interface BusinessPolicyItem {
   id: string;
   name: string;
@@ -89,6 +108,9 @@ interface BusinessRulesContextType {
   workingHours: WorkingHoursItem[];
   languages: LanguageItem[];
   businessPolicies: BusinessPolicyItem[];
+  countryCodes: CountryCodeItem[];
+  activeCountryCode: CountryCodeItem | null;
+  setActiveCountryCode: (cc: CountryCodeItem | null) => void;
   activeBusinessType: BusinessTypeItem | null;
   activeDepartment: DepartmentItem | null;
   activeWorkingHours: WorkingHoursItem | null;
@@ -149,6 +171,8 @@ export const BusinessRulesProvider: React.FC<{ children: React.ReactNode }> = ({
   const [workingHours, setWorkingHours] = useState<WorkingHoursItem[]>(DEFAULT_WORKING_HOURS);
   const [languages, setLanguages] = useState<LanguageItem[]>(DEFAULT_LANGUAGES);
   const [businessPolicies, setBusinessPolicies] = useState<BusinessPolicyItem[]>(DEFAULT_POLICIES);
+  const [countryCodes, setCountryCodes] = useState<CountryCodeItem[]>([]);
+  const [activeCountryCode, setActiveCountryCode] = useState<CountryCodeItem | null>(null);
 
   const [activeBusinessType, setActiveBusinessType] = useState<BusinessTypeItem | null>(DEFAULT_BUSINESS_TYPES[0]);
   const [activeDepartment, setActiveDepartment] = useState<DepartmentItem | null>(DEFAULT_DEPARTMENTS[0]);
@@ -180,6 +204,10 @@ export const BusinessRulesProvider: React.FC<{ children: React.ReactNode }> = ({
         if (parsed.business_policies && Array.isArray(parsed.business_policies) && parsed.business_policies.length > 0) {
           setBusinessPolicies(parsed.business_policies);
           setActivePolicies(parsed.business_policies);
+        }
+        if (parsed.country_codes && Array.isArray(parsed.country_codes) && parsed.country_codes.length > 0) {
+          setCountryCodes(parsed.country_codes);
+          setActiveCountryCode(parsed.country_codes[0]);
         }
       }
     } catch (e) {
