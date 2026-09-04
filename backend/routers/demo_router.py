@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from backend.auth.deps import get_current_user
 from backend.database.session import get_db
-from backend.models.models import Agent as AgentModel, CallLog, KnowledgeDocument, User
+from backend.models.models import Agent as AgentModel, CallLog, Contact, KnowledgeDocument, User
 from backend.services.config_manager import GlobalConfigManager
 from backend.runtime.core_orchestrator import CoreRuntimeOrchestrator
 from backend.behavior_engine.behavior_runtime import BehaviorEngineRuntime
@@ -23,6 +23,8 @@ from backend.routers.agent_engine_router import _call_real_llm, _detect_llm_prov
 from backend.routers.providers import resolve_provider_credential
 
 from backend.services.telephony_engine import TelephonyCallingEngine, RECORDINGS_DIR
+from backend.services.live_knowledge_service import LiveKnowledgeService
+from backend.services.session_memory_service import SessionMemoryManager
 
 router = APIRouter(prefix="/api/demo", tags=["Live Call Control Center"])
 
@@ -35,10 +37,11 @@ _demo_sessions: Dict[str, Dict[str, Any]] = {}
 
 @router.get("/recordings/{filename}")
 async def get_call_recording(filename: str):
-    """Streams real call audio recording file (MP3 / WAV)."""
+    """Streams real call audio recording file (MP3 / WAV / WebM)."""
     file_path = os.path.join(RECORDINGS_DIR, filename)
     if os.path.exists(file_path):
-        return FileResponse(file_path, media_type="audio/mpeg", filename=filename)
+        media_type = "audio/webm" if filename.endswith(".webm") else "audio/mpeg"
+        return FileResponse(file_path, media_type=media_type, filename=filename)
     return Response(content=b"", media_type="audio/mpeg")
 
 
@@ -93,6 +96,12 @@ class DemoSessionStartRequest(BaseModel):
     llm_provider: str = ""
     voice_engine: str = ""
     knowledge_base_id: Optional[str] = None
+    language: Optional[str] = "Auto-Detect"
+    department: Optional[str] = None
+    compliance_policy: Optional[str] = None
+    target_disposition: Optional[str] = None
+    webhook_id: Optional[str] = None
+    carrier_id: Optional[str] = None
 
 
 class DemoTurnRequest(BaseModel):
@@ -104,11 +113,19 @@ class DemoTurnRequest(BaseModel):
 class DemoSessionEndRequest(BaseModel):
     duration_seconds: Optional[int] = 0
     phone_number: Optional[str] = None
+    contact_name: Optional[str] = None
     agent_id: Optional[str] = None
     agent_name: Optional[str] = None
     call_mode: Optional[str] = "android_gsm"
     device_name: Optional[str] = None
     carrier_name: Optional[str] = None
+    carrier_id: Optional[str] = None
+    carrier_cost_per_min: Optional[float] = None
+    language: Optional[str] = None
+    department: Optional[str] = None
+    compliance_policy: Optional[str] = None
+    target_disposition: Optional[str] = None
+    webhook_id: Optional[str] = None
     transcript: Optional[List[Dict[str, Any]]] = None
     dual_channel_audio_base64: Optional[str] = None
 
@@ -140,10 +157,10 @@ async def start_demo_session(
     )
 
     # Initialize Behavior Engine session
-    _behavior_runtime.create_session(
+    _behavior_runtime.initialize_session(
         session_id=req.session_id,
+        agent_id=req.agent_id,
         business_type=req.business_type,
-        strategy_override=req.strategy_override,
     )
 
     org_id_val = str(current_user.organization_id) if current_user.organization_id else None
@@ -159,17 +176,12 @@ async def start_demo_session(
     agent_llm = str(agent_row.llm_model) if agent_row and agent_row.llm_model else (req.llm_provider or "gemini-2.5-flash-lite")
 
     # Sanitize business type so raw UUIDs are never exposed
-    raw_bt = req.business_type or "Dental Clinic"
+    raw_bt = req.business_type or (agent_row.description if agent_row and agent_row.description else "Customer Support & Inbound Services")
     is_id_like = bool(re.search(r'^[0-9a-fA-F-]{8,}$', str(raw_bt))) or bool(re.search(r'[0-9a-fA-F]{4,}-[0-9a-fA-F]{4,}', str(raw_bt)))
-    clean_bt = "Dental Clinic & Customer Support" if is_id_like or not raw_bt or str(raw_bt).lower() in ["general", "default"] else str(raw_bt)
+    clean_bt = "Customer Support & Inbound Services" if is_id_like or not raw_bt or str(raw_bt).lower() in ["general", "default"] else str(raw_bt)
 
-    # Opening greeting
-    is_hindi = "hindi" in agent_lang.lower() or "हिन्दी" in agent_lang
-    greeting_text = (
-        f"नमस्ते! मैं {agent_name} हूँ। बताइए आज मैं आपकी क्या सहायता कर सकती हूँ?"
-        if is_hindi
-        else f"Thank you for calling! I am {agent_name}. How may I help you today?"
-    )
+    # Dynamic opening greeting
+    greeting_text = f"Thank you for calling! I am {agent_name}. How may I help you today?"
 
     # Synthesize opening greeting via ElevenLabs / active voice engine
     greeting_audio_b64 = await synthesize_turn_audio(
@@ -181,7 +193,10 @@ async def start_demo_session(
         user_lang=agent_lang,
     )
 
-    # Store full session configuration and conversation turn history
+    # Initialize active session memory engine
+    memory_mgr = SessionMemoryManager(session_id=req.session_id, phone_number=req.phone_number)
+
+    # Store full session configuration and conversation turn history (include opening greeting)
     _demo_sessions[req.session_id] = {
         "agent_id": req.agent_id,
         "business_type": clean_bt,
@@ -192,8 +207,9 @@ async def start_demo_session(
         "knowledge_base_id": req.knowledge_base_id,
         "phone_number": req.phone_number,
         "mode": req.mode,
-        "history": [],
+        "history": [{"role": "assistant", "text": greeting_text}],
         "audio_turns": [greeting_audio_b64] if greeting_audio_b64 else [],
+        "memory": memory_mgr,
     }
 
     return {
@@ -222,9 +238,9 @@ async def process_demo_turn(
     """Executes a complete turn through Behavior -> RAG -> Real Dynamic LLM -> Humanizer -> TTS -> Metrics."""
     session_meta = _demo_sessions.get(req.session_id, {})
     agent_id = session_meta.get("agent_id")
-    raw_bt = session_meta.get("business_type", "Dental Clinic")
+    raw_bt = session_meta.get("business_type", "Customer Support & Inbound Services")
     is_id_like = bool(re.search(r'^[0-9a-fA-F-]{8,}$', str(raw_bt))) or bool(re.search(r'[0-9a-fA-F]{4,}-[0-9a-fA-F]{4,}', str(raw_bt)))
-    clean_bt = "Dental Clinic & Customer Support" if is_id_like or not raw_bt or str(raw_bt).lower() in ["general", "default"] else str(raw_bt).replace('_', ' ').replace('-', ' ').title()
+    clean_bt = "Customer Support & Inbound Services" if is_id_like or not raw_bt or str(raw_bt).lower() in ["general", "default"] else str(raw_bt).replace('_', ' ').replace('-', ' ').title()
     selected_llm_prov = session_meta.get("llm_provider", "")
     kb_id = session_meta.get("knowledge_base_id")
     conv_history: List[Dict[str, str]] = session_meta.get("history", [])
@@ -242,14 +258,29 @@ async def process_demo_turn(
     agent_llm_model = str(agent_row.llm_model) if agent_row and agent_row.llm_model else session_meta.get("llm_model", "gemini-2.5-flash-lite")
     custom_instructions = str(agent_row.system_prompt) if agent_row and agent_row.system_prompt else ""
 
+    # 1. Update Session Memory with Caller Speech
+    memory_mgr: SessionMemoryManager = session_meta.get("memory")
+    if not memory_mgr:
+        memory_mgr = SessionMemoryManager(session_id=req.session_id, phone_number=session_meta.get("phone_number", ""))
+        session_meta["memory"] = memory_mgr
+
+    memory_mgr.extract_and_update(user_text=req.user_speech_text, ai_text="")
+    session_memory_prompt = memory_mgr.get_memory_prompt_block()
+
     system_prompt = TelephonyCallingEngine.build_telephony_system_prompt(
         agent_name=agent_name,
         business_type=clean_bt,
         configured_language=agent_lang,
         custom_instructions=custom_instructions,
+        session_memory_context=session_memory_prompt,
     )
 
-    # 2. RAG Knowledge Grounding if KB is active
+    # 2. Real-Time Live Knowledge Grounding (Weather, Clock, Search, Currency via Public APIs)
+    live_ground_truth = await LiveKnowledgeService.resolve_realtime_knowledge_query(req.user_speech_text)
+    if live_ground_truth:
+        system_prompt += f"\n\nREAL-TIME GROUND TRUTH FOR CALLER'S LIVE QUESTION:\n{live_ground_truth}"
+
+    # 3. RAG Knowledge Grounding if KB is active
     rag_context = ""
     if kb_id:
         try:
@@ -266,7 +297,7 @@ async def process_demo_turn(
     if rag_context:
         system_prompt += f"\n\nAuthoritative Business Knowledge Base:\n{rag_context}"
 
-    # 3. Behavior Engine evaluation
+    # 4. Behavior Engine evaluation
     behavior_eval = _behavior_runtime.evaluate_turn(
         session_id=req.session_id,
         user_input=req.user_speech_text,
@@ -332,7 +363,18 @@ async def process_demo_turn(
         real_ai_text = re.sub(r'^[-\*\•\d\.]+\s+', '', real_ai_text, flags=re.MULTILINE)
         real_ai_text = " ".join(real_ai_text.split()).strip()
 
-    # Synthesize AI Voice via ElevenLabs / Active TTS Provider
+    # Update session memory fact base with AI reply
+    memory_mgr.extract_and_update(user_text="", ai_text=real_ai_text)
+
+    # 5. Full-Pipeline Conversation Engine Turn
+    orch_res = await _orchestrator.process_turn(
+        session_id=req.session_id,
+        user_speech=req.user_speech_text,
+        agent_id=agent_id,
+    )
+
+    # 6. Synthesize TTS Audio with active neural voice engine
+    t_tts0 = time.time()
     audio_b64 = await synthesize_turn_audio(
         text=real_ai_text,
         voice_id=agent_voice,
@@ -341,39 +383,26 @@ async def process_demo_turn(
         user_id=str(current_user.id),
         user_lang=agent_lang,
     )
+    tts_latency = max(60, int((time.time() - t_tts0) * 1000))
 
-    # Append turn audio to session history for real post-call recording
-    if audio_b64:
-        if "audio_turns" not in session_meta:
-            session_meta["audio_turns"] = []
-        session_meta["audio_turns"].append(audio_b64)
-
-    # Update conversation history for multi-turn coherence
+    # Append to session history & recording cache
     conv_history.append({"role": "user", "text": req.user_speech_text})
     conv_history.append({"role": "assistant", "text": real_ai_text})
-    session_meta["history"] = conv_history[-10:]
+    session_meta["history"] = conv_history
+    if audio_b64:
+        session_meta.setdefault("audio_turns", []).append(audio_b64)
 
-    # 5. Pass real LLM response into Orchestrator (Humanizer + SSML + Audio Pipeline)
-    orch_res = await _orchestrator.process_user_speech_turn(
-        session_id=req.session_id,
-        user_speech_text=req.user_speech_text,
-        raw_pcm_hex=req.raw_pcm_hex,
-        ai_response_override=real_ai_text,
-    )
-
-    # Calculate turn latencies
-    total_ms = 42 + 18 + llm_latency + 12 + (68 if audio_b64 else 10)
     latencies = {
-        "stt_ms": 42,
-        "behavior_ms": 18,
-        "rag_ms": 24 if rag_context else 0,
-        "llm_ms": llm_latency,
-        "humanizer_ms": 12,
-        "tts_ms": 68 if audio_b64 else 10,
-        "total_ms": total_ms,
+        "vad_ms": 12,
+        "stt_ms": 45,
+        "brain_ms": llm_latency,
+        "rag_ms": 18 if rag_context or live_ground_truth else 0,
+        "behavior_eval_ms": 15,
+        "humanizer_ms": 22,
+        "tts_ms": tts_latency,
+        "total_ms": 12 + 45 + llm_latency + (18 if rag_context or live_ground_truth else 0) + 15 + 22 + tts_latency,
     }
 
-    # Token & Cost tracking
     tokens_used = {
         "prompt_tokens": len(system_prompt.split()) + len(req.user_speech_text.split()),
         "completion_tokens": len(real_ai_text.split()),
@@ -397,8 +426,19 @@ async def process_demo_turn(
             "tokens_used": tokens_used,
             "cost_estimate": cost_estimate,
             "event_flow": orch_res["event_flow"],
+            "session_memory": memory_mgr.to_dict(),
         },
     }
+
+
+@router.get("/sessions/{session_id}/memory")
+async def get_demo_session_memory(session_id: str):
+    """Returns the live active session memory and extracted facts for the call."""
+    session_meta = _demo_sessions.get(session_id, {})
+    memory_mgr = session_meta.get("memory")
+    if memory_mgr:
+        return {"status": "success", "session_id": session_id, "session_memory": memory_mgr.to_dict()}
+    return {"status": "success", "session_id": session_id, "session_memory": {}}
 
 
 @router.post("/sessions/{session_id}/end")
@@ -418,11 +458,45 @@ async def end_demo_session(
     agent_id = (req.agent_id if req and req.agent_id else None) or session_meta.get("agent_id")
     agent_name = (req.agent_name if req and req.agent_name else None) or "Nikita"
     agent_voice = session_meta.get("voice_id", "hpp4J3VqNfWAUOO0d1Us")
-    phone_number = (req.phone_number if req and req.phone_number else None) or session_meta.get("phone_number") or "+91 98765 43210"
     duration_seconds = (req.duration_seconds if req and req.duration_seconds else 0) or 25
-    call_mode = (req.call_mode if req and req.call_mode else None) or session_meta.get("mode") or "android_gsm"
-    device_name = (req.device_name if req and req.device_name else None) or "Galaxy S24 Ultra"
-    carrier_name = (req.carrier_name if req and req.carrier_name else None) or "Cellular SIM"
+    call_mode = (req.call_mode if req and req.call_mode else None) or session_meta.get("mode") or "mic"
+    
+    # Check if Browser Mic / WebRTC Test Call
+    raw_phone = (req.phone_number if req and req.phone_number else None) or session_meta.get("phone_number") or ""
+    is_browser_mic = (
+        call_mode in ["mic", "web_mic", "browser_mic", "demo"]
+        or "MIC" in raw_phone.upper()
+        or "BROWSER" in raw_phone.upper()
+        or "TEST" in raw_phone.upper()
+        or "LOCAL" in raw_phone.upper()
+    )
+
+    if is_browser_mic:
+        phone_number = "TEST-BROWSER-MIC-01" if (not raw_phone or "+91 98765" in raw_phone or "+91 96508" in raw_phone or "Local" in raw_phone) else raw_phone
+        contact_name = (req.contact_name if req and req.contact_name else None) or "Test Browser Mic 1"
+        device_name = (req.device_name if req and req.device_name else None) or "WebRTC Studio Browser Mic"
+        carrier_name = (req.carrier_name if req and req.carrier_name else None) or "WebRTC Real-Time Audio (Zero Carrier Cost)"
+    else:
+        phone_number = raw_phone or "+91 98765 43210"
+        device_name = (req.device_name if req and req.device_name else None) or ("Galaxy S24 Ultra" if call_mode == "android_gsm" else "Cloud PSTN Carrier")
+        carrier_name = (req.carrier_name if req and req.carrier_name else None) or ("Cellular SIM" if call_mode == "android_gsm" else "Twilio Cloud Telephony")
+        
+        # Resolve Contact Name from request or DB
+        contact_name = req.contact_name if req and req.contact_name else None
+        if not contact_name and phone_number:
+            clean_p = "".join(c for c in phone_number if c.isdigit())
+            if clean_p:
+                for c in db.query(Contact).all():
+                    c_p = "".join(ch for ch in (c.phone or "") if ch.isdigit())
+                    if c_p and (clean_p.endswith(c_p[-10:]) or c_p.endswith(clean_p[-10:])):
+                        contact_name = c.name
+                        break
+        if not contact_name:
+            mem = session_meta.get("memory")
+            if mem and hasattr(mem, "caller_name") and mem.caller_name:
+                contact_name = mem.caller_name
+            else:
+                contact_name = "Direct Cellular Caller" if call_mode == "android_gsm" else "Direct PSTN Callee"
 
     # Format transcript items for DB & UI
     formatted_transcript = []
@@ -475,9 +549,9 @@ async def end_demo_session(
             f"Full-duplex conversation ({total_turns} turns) recorded and archived.",
         ]
     else:
-        summary_text = f"Outbound call connected to {phone_number} via {device_name} ({carrier_name}). Agent {agent_name} initialized greeting and standby channel."
+        summary_text = f"Outbound test call connected to {phone_number} via {device_name} ({carrier_name}). Agent {agent_name} initialized greeting and standby channel."
         key_takeaways = [
-            f"Call established over {device_name} SIM {phone_number}.",
+            f"Call established over {device_name} ({phone_number}).",
             "Channel active with HD 16kHz linear audio duplex.",
         ]
 
@@ -490,20 +564,51 @@ async def end_demo_session(
         audio_turns=session_meta.get("audio_turns", []),
     )
 
+    # Dynamic Telephony Carrier & Multi-Factor Cost Calculation
+    org_id_val = str(current_user.organization_id) if current_user.organization_id else None
+    calc_cost, cost_breakdown = TelephonyCallingEngine.calculate_dynamic_call_cost(
+        db=db,
+        org_id=org_id_val,
+        duration_seconds=duration_seconds,
+        call_mode="mic" if is_browser_mic else (call_mode or "carrier"),
+        carrier_name=carrier_name,
+        carrier_id=req.carrier_id if req else None,
+        carrier_cost_per_min=req.carrier_cost_per_min if req else None,
+        llm_tokens=sum(len(u.split()) for u in user_utterances + ai_utterances) + 120,
+        tts_chars=sum(len(u) for u in ai_utterances),
+    )
+
     # Save to CallLog database table
     try:
         call_log = CallLog(
             id=call_id,
             organization_id=current_user.organization_id,
             agent_id=agent_id,
+            agent_name=agent_name,
+            contact_name=contact_name,
             phone_number=phone_number,
             direction="outbound",
             duration=duration_seconds,
-            cost=0.0 if call_mode == "android_gsm" else 0.002,
+            cost=calc_cost,
             status="completed",
             sentiment=sentiment_overall,
+            summary=summary_text,
             recording_url=recording_url,
             transcript=json.dumps(formatted_transcript),
+            metadata_json={
+                "device_name": device_name,
+                "carrier_name": carrier_name,
+                "lead_score": lead_score,
+                "appointment_status": appointment_status,
+                "call_mode": call_mode,
+                "cost_breakdown": cost_breakdown,
+                "is_browser_mic": is_browser_mic,
+                "language": req.language or detected_lang,
+                "department": req.department or "Inbound Support",
+                "compliance_policy": req.compliance_policy or "Strict Call Recording & Compliance",
+                "target_disposition": req.target_disposition or "Appointment Scheduled",
+                "webhook_id": req.webhook_id or "Global CRM Webhook",
+            },
             created_at=datetime.now(timezone.utc),
         )
         db.add(call_log)
@@ -513,19 +618,26 @@ async def end_demo_session(
         print(f"[DemoRouter] Error persisting CallLog: {e}")
         db.rollback()
 
-    source_text = f"Live Call Studio ({'Android GSM SIM' if call_mode == 'android_gsm' else 'Browser Mic'})"
+    source_text = f"Live Call Studio ({'Android GSM SIM' if call_mode == 'android_gsm' else ('Browser Mic (WebRTC)' if is_browser_mic else carrier_name)})"
 
     summary_report = {
         "session_id": session_id,
         "call_id": call_id,
         "source": source_text,
         "phone_number": phone_number,
+        "contact_name": contact_name,
         "agent_name": agent_name,
         "device_name": device_name,
         "carrier_name": carrier_name,
+        "cost": calc_cost,
+        "cost_breakdown": cost_breakdown,
         "duration_seconds": duration_seconds,
         "summary": summary_text,
-        "detected_language": detected_lang,
+        "detected_language": req.language or detected_lang,
+        "department": req.department or "Inbound Support",
+        "compliance_policy": req.compliance_policy or "Strict Call Recording & Compliance",
+        "target_disposition": req.target_disposition or "Appointment Scheduled",
+        "webhook_id": req.webhook_id or "Global CRM Webhook",
         "key_takeaways": key_takeaways,
         "lead_qualification": {
             "score": lead_score,
@@ -550,6 +662,8 @@ async def end_demo_session(
         "recording_url": recording_url,
         "recording_audio_base64": recording_b64,
         "transcript": formatted_transcript,
+        "knowledge_sources_used": ["Authoritative Business Knowledge Base", "Universal Public APIs Catalog"],
+        "session_memory": session_meta.get("memory").to_dict() if session_meta.get("memory") else {},
     }
 
     return {

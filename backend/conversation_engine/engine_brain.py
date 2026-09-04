@@ -169,18 +169,7 @@ class ConversationEngine:
             text = f"Thank you for reaching out to {self.agent_name}. Have a wonderful day!"
             self.lifecycle_manager.mark_completed(CallEndReason.NORMAL_GOODBYE)
         else:
-            lower = user_text.lower().strip()
-            # Intelligent multilingual contextual fallback if LLM is offline
-            if any(k in lower for k in ["hindi", "हिंदी", "hindi me", "hindi mein", "baat kar sakte"]):
-                text = "हाँ बिल्कुल! मैं आपसे हिंदी में बात कर सकता हूँ। बताइए मैं आज आपकी क्या सहायता कर सकता हूँ?"
-            elif any(k in lower for k in ["hello", "hi", "namaste", "hey", "kem cho", "kaise"]):
-                text = f"Hello! I am {self.agent_name}. How can I assist you with your inquiry today?"
-            elif any(k in lower for k in ["appointment", "booking", "slot", "schedule", "time", "date"]):
-                text = "I would be happy to help you schedule an appointment. What date and time works best for you?"
-            elif any(k in lower for k in ["price", "cost", "fee", "rate", "kitna", "charges"]):
-                text = "Our pricing depends on the service package. I can share the complete breakdown or connect you with our team."
-            else:
-                text = f"Thank you for sharing that. I am here to help you with anything you need. Could you please specify how I can assist you further?"
+            text = f"I am {self.agent_name}. I have noted your message: '{user_text}'. How may I assist you further?"
 
         ssml = self.humanizer.humanize_text(text)
         self.context_manager.add_turn(speaker="assistant", text=text)

@@ -67,6 +67,12 @@ from backend.routers.prompt_templates_ai import (
 from backend.routers.webhooks_manager import (
     router as webhooks_manager_router,
 )
+from backend.routers.public_apis_catalog_router import (
+    router as public_apis_catalog_router,
+)
+from backend.routers.skills_router import (
+    router as skills_router,
+)
 from backend.websocket.router import ws_router
 from backend.websocket.twilio_stream_router import router as twilio_ws_router
 
@@ -138,6 +144,8 @@ app.include_router(android_gateway_router)
 app.include_router(voice_runtime_router)
 app.include_router(prompt_templates_ai_router)
 app.include_router(webhooks_manager_router)
+app.include_router(public_apis_catalog_router)
+app.include_router(skills_router)
 app.include_router(ws_router)
 app.include_router(twilio_ws_router)
 

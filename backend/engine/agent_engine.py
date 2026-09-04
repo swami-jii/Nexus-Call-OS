@@ -1,5 +1,6 @@
 import time
 from typing import Any, Dict, List, Optional
+from backend.skills.skill_registry import SkillRegistry
 
 
 class ConversationTurn:
@@ -77,47 +78,8 @@ class AgentToolExecutor:
 
 class AgentSkillManager:
     @staticmethod
-    def evaluate_skill(skill_name: str | None, input_text: str, agent_name: str = "AI Assistant") -> str:
-        text_lower = input_text.lower().strip()
-
-        # Name / Identity Intent
-        if any(kw in text_lower for kw in ["naam", "name", "who are you", "kaun", "identity"]):
-            return (
-                f"Mera naam {agent_name} hai. Main aapki AI Voice Operating System assistant hu. "
-                "Main aapki kya madad kar sakti hu?"
-            )
-
-        if skill_name == "greeting":
-            if any(kw in text_lower for kw in ["hi", "hello", "hey", "namaste", "good morning", "good evening"]):
-                return (
-                    f"Namaste! Main {agent_name} hu, Nexus AI Operating System me aapka swagat hai. "
-                    "Aapki kaise madad kar sakti hu?"
-                )
-            return (
-                f"Hello! Main {agent_name} hu. Thank you for calling Nexus AI Operating System. "
-                "How can I assist you today?"
-            )
-        if skill_name == "qualification":
-            if "pricing" in text_lower or "plan" in text_lower:
-                return (
-                    "Our Enterprise plan starts at $499/mo with unlimited voice "
-                    f"streaming and custom LLM tuning with {agent_name}."
-                )
-            return f"Hello! I am {agent_name}. May I ask how many monthly voice calls your organization handles?"
-        if skill_name == "appointment_booking":
-            return (
-                f"I am {agent_name}. I can schedule a live demonstration with our senior solution "
-                "architect tomorrow at 2:00 PM EST."
-            )
-        if skill_name == "transfer_decision":
-            return f"I am {agent_name}. Transferring your call to a senior human operator now. Please hold."
-        if skill_name == "call_closing":
-            return f"Thank you for reaching out to {agent_name} at Nexus AI. Have a great day!"
-        
-        return (
-            f"Hello, I am {agent_name}. Regarding '{input_text}', Nexus AI OS is processing "
-            "this request for you."
-        )
+    def evaluate_skill(skill_name: str | None, input_text: str, agent_name: str = "AI Assistant", context: Optional[Dict[str, Any]] = None) -> str:
+        return SkillRegistry.evaluate_skill(skill_name, input_text, agent_name=agent_name, context=context)
 
 
 class EnterpriseAgentEngine:

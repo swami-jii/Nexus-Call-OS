@@ -270,13 +270,17 @@ class KnowledgeOut(KnowledgeBase):
 class CallLogUpdate(BaseModel):
     phone_number: str | None = None
     agent_id: str | None = None
+    agent_name: str | None = None
+    contact_name: str | None = None
     campaign_id: str | None = None
     direction: str | None = None
     duration: int | None = None
     cost: float | None = None
     status: str | None = None
     sentiment: str | None = None
+    summary: str | None = None
     recording_url: str | None = None
+    transcript: str | None = None
     transcript_text: str | None = None
     metadata_json: dict[str, Any] | None = None
 
@@ -306,14 +310,18 @@ class NotificationOut(NotificationBase):
 class CallLogBase(BaseModel):
     phone_number: str
     agent_id: str | None = None
+    agent_name: str | None = None
+    contact_name: str | None = None
     campaign_id: str | None = None
     direction: str | None = "outbound"
     duration: int | None = 0
     cost: float | None = 0.0
     status: str | None = "completed"
     sentiment: str | None = "Positive"
+    summary: str | None = None
     recording_url: str | None = None
     transcript: str | None = None
+    metadata_json: dict[str, Any] | None = None
 
 
 class CallLogCreate(CallLogBase):
@@ -322,7 +330,7 @@ class CallLogCreate(CallLogBase):
 
 class CallLogOut(CallLogBase):
     id: str
-    organization_id: str | None
+    organization_id: str | None = None
     created_at: datetime
 
     class Config:

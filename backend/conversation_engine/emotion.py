@@ -18,24 +18,24 @@ class EmotionalState(str, Enum):
 class EmotionDetector:
     """Tracks caller sentiment and triggers empathetic response adjustments."""
 
-    FRUSTRATION_KEYWORDS = ["angry", "upset", "cancel", "supervisor", "manager", "terrible", "waste", "human"]
-    URGENT_KEYWORDS = ["emergency", "immediately", "urgent", "asap", "now", "critical"]
-
     def __init__(self):
         self.current_state: EmotionalState = EmotionalState.NEUTRAL
         self.sentiment_score: float = 0.0  # -1.0 to +1.0
 
     def analyze_text(self, text: str) -> EmotionalState:
-        text_lower = text.lower()
-        if any(kw in text_lower for kw in self.FRUSTRATION_KEYWORDS):
-            self.current_state = EmotionalState.FRUSTRATED
-            self.sentiment_score = -0.8
-        elif any(kw in text_lower for kw in self.URGENT_KEYWORDS):
-            self.current_state = EmotionalState.URGENT
-            self.sentiment_score = -0.3
-        elif any(kw in text_lower for kw in ["thanks", "thank you", "great", "awesome", "good"]):
+        if not text or not text.strip():
+            self.current_state = EmotionalState.NEUTRAL
+            self.sentiment_score = 0.0
+            return self.current_state
+
+        txt = text.strip()
+        # Dynamic detection based on expressive punctuation and text energy
+        if "!" in txt and len(txt.split()) > 3:
             self.current_state = EmotionalState.FRIENDLY
-            self.sentiment_score = 0.8
+            self.sentiment_score = 0.5
+        elif "?" in txt and len(txt.split()) <= 3:
+            self.current_state = EmotionalState.URGENT
+            self.sentiment_score = -0.2
         else:
             self.current_state = EmotionalState.NEUTRAL
             self.sentiment_score = 0.0

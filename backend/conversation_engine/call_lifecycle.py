@@ -21,15 +21,16 @@ class CallEndReason(str, Enum):
 class CallLifecycleManager:
     """Manages the complete lifecycle of a phone call from greeting to hangup."""
 
-    GOODBYE_KEYWORDS = ["goodbye", "bye", "see ya", "talk to you later", "have a nice day", "thank you bye", "alvida", "phir milenge"]
-
     def __init__(self, max_call_duration_sec: float = 600.0):
         self.max_call_duration_sec = max_call_duration_sec
         self.status = CallEndReason.IN_PROGRESS
 
     def evaluate_goodbye_intent(self, text: str) -> bool:
-        text_lower = text.lower().strip()
-        if any(w in text_lower for w in self.GOODBYE_KEYWORDS):
+        """Evaluates whether the conversation turn signals a call termination."""
+        if not text:
+            return False
+        clean = text.strip()
+        if "[HANGUP]" in clean or "[hangup]" in clean.lower():
             self.status = CallEndReason.NORMAL_GOODBYE
             return True
         return False

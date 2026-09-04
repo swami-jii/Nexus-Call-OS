@@ -17,6 +17,7 @@ import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { CommandPaletteSelect, SelectOption } from '../components/ui/CommandPaletteSelect';
 import { GlobalLanguagePicker } from '../components/integrations/GlobalLanguagePicker';
+import { PublicApisCatalogTab } from '../components/integrations/PublicApisCatalogTab';
 import {
   GLOBAL_COUNTRY_CODES_CATALOG,
   GlobalCountryCodeItem,
@@ -47,6 +48,7 @@ export type ConfigCategoryTab =
   | 'gsm_gateways'
   | 'call_routing'
   | 'webhooks'
+  | 'public_apis'
   | 'ai_tools'
   | 'variables'
   | 'tags'
@@ -2747,6 +2749,28 @@ const getAuthToken = (): string => {
   const [llmStatusFilter, setLlmStatusFilter] = useState<'all' | 'connected' | 'untested'>('all');
   const [llmCategoryFilter, setLlmCategoryFilter] = useState<'all' | 'cloud' | 'local'>('all');
   const [llmSortBy, setLlmSortBy] = useState<'provider' | 'last_tested'>('provider');
+
+  // Live Public APIs Configured Workspace Cards Count
+  const [publicApisCount, setPublicApisCount] = useState<number>(0);
+
+  useEffect(() => {
+    const handleCountChange = (e: any) => {
+      if (typeof e.detail === 'number') {
+        setPublicApisCount(e.detail);
+      }
+    };
+    window.addEventListener('nexus_public_apis_count_changed', handleCountChange);
+    // Initial fetch of active public APIs count
+    fetch('/api/public-apis/active')
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.active_apis)) {
+          setPublicApisCount(data.active_apis.length);
+        }
+      })
+      .catch(() => {});
+    return () => window.removeEventListener('nexus_public_apis_count_changed', handleCountChange);
+  }, []);
 
   // Generic Tab Search, Filter & Sort State
   const [genericSearchQuery, setGenericSearchQuery] = useState('');
@@ -8370,6 +8394,7 @@ const getAuthToken = (): string => {
 
     // Group 4: Data & Webhooks (Centralized SSOT)
     { tab: 'knowledge_collections', label: 'Knowledge & RAG', group: 'data', icon: <Database className="h-3.5 w-3.5" />, description: 'Vector RAG knowledge stores, chunking strategies, and document indexing.' },
+    { tab: 'public_apis', label: 'Public APIs', group: 'data', icon: <Globe className="h-3.5 w-3.5" />, description: 'Universal Public APIs catalog across 50 categories with live background execution, key registration, and ground-truth simulation.' },
     { tab: 'prompt_templates', label: 'Prompt Templates', group: 'data', icon: <BookOpen className="h-3.5 w-3.5" />, description: 'Reusable system personas, template variables, versioning, and guardrails.' },
     { tab: 'webhooks', label: 'Webhooks & Events', group: 'data', icon: <Webhook className="h-3.5 w-3.5" />, description: 'Realtime event dispatch endpoints, authentication secrets, and delivery logs.' },
     { tab: 'variables', label: 'Variables', group: 'data', icon: <Variable className="h-3.5 w-3.5" />, description: 'System & prompt interpolation variable registry, secret masking, and scopes.' },
@@ -8862,16 +8887,17 @@ const getAuthToken = (): string => {
     counts['voice'] = voiceCreds.length;
     counts['embeddings'] = embeddingsCreds.length;
     counts['vision_doc'] = visionDocCreds.length;
+    counts['public_apis'] = publicApisCount;
 
     categories.forEach(c => {
-      if (c.tab !== 'llm' && c.tab !== 'stt' && c.tab !== 'voice' && c.tab !== 'embeddings' && c.tab !== 'vision_doc') {
+      if (c.tab !== 'llm' && c.tab !== 'stt' && c.tab !== 'voice' && c.tab !== 'embeddings' && c.tab !== 'vision_doc' && c.tab !== 'public_apis') {
         const items = Array.isArray(customItems[c.tab]) ? customItems[c.tab] : [];
         counts[c.tab] = items.length;
       }
     });
 
     return counts;
-  }, [llmCreds, sttCreds, voiceCreds, embeddingsCreds, visionDocCreds, customItems]);
+  }, [llmCreds, sttCreds, voiceCreds, embeddingsCreds, visionDocCreds, customItems, publicApisCount]);
 
   const activeGroupCategories = useMemo(() => {
     return categories.filter(c => c.group === activeGroup);
@@ -15321,8 +15347,13 @@ const getAuthToken = (): string => {
         </div>
       )}
 
+      {/* PUBLIC APIS 1,722+ CATALOG & LIVE INTELLIGENCE TAB */}
+      {activeTab === 'public_apis' && (
+        <PublicApisCatalogTab onAddToast={addToast} onActiveCountChange={setPublicApisCount} />
+      )}
+
       {/* OTHER TABS USE THE UNIVERSAL GENERIC RENDERER WITH VIEW SWITCHER */}
-      {activeTab !== 'llm' && activeTab !== 'voice' && activeTab !== 'stt' && activeTab !== 'embeddings' && activeTab !== 'vision_doc' && (
+      {activeTab !== 'llm' && activeTab !== 'voice' && activeTab !== 'stt' && activeTab !== 'embeddings' && activeTab !== 'vision_doc' && activeTab !== 'public_apis' && (
         renderGenericCategoryTab(
           activeTab,
           categories.find((c) => c.tab === activeTab)?.label || 'Category',

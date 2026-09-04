@@ -5,8 +5,10 @@ import os
 # Add project root to sys.path
 sys.path.insert(0, os.path.abspath("."))
 
-from backend.services.webhook_dispatcher import test_single_webhook_dispatch
+import pytest
+from backend.services.webhook_dispatcher import test_single_webhook_dispatch as _test_single_webhook_dispatch
 
+@pytest.mark.anyio
 async def test_all_http_methods():
     methods = ["POST", "PUT", "PATCH", "GET", "DELETE"]
     print("==================================================")
@@ -15,7 +17,7 @@ async def test_all_http_methods():
     for method in methods:
         url = "https://httpbin.org/anything"
         print(f"Testing {method} -> {url} ...")
-        res = await test_single_webhook_dispatch(
+        res = await _test_single_webhook_dispatch(
             endpoint_url=url,
             http_method=method,
             auth_type="HMAC Signature",

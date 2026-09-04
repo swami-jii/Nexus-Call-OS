@@ -54,3 +54,30 @@ A complete telephony recording must preserve the two-way conversation:
 - **AI Channel**: Neural TTS synthesized speech stream.
 - **Unified Mixer**: `MediaStreamAudioDestinationNode` mixing both tracks in real-time into a unified audio stream (`MediaRecorder`).
 - **Persistence**: Persisted to `uploads/recordings/{call_id}.mp3` and surfaced in Post-Call Intelligence and Call History for instant HD playback and download.
+
+---
+
+## 6. Universal Live World Intelligence & Polite Business Pivot
+- **Permanent Public APIs Knowledge Integration**: Nexus Call OS maintains a local permanent archive of 1400+ curated public APIs (`docs/public_apis_catalog/apis_catalog.json`) providing zero-latency live data for Weather (Open-Meteo), Real-time Time/Date (0ms Clock Context), Currency (Frankfurter ECB), and Web Search (Wikipedia/DuckDuckGo).
+- **Polite Human Receptionist Pivot Protocol**:
+  1. If a caller asks a general real-world question (e.g. today's weather, current time, currency rates, general facts), the voice agent answers accurately and helpfully in 1 concise conversational sentence.
+  2. The agent then gently and politely confirms if the caller needs assistance with the primary business domain (e.g., *"आज का तापमान 28°C और मौसम साफ़ है। वैसे आपने [Business Name] के लिए कॉल किया था — क्या आप इससे संबंधित भी कुछ जानना चाहते हैं?"*).
+  3. The agent NEVER refuses general questions or acts like a rigid bot; it maintains authentic human helpfulness while keeping the core business objective seamlessly on track.
+
+---
+
+## 7. Cognitive Session Memory & Anti-Repetition Standard
+- **Multi-Turn Working Memory (`SessionMemoryManager`)**:
+  - Automatically extracts and maintains active caller state across all turns:
+    * `caller_name`: e.g. "Rahul", "Priya", "John"
+    * `intent`: e.g. "Appointment Scheduling", "Tooth Pain Triage", "Pricing Inquiry"
+    * `booking_slot`: e.g. "Tomorrow 5:00 PM", "Monday morning"
+    * `extracted_facts`: List of key facts mentioned during dialogue
+  - The structured memory block is injected into the LLM system prompt on every turn to prevent amnesia and ensure seamless continuity.
+- **Zero-Repetition Dialogue Standard**:
+  - **No Repeated Introductions**: The opening greeting is delivered once at call initialization. On all subsequent turns, the AI never re-introduces itself ("नमस्ते! मैं [Name] हूँ" or "Hello I am [Name]") and never says "How can I help you?".
+  - **No Formulaic Repetitive Pivots**: The agent does NOT recite the same business pivot formula on every turn; it converses with natural human variety and brevity.
+  - **No Re-Asking Known Information**: The AI agent never asks the caller for details, names, or preferences that are already recorded in active Session Memory.
+- **End-of-Call Persistence**:
+  - Session Memory is serialized and persisted into database `CallLog` records and surfaced in Post-Call Intelligence reports for auditability and CRM sync.
+

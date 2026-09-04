@@ -98,7 +98,7 @@ export const CallHistoryView: React.FC = () => {
       return;
     }
 
-    let recUrl = selectedCall.recording_url;
+    let recUrl = (selectedCall as any).recording_url || selectedCall.recordingUrl;
     if (!recUrl || recUrl.includes('api.nexuscalling.com')) {
       recUrl = `/api/demo/recordings/${selectedCall.id}.mp3`;
     }
@@ -174,7 +174,7 @@ export const CallHistoryView: React.FC = () => {
 
   const handleDownloadMp3 = () => {
     if (!selectedCall) return;
-    let recUrl = selectedCall.recording_url;
+    let recUrl = (selectedCall as any).recording_url || selectedCall.recordingUrl;
     if (!recUrl || recUrl.includes('api.nexuscalling.com')) {
       recUrl = `/api/demo/recordings/${selectedCall.id}.mp3`;
     }
@@ -286,21 +286,36 @@ export const CallHistoryView: React.FC = () => {
       key: 'contactName',
       header: 'Contact & Phone',
       sortable: true,
-      render: (log) => (
-        <div className="flex items-center gap-3 whitespace-nowrap min-w-[200px]">
-          <div className="h-8 w-8 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-            <PhoneCall className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 whitespace-nowrap truncate">
-              {log.contactName || 'Unknown Contact'}
+      render: (log) => {
+        const isMicTest =
+          log.contactName?.toLowerCase().includes('browser mic') ||
+          log.contactPhone?.toUpperCase().includes('MIC') ||
+          log.contactPhone?.toUpperCase().includes('BROWSER');
+        return (
+          <div className="flex items-center gap-3 whitespace-nowrap min-w-[200px]">
+            <div className={`h-8 w-8 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
+              isMicTest
+                ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+            }`}>
+              <PhoneCall className="h-4 w-4" />
             </div>
-            <div className="text-[11px] font-mono text-zinc-400 font-semibold whitespace-nowrap">
-              {log.contactPhone || '+91 96508 55921'}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 font-extrabold text-xs text-zinc-900 dark:text-zinc-100 whitespace-nowrap truncate">
+                <span>{log.contactName || (isMicTest ? 'Test Browser Mic 1' : 'Direct Caller')}</span>
+                {isMicTest && (
+                  <Badge variant="blue" size="sm" className="text-[9px] py-0 px-1 font-semibold">
+                    Web Mic
+                  </Badge>
+                )}
+              </div>
+              <div className="text-[11px] font-mono text-zinc-400 font-semibold whitespace-nowrap">
+                {log.contactPhone || (isMicTest ? 'TEST-BROWSER-MIC-01' : '+18005550199')}
+              </div>
             </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'agentName',
@@ -647,24 +662,34 @@ export const CallHistoryView: React.FC = () => {
 
                 <div className="max-h-72 overflow-y-auto space-y-2.5 pr-1 text-xs no-scrollbar">
                   {selectedCall.transcript && selectedCall.transcript.length > 0 ? (
-                    selectedCall.transcript.map((t, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-3.5 rounded-3xl border transition-all shadow-2xs ${
-                          t.speaker === 'AI' || t.speaker.toLowerCase().includes('nikita') || t.speaker.toLowerCase().includes('agent')
-                            ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-950 dark:text-emerald-100 mr-5'
-                            : 'bg-blue-50/90 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/80 text-blue-950 dark:text-blue-100 ml-5'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1 text-[10px] font-extrabold opacity-75">
-                          <span className="flex items-center gap-1">
-                            {t.speaker === 'AI' || t.speaker.toLowerCase().includes('nikita') ? '🤖 AI Agent' : '👤 Caller'}
-                          </span>
-                          <span className="font-mono text-[9px]">{t.time}</span>
+                    selectedCall.transcript.map((t, idx) => {
+                      const spkLower = (t.speaker || '').toLowerCase();
+                      const isAi =
+                        spkLower === 'ai' ||
+                        spkLower.includes('agent') ||
+                        spkLower.includes('nikita') ||
+                        spkLower.includes('mukesh') ||
+                        (selectedCall.agentName && spkLower.includes(selectedCall.agentName.toLowerCase()));
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-3.5 rounded-3xl border transition-all shadow-2xs ${
+                            isAi
+                              ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-950 dark:text-emerald-100 mr-5'
+                              : 'bg-blue-50/90 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/80 text-blue-950 dark:text-blue-100 ml-5'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1 text-[10px] font-extrabold opacity-75">
+                            <span className="flex items-center gap-1">
+                              {isAi ? `🤖 ${selectedCall.agentName || 'AI Agent'}` : `👤 ${selectedCall.contactName || 'Caller'}`}
+                            </span>
+                            <span className="font-mono text-[9px]">{t.time}</span>
+                          </div>
+                          <p className="leading-relaxed font-medium">{t.text}</p>
                         </div>
-                        <p className="leading-relaxed font-medium">{t.text}</p>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="p-5 text-center text-zinc-400 italic bg-zinc-50 dark:bg-zinc-850/50 rounded-3xl border border-zinc-200 dark:border-zinc-800">
                       No transcript messages recorded for this call.

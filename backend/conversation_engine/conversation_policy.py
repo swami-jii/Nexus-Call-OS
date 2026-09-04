@@ -8,7 +8,7 @@ callback requests, hold requests, and PCI/HIPAA compliance masking.
 
 import re
 from enum import Enum
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 
 class ActionTrigger(str, Enum):
@@ -22,23 +22,31 @@ class ActionTrigger(str, Enum):
 class ConversationPolicyEnforcer:
     """Evaluates universal conversation rules independent of LLM prompts."""
 
-    TRANSFER_KEYWORDS = ["agent", "human", "representative", "operator", "supervisor", "speak to someone"]
-    CALLBACK_KEYWORDS = ["call me back", "callback", "later", "reach out tomorrow"]
-    HOLD_KEYWORDS = ["hold on", "wait a second", "give me a minute", "one moment"]
-    ESCALATE_KEYWORDS = ["lawyer", "attorney", "sue", "legal", "complain", "fraud"]
-
-    def __init__(self, mask_pii: bool = True):
+    def __init__(
+        self,
+        mask_pii: bool = True,
+        transfer_keywords: Optional[list] = None,
+        callback_keywords: Optional[list] = None,
+        hold_keywords: Optional[list] = None,
+        escalate_keywords: Optional[list] = None,
+    ):
         self.mask_pii = mask_pii
+        self.transfer_keywords = transfer_keywords or []
+        self.callback_keywords = callback_keywords or []
+        self.hold_keywords = hold_keywords or []
+        self.escalate_keywords = escalate_keywords or []
 
     def detect_action_trigger(self, user_text: str) -> ActionTrigger:
+        if not user_text:
+            return ActionTrigger.NONE
         text_lower = user_text.lower().strip()
-        if any(kw in text_lower for kw in self.TRANSFER_KEYWORDS):
+        if self.transfer_keywords and any(kw in text_lower for kw in self.transfer_keywords):
             return ActionTrigger.HUMAN_TRANSFER
-        if any(kw in text_lower for kw in self.CALLBACK_KEYWORDS):
+        if self.callback_keywords and any(kw in text_lower for kw in self.callback_keywords):
             return ActionTrigger.CALLBACK_REQUEST
-        if any(kw in text_lower for kw in self.HOLD_KEYWORDS):
+        if self.hold_keywords and any(kw in text_lower for kw in self.hold_keywords):
             return ActionTrigger.HOLD_REQUEST
-        if any(kw in text_lower for kw in self.ESCALATE_KEYWORDS):
+        if self.escalate_keywords and any(kw in text_lower for kw in self.escalate_keywords):
             return ActionTrigger.ESCALATION
         return ActionTrigger.NONE
 

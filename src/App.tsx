@@ -7,6 +7,8 @@ import { ScreenId } from './types';
 import { AuthProvider } from './context/AuthContext';
 import { BusinessRulesProvider } from './context/BusinessRulesContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
+import { fetchAPI } from './lib/api';
+import { DEFAULT_BUSINESS_RULES_ITEMS } from './views/IntegrationsView';
 
 import { DashboardView } from './views/DashboardView';
 import { AgentsView } from './views/AgentsView';
@@ -61,6 +63,30 @@ export default function App() {
       // ignore
     }
   };
+
+  // Global Workspace Canonical SSOT Bootstrap on Application Startup
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nexus_custom_items');
+      if (!saved) {
+        localStorage.setItem('nexus_custom_items', JSON.stringify(DEFAULT_BUSINESS_RULES_ITEMS));
+      }
+    } catch {}
+
+    fetchAPI('/api/credentials')
+      .then((data) => {
+        if (data && typeof data === 'object') {
+          try {
+            const saved = localStorage.getItem('nexus_custom_items');
+            const parsed = saved ? JSON.parse(saved) : {};
+            const merged = { ...DEFAULT_BUSINESS_RULES_ITEMS, ...parsed, ...data };
+            localStorage.setItem('nexus_custom_items', JSON.stringify(merged));
+            window.dispatchEvent(new Event('nexus_business_rules_updated'));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // If Mobile Gateway is requested, render clean full-screen mobile app shell without desktop sidebar
   if (currentScreen === 'mobile-gateway') {

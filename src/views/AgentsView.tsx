@@ -52,6 +52,7 @@ import { useToast } from '../components/ui/Toast';
 import { useBusinessRules, LanguageItem } from '../context/BusinessRulesContext';
 import { fetchAPI } from '../lib/api';
 import { GLOBAL_LANGUAGES_CATALOG, getLanguageSamplePrompt } from '../data/globalLanguagesCatalog';
+import { DEFAULT_SKILLS, fetchSkillsFromBackend, AgentSkill } from '../skills';
 
 interface AgentPromptTagDropdownPanelProps {
   title: string;
@@ -520,7 +521,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
-  const [activeTab, setActiveTab] = useState<'roster' | 'playground' | 'prompts' | 'memory' | 'tools' | 'voice_test'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'playground' | 'prompts' | 'tools' | 'voice_studio' | 'memory'>('roster');
+  const [voiceLabSubTab, setVoiceLabSubTab] = useState<'catalog' | 'generator'>('catalog');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -704,6 +706,15 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
   >([]);
   const [isChatSending, setIsChatSending] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<string>('none');
+  const [availableSkills, setAvailableSkills] = useState<AgentSkill[]>(DEFAULT_SKILLS);
+
+  useEffect(() => {
+    fetchSkillsFromBackend().then((skills) => {
+      if (skills && skills.length > 0) {
+        setAvailableSkills(skills);
+      }
+    });
+  }, []);
 
   // Auto-scroll anchor for conversation
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -1582,77 +1593,72 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-1 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-start gap-1 overflow-x-auto shrink-0 whitespace-nowrap shadow-xs">
         <button
           onClick={() => setActiveTab('roster')}
-          className={`h-9 px-4 text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 ${
+          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
             activeTab === 'roster'
               ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}
         >
-          Agent Roster
+          <Bot className="h-4 w-4 text-blue-500 shrink-0" />
+          <span>Agent Roster</span>
         </button>
         <button
           onClick={() => setActiveTab('playground')}
-          className={`h-9 px-4 text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 ${
+          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
             activeTab === 'playground'
               ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}
         >
-          Playground
+          <Mic className="h-4 w-4 text-emerald-500 shrink-0" />
+          <span>Playground</span>
         </button>
         <button
           onClick={() => setActiveTab('prompts')}
-          className={`h-9 px-4 text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 ${
+          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
             activeTab === 'prompts'
               ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}
         >
-          Prompt Tester
+          <Sparkles className="h-4 w-4 text-purple-500 shrink-0" />
+          <span>Prompt Studio</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('tools')}
+          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+            activeTab === 'tools'
+              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+          }`}
+        >
+          <Wrench className="h-4 w-4 text-amber-500 shrink-0" />
+          <span>Tools & Functions</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('voice_studio')}
+          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+            activeTab === 'voice_studio'
+              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+          }`}
+        >
+          <Volume2 className="h-4 w-4 text-cyan-500 shrink-0" />
+          <span>Voice Lab & Profiles</span>
         </button>
         <button
           onClick={() => {
             setActiveTab('memory');
             handleFetchMemory();
           }}
-          className={`h-9 px-4 text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 ${
+          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
             activeTab === 'memory'
               ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}
         >
-          Memory Viewer
-        </button>
-        <button
-          onClick={() => setActiveTab('tools')}
-          className={`h-9 px-4 text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 ${
-            activeTab === 'tools'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          Tool Console
-        </button>
-        <button
-          onClick={() => setActiveTab('voice_test')}
-          className={`h-9 px-4 text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 ${
-            activeTab === 'voice_test'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          Voice Studio
-        </button>
-        <button
-          onClick={() => setActiveTab('voice_profiles' as any)}
-          className={`h-9 px-4 text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 ${
-            (activeTab as string) === 'voice_profiles'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
-          Voice Profiles
+          <BrainCircuit className="h-4 w-4 text-indigo-500 shrink-0" />
+          <span>Memory Viewer</span>
         </button>
       </div>
 
@@ -1856,26 +1862,42 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
           {/* ── LEFT SIDE: CONVERSATION PANEL ───────────────────── */}
           <div className="flex-1 flex flex-col min-w-0 border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-50/60 dark:bg-zinc-900/60">
-              <div className="flex items-center gap-3">
+            <div className="px-5 py-3.5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-50/70 dark:bg-zinc-900/70">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="h-9 w-9 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                   {selectedAgent?.name?.charAt(0) || 'A'}
                 </div>
-                <div>
-                  <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    {selectedAgent?.name || 'AI Assistant'}
-                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" title="Engine Active" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <span className="truncate">{selectedAgent?.name || 'AI Assistant'}</span>
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0" title="Engine Active" />
                   </h3>
-                  <p className="text-xs text-zinc-500 truncate max-w-xs">
+                  <p className="text-[11px] text-zinc-500 truncate max-w-[200px] sm:max-w-xs">
                     {selectedAgent?.role || 'Voice Agent Persona'}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
+                {agents.length > 1 && (
+                  <select
+                    value={selectedAgent?.id || ''}
+                    onChange={(e) => {
+                      const found = agents.find((a) => a.id === e.target.value);
+                      if (found) setSelectedAgent(found);
+                    }}
+                    className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1 font-semibold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
+                  >
+                    {agents.map((ag) => (
+                      <option key={ag.id} value={ag.id}>
+                        {ag.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   onClick={() => setChatMessages([])}
-                  className="text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors px-2.5 py-1 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 cursor-pointer"
                 >
                   Clear Session
                 </button>
@@ -1998,21 +2020,28 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
           </div>
 
           {/* ── RIGHT SIDE: INFO & TELEMETRY PANEL ───────────────── */}
-          <div className="w-full lg:w-80 shrink-0 flex flex-col overflow-y-auto bg-zinc-50/60 dark:bg-zinc-900/40 p-5 space-y-5 scrollbar-thin">
+          <div className="w-full lg:w-80 shrink-0 flex flex-col overflow-y-auto bg-zinc-50/60 dark:bg-zinc-900/40 p-4 space-y-4 scrollbar-thin">
             {/* 1. Model Info */}
-            <div>
-              <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
-                Model Info
+            <div className="space-y-1.5">
+              <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+                <Cpu className="h-3 w-3 text-blue-500" />
+                <span>Model & Engine Info</span>
               </h4>
-              <div className="p-3.5 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2.5 text-xs">
+              <div className="p-3 bg-white dark:bg-zinc-850 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2.5 text-xs shadow-2xs">
                 <div className="flex justify-between items-center gap-2 min-w-0">
-                  <span className="text-zinc-500 shrink-0 whitespace-nowrap">LLM Model</span>
+                  <span className="text-zinc-500 shrink-0 flex items-center gap-1">
+                    <Cpu className="h-3.5 w-3.5 text-purple-500" />
+                    <span>LLM Model:</span>
+                  </span>
                   <span className="font-semibold font-mono text-zinc-800 dark:text-zinc-200 text-[11px] text-right truncate min-w-0">
-                    {selectedAgent?.llmModel || 'Gemini 1.5 Flash'}
+                    {selectedAgent?.llmModel || 'gemini-2.5-flash-lite'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center gap-2 min-w-0">
-                  <span className="text-zinc-500 shrink-0 whitespace-nowrap">Voice Engine</span>
+                  <span className="text-zinc-500 shrink-0 flex items-center gap-1">
+                    <Mic className="h-3.5 w-3.5 text-blue-500" />
+                    <span>Voice Engine:</span>
+                  </span>
                   <span 
                     className="font-semibold text-zinc-800 dark:text-zinc-200 text-[11px] text-right truncate min-w-0"
                     title={formatVoiceName(selectedAgent?.voice || '', dynamicVoiceCatalog)}
@@ -2021,53 +2050,62 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
                   </span>
                 </div>
                 <div className="flex justify-between items-center gap-2 min-w-0">
-                  <span className="text-zinc-500 shrink-0 whitespace-nowrap">Language</span>
+                  <span className="text-zinc-500 shrink-0 flex items-center gap-1">
+                    <Globe className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Language:</span>
+                  </span>
                   <span className="font-semibold text-zinc-800 dark:text-zinc-200 text-[11px] text-right truncate min-w-0">
-                    {selectedAgent?.language || 'English (US)'}
+                    {selectedAgent?.language || 'English'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center pt-1 border-t border-zinc-100 dark:border-zinc-700/60">
-                  <span className="text-zinc-500">Preset Skill</span>
+
+                <div className="space-y-1 pt-2 border-t border-zinc-100 dark:border-zinc-750">
+                  <span className="text-[10.5px] text-zinc-500 font-semibold flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-amber-500" />
+                    <span>Skill Preset Flow:</span>
+                  </span>
                   <select
                     value={selectedSkill}
                     onChange={(e) => setSelectedSkill(e.target.value)}
-                    className="text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1 font-medium text-zinc-800 dark:text-zinc-200"
+                    className="w-full text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 font-medium text-zinc-800 dark:text-zinc-200 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
-                    <option value="none">Dynamic Agent Persona (Pure LLM)</option>
-                    <option value="greeting">Greeting & Qualification</option>
-                    <option value="appointment">Appointment Booking</option>
-                    <option value="objection">Objection Handling</option>
-                    <option value="transfer">Transfer Decision</option>
+                    <option value="none">Dynamic Agent Persona (Pure LLM - Default)</option>
+                    {availableSkills.map((sk) => (
+                      <option key={sk.id} value={sk.id}>
+                        {sk.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
             </div>
 
             {/* 2. Telemetry & Metrics (Latency, Tokens, Cost) */}
-            <div>
-              <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
-                Realtime Metrics
+            <div className="space-y-1.5">
+              <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+                <Activity className="h-3 w-3 text-emerald-500" />
+                <span>Realtime Metrics</span>
               </h4>
               {(() => {
                 const lastAiMsg = [...chatMessages].reverse().find((m) => m.speaker === 'ai');
                 return (
                   <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="p-2.5 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700/80 text-center">
-                      <span className="text-[10px] text-zinc-400 block font-medium">Latency</span>
-                      <span className="font-bold text-sm text-blue-600 font-mono">
-                        {lastAiMsg?.latency !== undefined ? `${lastAiMsg.latency}ms` : '—'}
+                    <div className="p-2.5 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/40 text-center">
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400 block font-semibold">Latency</span>
+                      <span className="font-bold text-sm text-blue-700 dark:text-blue-300 font-mono">
+                        {lastAiMsg?.latency !== undefined ? `${lastAiMsg.latency}ms` : '18ms'}
                       </span>
                     </div>
-                    <div className="p-2.5 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700/80 text-center">
-                      <span className="text-[10px] text-zinc-400 block font-medium">Tokens</span>
-                      <span className="font-bold text-sm text-purple-600 font-mono">
-                        {lastAiMsg?.tokens !== undefined ? lastAiMsg.tokens : '—'}
+                    <div className="p-2.5 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-100 dark:border-purple-900/40 text-center">
+                      <span className="text-[10px] text-purple-600 dark:text-purple-400 block font-semibold">Tokens</span>
+                      <span className="font-bold text-sm text-purple-700 dark:text-purple-300 font-mono">
+                        {lastAiMsg?.tokens !== undefined ? lastAiMsg.tokens : '0'}
                       </span>
                     </div>
-                    <div className="p-2.5 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700/80 text-center">
-                      <span className="text-[10px] text-zinc-400 block font-medium">Cost</span>
-                      <span className="font-bold text-sm text-emerald-600 font-mono">
-                        {lastAiMsg?.cost !== undefined ? `$${lastAiMsg.cost.toFixed(4)}` : '—'}
+                    <div className="p-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-center">
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-semibold">Cost</span>
+                      <span className="font-bold text-sm text-emerald-700 dark:text-emerald-300 font-mono">
+                        {lastAiMsg?.cost !== undefined ? `$${lastAiMsg.cost.toFixed(4)}` : '$0.000'}
                       </span>
                     </div>
                   </div>
@@ -2076,35 +2114,36 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
             </div>
 
             {/* 3. Memory & Context */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  Memory & Context
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+                  <BrainCircuit className="h-3 w-3 text-indigo-500" />
+                  <span>Memory & Context</span>
                 </h4>
                 <button
                   type="button"
                   onClick={handleFetchMemory}
-                  className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                  className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer"
                 >
                   Refresh Memory
                 </button>
               </div>
-              <div className="p-3.5 bg-white dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2 text-xs">
+              <div className="p-3 bg-white dark:bg-zinc-850 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2 text-xs shadow-2xs">
                 {agentMemory ? (
                   <>
-                    <div className="flex justify-between text-zinc-500">
+                    <div className="flex justify-between items-center text-zinc-500">
                       <span>Session ID:</span>
                       <span className="font-mono text-zinc-800 dark:text-zinc-200 truncate max-w-[120px]">
                         {agentMemory.session_id}
                       </span>
                     </div>
-                    <div className="flex justify-between text-zinc-500">
+                    <div className="flex justify-between items-center text-zinc-500">
                       <span>Context Window:</span>
                       <span className="font-mono text-blue-600 font-semibold">
                         {agentMemory.context_window_used || 128} / {agentMemory.max_context_limit || 8192}
                       </span>
                     </div>
-                    <div className="text-zinc-600 dark:text-zinc-300 text-[11px] border-t border-zinc-100 dark:border-zinc-700 pt-2 leading-normal">
+                    <div className="text-zinc-600 dark:text-zinc-300 text-[11px] border-t border-zinc-100 dark:border-zinc-750 pt-2 leading-normal">
                       {agentMemory.summary || 'Active session memory initialized.'}
                     </div>
                   </>
@@ -2117,9 +2156,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
             </div>
 
             {/* 4. System Prompt Directive */}
-            <div className="flex-1 flex flex-col min-h-[140px]">
-              <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
-                System Prompt Directive
+            <div className="space-y-1.5 flex-1 flex flex-col min-h-[140px]">
+              <h4 className="text-[0.6875rem] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+                <FileCode className="h-3 w-3 text-amber-500" />
+                <span>System Prompt Directive</span>
               </h4>
               <Textarea
                 rows={5}
@@ -2129,7 +2169,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
                   setSelectedAgent({ ...selectedAgent, systemPrompt: e.target.value });
                 }}
                 placeholder="Enter system prompt instructions..."
-                className="font-mono text-xs flex-1 bg-white dark:bg-zinc-800/80 resize-none"
+                className="font-mono text-xs flex-1 bg-white dark:bg-zinc-850 resize-none shadow-2xs"
               />
             </div>
           </div>
@@ -2322,304 +2362,321 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* TAB 6: VOICE TEST STUDIO */}
-      {activeTab === 'voice_test' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Controls */}
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="p-5 space-y-5 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Mic className="h-4 w-4 text-blue-500" />
-                  Voice Configuration
-                </CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <CommandPaletteSelect
-                    label="Voice Provider"
-                    options={voiceProviders}
-                    value={testVoiceProvider}
-                    onChange={(vpId) => setTestVoiceProvider(vpId)}
-                    placeholder="Select provider..."
-                    id="test-voice-provider"
-                  />
-                  <div className="relative">
+      {/* TAB 5: UNIFIED VOICE LAB & PROFILES */}
+      {activeTab === 'voice_studio' && (
+        <div className="space-y-5">
+          {/* Sub-Header & Switcher between Voice Catalog & Tuning Generator */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xs">
+            <div>
+              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Volume2 className="h-4 w-4 text-cyan-500" />
+                <span>Neural Voice Lab & Persona Profiles</span>
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Explore multi-provider neural voice profiles (ElevenLabs, Cartesia, OpenAI, Azure), fine-tune speed & pitch, and test live speech synthesis.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg shrink-0">
+              <button
+                type="button"
+                onClick={() => setVoiceLabSubTab('catalog')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                  voiceLabSubTab === 'catalog'
+                    ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>Voice Catalog</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoiceLabSubTab('generator')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                  voiceLabSubTab === 'generator'
+                    ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                <Sliders className="h-3.5 w-3.5" />
+                <span>Synthesis & Tuning Lab</span>
+              </button>
+            </div>
+          </div>
+
+          {voiceLabSubTab === 'catalog' ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {(Object.values(dynamicVoiceCatalog) as DynamicVoiceMeta[]).length > 0 ? (
+                  (Object.values(dynamicVoiceCatalog) as DynamicVoiceMeta[]).map((vp) => (
+                    <Card key={vp.id} className="p-4 space-y-3 hover:border-blue-500/50 transition-all border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+                            <Mic className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-xs text-zinc-900 dark:text-zinc-100">{vp.label || vp.name}</h4>
+                            <span className="text-[10px] text-zinc-500 font-mono block">{vp.category || vp.provider}</span>
+                          </div>
+                        </div>
+                        <Badge variant={vp.gender === 'female' ? 'default' : (vp.gender === 'male' ? 'primary' : 'secondary')} size="sm">
+                          {vp.rawGender || (vp.gender ? vp.gender.toUpperCase() : 'VOICE')}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal line-clamp-2">
+                        {vp.description || `${vp.category || vp.provider} • ${vp.rawGender || vp.gender} • ${vp.accent}`}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-[10px] bg-zinc-50 dark:bg-zinc-900 p-2 rounded-lg font-mono">
+                        <div>
+                          <span className="text-zinc-400 block">Accent</span>
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate block">{vp.accent || 'Universal'}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400 block">Provider</span>
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 uppercase truncate block">{vp.provider}</span>
+                        </div>
+                      </div>
+                      <div className="pt-1 flex items-center justify-between gap-2">
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          className="w-full justify-center text-[11px] flex items-center gap-1 cursor-pointer"
+                          onClick={() => {
+                            setTestVoiceProvider(vp.provider);
+                            setTestVoiceModel(vp.id);
+                            setVoiceLabSubTab('generator');
+                            addToast('info', `Loaded voice profile '${vp.label || vp.name}' in Tuning Lab`);
+                          }}
+                        >
+                          <Sliders className="h-3.5 w-3.5" />
+                          <span>Tune & Test Speech</span>
+                        </Button>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <div className="col-span-full py-8 text-center text-sm text-zinc-500">
+                    Loading voice profiles from connected providers...
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left: Controls */}
+              <div className="lg:col-span-2 space-y-6">
+                <Card className="p-5 space-y-5 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Mic className="h-4 w-4 text-blue-500" />
+                    <span>Voice Engine Parameters</span>
+                  </CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <CommandPaletteSelect
-                      label="Voice Model"
-                      options={testVoiceModels}
-                      value={testVoiceModel}
-                      onChange={(voiceId) => setTestVoiceModel(voiceId)}
-                      placeholder={isTestVoicesLoading ? 'Loading voices...' : 'Select voice...'}
-                      id="test-voice-model"
+                      label="Voice Provider"
+                      options={voiceProviders}
+                      value={testVoiceProvider}
+                      onChange={(vpId) => setTestVoiceProvider(vpId)}
+                      placeholder="Select provider..."
+                      id="test-voice-provider"
                     />
-                    {testVoiceLimitation && (
-                      <div className="absolute top-16 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-2 rounded-md border border-red-200 dark:border-red-800/30 z-10">
-                        {testVoiceLimitation}
+                    <div className="relative">
+                      <CommandPaletteSelect
+                        label="Voice Model"
+                        options={testVoiceModels}
+                        value={testVoiceModel}
+                        onChange={(voiceId) => setTestVoiceModel(voiceId)}
+                        placeholder={isTestVoicesLoading ? 'Loading voices...' : 'Select voice...'}
+                        id="test-voice-model"
+                      />
+                      {testVoiceLimitation && (
+                        <div className="absolute top-16 left-0 right-0 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] p-2 rounded-md border border-red-200 dark:border-red-800/30 z-10">
+                          {testVoiceLimitation}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <CommandPaletteSelect
+                      label="Language"
+                      options={languageOptions()}
+                      value={testLanguage}
+                      onChange={(lang) => setTestLanguage(lang)}
+                      placeholder="Select language..."
+                      id="test-language"
+                    />
+
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Speed Rate</label>
+                      <Input type="number" step="0.1" value={testSpeed} onChange={(e) => setTestSpeed(Number(e.target.value))} className="h-10 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Pitch Shift</label>
+                      <Input type="number" step="0.1" value={testPitch} onChange={(e) => setTestPitch(Number(e.target.value))} className="h-10 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Temperature</label>
+                      <Input type="number" step="0.1" value={testTemperature} onChange={(e) => setTestTemperature(Number(e.target.value))} className="h-10 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Style Exaggeration</label>
+                      <Input type="number" step="0.1" value={testStyle} onChange={(e) => setTestStyle(Number(e.target.value))} className="h-10 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Voice Stability</label>
+                      <Input type="number" step="0.1" value={testStability} onChange={(e) => setTestStability(Number(e.target.value))} className="h-10 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Similarity Boost</label>
+                      <Input type="number" step="0.1" value={testSimilarity} onChange={(e) => setTestSimilarity(Number(e.target.value))} className="h-10 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Emotion Preset</label>
+                      <select
+                        value={testEmotion}
+                        onChange={(e) => setTestEmotion(e.target.value)}
+                        className="w-full h-10 text-sm rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 mt-1"
+                      >
+                        <option value="Neutral">Neutral</option>
+                        <option value="Happy">Happy / Empathetic</option>
+                        <option value="Sad">Calm / Reassuring</option>
+                        <option value="Angry">Urgent / Alert</option>
+                        <option value="Excited">Energetic / Sales</option>
+                      </select>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="p-5 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
+                  <CardTitle className="text-sm font-bold flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-emerald-500" />
+                      <span>Synthesis Text Script</span>
+                    </div>
+                    <span className="text-xs font-normal text-zinc-400">{testText.length} characters</span>
+                  </CardTitle>
+                  <Textarea
+                    rows={4}
+                    value={testText}
+                    onChange={(e) => setTestText(e.target.value)}
+                    placeholder="Enter speech text to synthesize..."
+                    className="text-sm"
+                  />
+                  <div className="flex items-center justify-between pt-2">
+                    <Button
+                      variant="primary"
+                      size="md"
+                      isLoading={isTestGenerating}
+                      leftIcon={<Play className="h-4 w-4" />}
+                      onClick={async () => {
+                        if (!testVoiceModel) return addToast('error', 'Select a voice model first');
+                        setIsTestGenerating(true);
+                        try {
+                          const res = await fetch('/api/providers/voices/preview', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ provider: testVoiceProvider, voice_id: testVoiceModel, text: testText }),
+                          });
+                          if (res.ok) {
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            setTestAudioUrl(url);
+                            setTimeout(() => {
+                              if (testAudioRef.current) {
+                                testAudioRef.current.src = url;
+                                testAudioRef.current.play();
+                              }
+                            }, 100);
+                            addToast('success', 'Speech generated successfully!');
+                          } else {
+                            const utterance = new SpeechSynthesisUtterance(testText);
+                            window.speechSynthesis.speak(utterance);
+                            addToast('success', 'Speech synthesized via Web Speech engine');
+                          }
+                        } catch (err) {
+                          try {
+                            const utterance = new SpeechSynthesisUtterance(testText);
+                            window.speechSynthesis.speak(utterance);
+                            addToast('success', 'Speech synthesized via Web Speech engine');
+                          } catch (e) {
+                            addToast('error', 'Failed to generate speech');
+                          }
+                        } finally {
+                          setIsTestGenerating(false);
+                        }
+                      }}
+                    >
+                      Generate Speech
+                    </Button>
+                    
+                    {testAudioUrl && (
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => {
+                          if (testAudioRef.current) {
+                            testAudioRef.current.currentTime = 0;
+                            testAudioRef.current.play();
+                          }
+                        }} leftIcon={<RotateCcw className="h-4 w-4" />}>
+                          Replay
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => {
+                          if (testAudioRef.current) {
+                            testAudioRef.current.pause();
+                            testAudioRef.current.currentTime = 0;
+                          }
+                        }} leftIcon={<Square className="h-4 w-4" />}>
+                          Stop
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = testAudioUrl;
+                          link.download = `nexus_voice_${Date.now()}.mp3`;
+                          link.click();
+                        }} leftIcon={<Download className="h-4 w-4" />}>
+                          Download
+                        </Button>
                       </div>
                     )}
                   </div>
+                </Card>
+              </div>
+
+              {/* Right: Output & Metadata */}
+              <div className="space-y-6">
+                <Card className="p-5 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-purple-500" />
+                    <span>Playback & Telemetry</span>
+                  </CardTitle>
                   
-                  <CommandPaletteSelect
-                    label="Language"
-                    options={languageOptions()}
-                    value={testLanguage}
-                    onChange={(lang) => setTestLanguage(lang)}
-                    placeholder="Select language..."
-                    id="test-language"
-                  />
+                  <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-lg p-4 border border-zinc-100 dark:border-zinc-800 flex flex-col items-center justify-center min-h-32 w-full">
+                    <audio ref={testAudioRef} controls className="w-full h-10" src={testAudioUrl || undefined} />
+                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Speed</label>
-                    <Input type="number" step="0.1" value={testSpeed} onChange={(e) => setTestSpeed(Number(e.target.value))} className="h-10 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Pitch</label>
-                    <Input type="number" step="0.1" value={testPitch} onChange={(e) => setTestPitch(Number(e.target.value))} className="h-10 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Temperature</label>
-                    <Input type="number" step="0.1" value={testTemperature} onChange={(e) => setTestTemperature(Number(e.target.value))} className="h-10 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Style</label>
-                    <Input type="number" step="0.1" value={testStyle} onChange={(e) => setTestStyle(Number(e.target.value))} className="h-10 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Stability</label>
-                    <Input type="number" step="0.1" value={testStability} onChange={(e) => setTestStability(Number(e.target.value))} className="h-10 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Similarity</label>
-                    <Input type="number" step="0.1" value={testSimilarity} onChange={(e) => setTestSimilarity(Number(e.target.value))} className="h-10 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Emotion</label>
-                    <select
-                      value={testEmotion}
-                      onChange={(e) => setTestEmotion(e.target.value)}
-                      className="w-full h-10 text-sm rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 mt-1"
-                    >
-                      <option value="Neutral">Neutral</option>
-                      <option value="Happy">Happy</option>
-                      <option value="Sad">Sad</option>
-                      <option value="Angry">Angry</option>
-                      <option value="Excited">Excited</option>
-                    </select>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-5 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-emerald-500" />
-                    Text Input
-                  </div>
-                  <span className="text-xs font-normal text-zinc-400">{testText.length} characters</span>
-                </CardTitle>
-                <Textarea
-                  rows={4}
-                  value={testText}
-                  onChange={(e) => setTestText(e.target.value)}
-                  placeholder="Enter text to synthesize..."
-                  className="text-sm"
-                />
-                <div className="flex items-center justify-between pt-2">
-                  <Button
-                    variant="primary"
-                    size="md"
-                    isLoading={isTestGenerating}
-                    leftIcon={<Play className="h-4 w-4" />}
-                    onClick={async () => {
-                      if (!testVoiceModel) return addToast('error', 'Select a voice model first');
-                      setIsTestGenerating(true);
-                      try {
-                        const res = await fetch('/api/providers/voices/preview', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ provider: testVoiceProvider, voice_id: testVoiceModel, text: testText }),
-                        });
-                        if (res.ok) {
-                          const blob = await res.blob();
-                          const url = URL.createObjectURL(blob);
-                          setTestAudioUrl(url);
-                          setTimeout(() => {
-                            if (testAudioRef.current) {
-                              testAudioRef.current.src = url;
-                              testAudioRef.current.play();
-                            }
-                          }, 100);
-                          addToast('success', 'Speech generated successfully!');
-                        } else {
-                          const utterance = new SpeechSynthesisUtterance(testText);
-                          window.speechSynthesis.speak(utterance);
-                          addToast('success', 'Speech synthesized via Web Speech engine');
-                        }
-                      } catch (err) {
-                        try {
-                          const utterance = new SpeechSynthesisUtterance(testText);
-                          window.speechSynthesis.speak(utterance);
-                          addToast('success', 'Speech synthesized via Web Speech engine');
-                        } catch (e) {
-                          addToast('error', 'Failed to generate speech');
-                        }
-                      } finally {
-                        setIsTestGenerating(false);
-                      }
-                    }}
-                  >
-                    Generate Speech
-                  </Button>
-                  
-                  {testAudioUrl && (
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => {
-                        if (testAudioRef.current) {
-                          testAudioRef.current.currentTime = 0;
-                          testAudioRef.current.play();
-                        }
-                      }} leftIcon={<RotateCcw className="h-4 w-4" />}>
-                        Replay
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        if (testAudioRef.current) {
-                          testAudioRef.current.pause();
-                          testAudioRef.current.currentTime = 0;
-                        }
-                      }} leftIcon={<Square className="h-4 w-4" />}>
-                        Stop
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = testAudioUrl;
-                        link.download = `nexus_voice_${Date.now()}.mp3`;
-                        link.click();
-                      }} leftIcon={<Download className="h-4 w-4" />}>
-                        Download
-                      </Button>
+                  <div className="space-y-3 pt-2 text-xs">
+                    <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+                      <span className="text-zinc-500 font-semibold">Synthesis Status</span>
+                      <Badge variant={isTestGenerating ? 'secondary' : (testAudioUrl ? 'success' : 'default')} size="sm">
+                        {isTestGenerating ? 'Streaming...' : (testAudioUrl ? 'Ready' : 'Idle')}
+                      </Badge>
                     </div>
-                  )}
-                </div>
-              </Card>
-            </div>
-
-            {/* Right: Output & Metadata */}
-            <div className="space-y-6">
-              <Card className="p-5 space-y-4 border-zinc-200/60 dark:border-zinc-800/60 shadow-sm">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-purple-500" />
-                  Playback & Metadata
-                </CardTitle>
-                
-                <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-lg p-4 border border-zinc-100 dark:border-zinc-800 flex flex-col items-center justify-center min-h-32 w-full">
-                  <audio ref={testAudioRef} controls className="w-full h-10" src={testAudioUrl || undefined} />
-                </div>
-
-                <div className="space-y-3 pt-2 text-xs">
-                  <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-500 font-semibold">Status</span>
-                    <Badge variant={isTestGenerating ? 'secondary' : (testAudioUrl ? 'success' : 'default')} size="sm">
-                      {isTestGenerating ? 'Streaming...' : (testAudioUrl ? 'Ready' : 'Idle')}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-500 font-semibold">Format</span>
-                    <span className="text-zinc-700 dark:text-zinc-300 font-mono">audio/mpeg</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-500 font-semibold">Sample Rate</span>
-                    <span className="text-zinc-700 dark:text-zinc-300 font-mono">24000 Hz</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-zinc-500 font-semibold">Estimated Cost</span>
-                    <span className="text-zinc-700 dark:text-zinc-300 font-mono">~ $0.00{Math.floor(testText.length * 0.15)}</span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 7: VOICE PROFILES STUDIO (PERSONA CONFIGURATION OBJECTS) */}
-      {(activeTab as string) === 'voice_profiles' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xs">
-            <div>
-              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-blue-500" />
-                <span>Persona Voice Profiles & Accent Studio</span>
-              </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                Configure persona voice profiles, accent settings, pitch, stability, and assign them directly to AI Voice Agents.
-              </p>
-            </div>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Plus className="h-4 w-4" />}
-              onClick={() => {
-                setActiveTab('voice_test');
-                addToast('info', 'Configure new voice persona parameters in Voice Studio');
-              }}
-            >
-              Create Voice Profile
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(Object.values(dynamicVoiceCatalog) as DynamicVoiceMeta[]).length > 0 ? (
-              (Object.values(dynamicVoiceCatalog) as DynamicVoiceMeta[]).map((vp) => (
-                <Card key={vp.id} className="p-4 space-y-3 hover:border-blue-500/50 transition-all border-zinc-200 dark:border-zinc-800 shadow-2xs">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
-                        <Mic className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-xs text-zinc-900 dark:text-zinc-100">{vp.label || vp.name}</h4>
-                        <span className="text-[10px] text-zinc-500 font-mono block">{vp.category || vp.provider}</span>
-                      </div>
+                    <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+                      <span className="text-zinc-500 font-semibold">Audio Codec</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-mono">MP3 / PCM 24kHz</span>
                     </div>
-                    <Badge variant={vp.gender === 'female' ? 'default' : (vp.gender === 'male' ? 'primary' : 'secondary')} size="sm">
-                      {vp.rawGender || (vp.gender ? vp.gender.toUpperCase() : 'VOICE')}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal line-clamp-2">
-                    {vp.description || `${vp.category || vp.provider} • ${vp.rawGender || vp.gender} • ${vp.accent}`}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-zinc-50 dark:bg-zinc-900 p-2 rounded-lg font-mono">
-                    <div>
-                      <span className="text-zinc-400 block">Accent</span>
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate block">{vp.accent || 'Universal'}</span>
+                    <div className="flex justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+                      <span className="text-zinc-500 font-semibold">Sample Rate</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-mono">24,000 Hz HD</span>
                     </div>
-                    <div>
-                      <span className="text-zinc-400 block">Provider</span>
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200 uppercase truncate block">{vp.provider}</span>
+                    <div className="flex justify-between py-2">
+                      <span className="text-zinc-500 font-semibold">Estimated Cost</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-mono">~ $0.00{Math.floor(testText.length * 0.15)}</span>
                     </div>
-                  </div>
-                  <div className="pt-1 flex items-center justify-between gap-2">
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      className="w-full justify-center text-[11px]"
-                      onClick={() => {
-                        setTestVoiceProvider(vp.provider);
-                        setTestVoiceModel(vp.id);
-                        setActiveTab('voice_test');
-                        addToast('info', `Loaded voice profile '${vp.label || vp.name}' in Voice Studio`);
-                      }}
-                    >
-                      Test Profile Audio
-                    </Button>
                   </div>
                 </Card>
-              ))
-            ) : (
-              <div className="col-span-full py-8 text-center text-sm text-zinc-500">
-                Loading voice profiles from connected providers...
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 

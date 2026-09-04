@@ -185,6 +185,8 @@ class CallLog(Base):
     agent_id = Column(
         String(36), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True
     )
+    agent_name = Column(String(255), nullable=True)
+    contact_name = Column(String(255), nullable=True)
     campaign_id = Column(
         String(36), ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True
     )
@@ -194,8 +196,10 @@ class CallLog(Base):
     cost = Column(Float, default=0.0)
     status = Column(String(50), default="completed")
     sentiment = Column(String(50), default="Positive")
+    summary = Column(Text, nullable=True)
     recording_url = Column(Text, nullable=True)
     transcript = Column(Text, nullable=True)
+    metadata_json = Column(JSON, default=dict)
     created_at = Column(DateTime, default=get_utc_now)
 
 
