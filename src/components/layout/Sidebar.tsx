@@ -165,19 +165,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <img
                   src="/create-call-banner-dark.png"
                   alt="Create Call OS"
-                  className="h-[30px] w-auto max-w-[155px] object-contain hidden dark:block"
+                  className="h-10 w-auto max-w-[165px] object-contain hidden dark:block"
                 />
                 <img
                   src="/create-call-banner-light.png"
                   alt="Create Call OS"
-                  className="h-[30px] w-auto max-w-[155px] object-contain block dark:hidden"
+                  className="h-10 w-auto max-w-[165px] object-contain block dark:hidden"
                 />
-                <div className="flex items-center gap-1 mt-0.5 select-none overflow-hidden">
-                  <span className="h-[1px] w-2 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
-                  <span className="text-[8px] font-semibold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase truncate">
+                <div className="flex items-center justify-between gap-1 mt-0.5 select-none w-full max-w-[165px]">
+                  <span className="h-[1px] w-2.5 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
+                  <span className="text-[7px] font-bold tracking-widest text-zinc-500 dark:text-zinc-400 uppercase whitespace-nowrap">
                     Crafting Digital Possibilities
                   </span>
-                  <span className="h-[1px] w-2 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
+                  <span className="h-[1px] w-2.5 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
                 </div>
               </div>
             </div>
