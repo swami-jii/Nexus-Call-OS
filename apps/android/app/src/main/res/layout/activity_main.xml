@@ -76,28 +76,34 @@
             android:paddingVertical="4dp" />
     </LinearLayout>
 
-    <!-- Main Scrollable Content Area -->
-    <!-- Main Scrollable Content Area with bottom navigation clearance -->
-    <ScrollView
+    <!-- Main Content Area Container (Coordinates Scrollable Screens vs Fixed Calls/Dialer Screen) -->
+    <FrameLayout
+        android:id="@+id/contentContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true"
-        android:clipToPadding="false"
-        android:scrollbars="none">
+        android:layout_weight="1">
 
-        <LinearLayout
+        <!-- Main Scrollable Content Area (Dashboard, SIMs, Agent, Settings, etc.) -->
+        <ScrollView
+            android:id="@+id/mainScrollView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:paddingTop="16dp"
-            android:paddingBottom="96dp">
+            android:fillViewport="true"
+            android:clipToPadding="false"
+            android:scrollbars="none">
 
-            <!-- ==================== SCREEN 1: DASHBOARD ==================== -->
             <LinearLayout
-                android:id="@+id/screenDashboard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="96dp">
+
+                <!-- ==================== SCREEN 1: DASHBOARD ==================== -->
+                <LinearLayout
+                    android:id="@+id/screenDashboard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -660,1410 +666,6 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                     app:backgroundTint="@null"
                     android:textAllCaps="false"
                     android:layout_marginTop="8dp" />
-            </LinearLayout>
-
-            <!-- ==================== SCREEN 3: CALLS & NATIVE DIALER ==================== -->
-            <LinearLayout
-                android:id="@+id/screenCalls"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <!-- Active In-Call Station Card (Prominently displayed when call is active/ringing/dialing) -->
-                <LinearLayout
-                    android:id="@+id/cardActiveCall"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_card_cyber_selected"
-                    android:orientation="vertical"
-                    android:padding="16dp"
-                    android:layout_marginBottom="14dp"
-                    android:visibility="gone">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:id="@+id/tvActiveCallTitle"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Active Call"
-                            android:textColor="@color/text_primary"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvCallStatePill"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="● STANDBY"
-                            android:textColor="@color/status_warning"
-                            android:textSize="10sp"
-                            android:textStyle="bold"
-                            android:background="@drawable/bg_pill_status"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="4dp" />
-                    </LinearLayout>
-
-                    <!-- Caller Info & Avatar -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:gravity="center_horizontal"
-                        android:paddingVertical="12dp">
-
-                        <ImageView
-                            android:id="@+id/ivInCallAvatar"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:src="@drawable/ic_person"
-                            app:tint="@color/primary"
-                            android:background="@drawable/bg_metric_tile"
-                            android:padding="10dp"
-                            android:layout_marginBottom="8dp" />
-
-                        <TextView
-                            android:id="@+id/tvCallNumber"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Ready for incoming calls"
-                            android:textColor="@color/text_primary"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:gravity="center" />
-
-                        <TextView
-                            android:id="@+id/tvCallLineDetails"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Active Line • Cellular Bridge"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:layout_marginTop="2dp" />
-
-                        <TextView
-                            android:id="@+id/tvCallDuration"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="00:00:00"
-                            android:textColor="@color/primary"
-                            android:textSize="20sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace"
-                            android:layout_marginTop="8dp" />
-                    </LinearLayout>
-
-                    <!-- Incoming Call Action Buttons (Answer & Reject) -->
-                    <LinearLayout
-                        android:id="@+id/layoutIncomingCallActions"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center"
-                        android:layout_marginTop="8dp"
-                        android:visibility="gone">
-
-                        <Button
-                            android:id="@+id/btnCallReject"
-                            android:layout_width="0dp"
-                            android:layout_height="46dp"
-                            android:layout_weight="1"
-                            android:text="Decline"
-                            android:textColor="#FFFFFF"
-                            android:textStyle="bold"
-                            android:textSize="13sp"
-                            android:background="@drawable/bg_btn_danger"
-                            app:backgroundTint="@null"
-                            android:textAllCaps="false"
-                            android:layout_marginEnd="6dp" />
-
-                        <Button
-                            android:id="@+id/btnCallAnswer"
-                            android:layout_width="0dp"
-                            android:layout_height="46dp"
-                            android:layout_weight="1"
-                            android:text="Answer"
-                            android:textColor="@color/text_inverse"
-                            android:textStyle="bold"
-                            android:textSize="13sp"
-                            android:background="@drawable/bg_btn_gradient_primary"
-                            app:backgroundTint="@null"
-                            android:textAllCaps="false"
-                            android:layout_marginStart="6dp" />
-                    </LinearLayout>
-
-                    <!-- In-Call Control Circle Buttons Row (Evenly Weighted 5 Slots - Never Clip) -->
-                    <LinearLayout
-                        android:id="@+id/layoutActiveCallControls"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingTop="8dp">
-
-                        <!-- Mic Mute Button Slot -->
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center">
-                            <ImageButton
-                                android:id="@+id/btnCallMute"
-                                android:layout_width="44dp"
-                                android:layout_height="44dp"
-                                android:src="@drawable/ic_mic"
-                                android:background="@drawable/bg_btn_circle_action"
-                                app:tint="@color/text_primary"
-                                android:contentDescription="Mute" />
-                        </LinearLayout>
-
-                        <!-- Keypad DTMF Button Slot -->
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center">
-                            <ImageButton
-                                android:id="@+id/btnCallKeypad"
-                                android:layout_width="44dp"
-                                android:layout_height="44dp"
-                                android:src="@drawable/ic_keypad"
-                                android:background="@drawable/bg_btn_circle_action"
-                                app:tint="@color/text_primary"
-                                android:contentDescription="Keypad" />
-                        </LinearLayout>
-
-                        <!-- Speaker Button Slot -->
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center">
-                            <ImageButton
-                                android:id="@+id/btnCallSpeaker"
-                                android:layout_width="44dp"
-                                android:layout_height="44dp"
-                                android:src="@drawable/ic_speaker"
-                                android:background="@drawable/bg_btn_circle_action"
-                                app:tint="@color/text_primary"
-                                android:contentDescription="Speaker" />
-                        </LinearLayout>
-
-                        <!-- Pause / Hold Button Slot -->
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center">
-                            <ImageButton
-                                android:id="@+id/btnCallPause"
-                                android:layout_width="44dp"
-                                android:layout_height="44dp"
-                                android:src="@drawable/ic_pause"
-                                android:background="@drawable/bg_btn_circle_action"
-                                app:tint="@color/text_primary"
-                                android:contentDescription="Hold" />
-                        </LinearLayout>
-
-                        <!-- Hangup / End Button Slot -->
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center">
-                            <ImageButton
-                                android:id="@+id/btnCallHangup"
-                                android:layout_width="44dp"
-                                android:layout_height="44dp"
-                                android:src="@drawable/ic_call_end"
-                                android:background="@drawable/bg_btn_circle_danger"
-                                app:tint="#FFFFFF"
-                                android:contentDescription="End Call" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- 4 Calls Segmented Sub-Tabs: Keypad | Recents | Contacts | Settings -->
-                <LinearLayout
-                    android:id="@+id/layoutCallsSubTabs"
-                    android:layout_width="match_parent"
-                    android:layout_height="36dp"
-                    android:orientation="horizontal"
-                    android:background="@drawable/bg_card_cyber"
-                    android:padding="2dp"
-                    android:layout_marginBottom="6dp">
-
-                    <Button
-                        android:id="@+id/tabCallsKeypad"
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:text="Dialer"
-                        android:textColor="@color/text_primary"
-                        android:textSize="11sp"
-                        android:textStyle="bold"
-                        android:singleLine="true"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:paddingHorizontal="2dp"
-                        android:minWidth="0dp"
-                        android:includeFontPadding="false"
-                        android:background="@drawable/bg_tab_pill_selected"
-                        app:backgroundTint="@null"
-                        android:textAllCaps="false" />
-
-                    <Button
-                        android:id="@+id/tabCallsRecents"
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:text="Recents"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp"
-                        android:singleLine="true"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:paddingHorizontal="2dp"
-                        android:minWidth="0dp"
-                        android:includeFontPadding="false"
-                        android:background="@drawable/bg_tab_pill_unselected"
-                        app:backgroundTint="@null"
-                        android:textAllCaps="false" />
-
-                    <Button
-                        android:id="@+id/tabCallsContacts"
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:text="Contacts"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp"
-                        android:singleLine="true"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:paddingHorizontal="2dp"
-                        android:minWidth="0dp"
-                        android:includeFontPadding="false"
-                        android:background="@drawable/bg_tab_pill_unselected"
-                        app:backgroundTint="@null"
-                        android:textAllCaps="false" />
-
-                    <Button
-                        android:id="@+id/tabCallsSettings"
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:text="Gateway"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp"
-                        android:singleLine="true"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:paddingHorizontal="2dp"
-                        android:minWidth="0dp"
-                        android:includeFontPadding="false"
-                        android:background="@drawable/bg_tab_pill_unselected"
-                        app:backgroundTint="@null"
-                        android:textAllCaps="false" />
-                </LinearLayout>
-
-                <!-- ==================== SUB-VIEW 1: DIALER KEYPAD ==================== -->
-                <LinearLayout
-                    android:id="@+id/containerCallsKeypadView"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:orientation="vertical"
-                    android:visibility="visible">
-
-                    <!-- Dialed Number Input / Display Card -->
-                    <LinearLayout
-                        android:id="@+id/cardDialedNumberDisplay"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:orientation="horizontal"
-                        android:background="@drawable/bg_card_cyber"
-                        android:gravity="center_vertical"
-                        android:paddingHorizontal="14dp"
-                        android:layout_marginBottom="4dp">
-
-                        <TextView
-                            android:id="@+id/tvDialedNumber"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:hint="Enter phone number..."
-                            android:textColorHint="@color/text_muted"
-                            android:textColor="@color/text_primary"
-                            android:textSize="20sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace"
-                            android:singleLine="true"
-                            android:ellipsize="start" />
-
-                        <ImageView
-                            android:id="@+id/btnDialerBackspace"
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:src="@drawable/ic_backspace"
-                            app:tint="@color/text_muted"
-                            android:padding="4dp"
-                            android:visibility="invisible"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="Backspace" />
-                    </LinearLayout>
-
-                    <!-- Real-Time Suggestions Dedicated Flexible Viewport (Expands naturally in upper region) -->
-                    <FrameLayout
-                        android:id="@+id/layoutSuggestionsWrapper"
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:minHeight="60dp"
-                        android:layout_marginBottom="4dp">
-
-                        <ScrollView
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:fillViewport="true"
-                            android:scrollbars="none">
-
-                            <LinearLayout
-                                android:id="@+id/containerNumberSuggestions"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="vertical" />
-                        </ScrollView>
-
-                        <TextView
-                            android:id="@+id/tvSuggestionsPlaceholder"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:gravity="center"
-                            android:text="Enter digits to search contacts &amp; recents"
-                            android:textColor="@color/text_muted"
-                            android:textSize="11sp"
-                            android:visibility="visible" />
-                    </FrameLayout>
-
-                    <!-- 12-Key Polished Native Dialpad Grid (Anchored at Bottom) -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:layout_marginBottom="4dp">
-
-                        <!-- Row 1: 1, 2, 3 -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="52dp"
-                            android:orientation="horizontal"
-                            android:layout_marginBottom="4dp">
-
-                            <!-- Key 1 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer1"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginEnd="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="1"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text=" "
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-
-                            <!-- Key 2 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer2"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginHorizontal="2dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="2"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="A B C"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-
-                            <!-- Key 3 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer3"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginStart="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="3"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="D E F"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-                        </LinearLayout>
-
-                        <!-- Row 2: 4, 5, 6 -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="52dp"
-                            android:orientation="horizontal"
-                            android:layout_marginBottom="4dp">
-
-                            <!-- Key 4 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer4"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginEnd="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="4"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="G H I"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-
-                            <!-- Key 5 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer5"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginHorizontal="2dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="5"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="J K L"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-
-                            <!-- Key 6 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer6"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginStart="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="6"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="M N O"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-                        </LinearLayout>
-
-                        <!-- Row 3: 7, 8, 9 -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="52dp"
-                            android:orientation="horizontal"
-                            android:layout_marginBottom="4dp">
-
-                            <!-- Key 7 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer7"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginEnd="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="7"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="P Q R S"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-
-                            <!-- Key 8 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer8"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginHorizontal="2dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="8"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="T U V"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-
-                            <!-- Key 9 -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer9"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginStart="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="9"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="W X Y Z"
-                                    android:textColor="@color/text_muted"
-                                    android:textSize="8sp" />
-                            </LinearLayout>
-                        </LinearLayout>
-
-                        <!-- Row 4: *, 0 (+ on long press), # -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="52dp"
-                            android:orientation="horizontal">
-
-                            <!-- Key * -->
-                            <LinearLayout
-                                android:id="@+id/btnDialerStar"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginEnd="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="*"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </LinearLayout>
-
-                            <!-- Key 0 (Long press for +) -->
-                            <LinearLayout
-                                android:id="@+id/btnDialer0"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginHorizontal="2dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="0"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="+"
-                                    android:textColor="@color/primary"
-                                    android:textSize="10sp"
-                                    android:textStyle="bold" />
-                            </LinearLayout>
-
-                            <!-- Key # -->
-                            <LinearLayout
-                                android:id="@+id/btnDialerPound"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_dialer_key"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:layout_marginStart="3dp">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="#"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="19sp"
-                                    android:textStyle="bold" />
-                            </LinearLayout>
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <!-- Large Call Action Button with Active SIM indication -->
-                    <Button
-                        android:id="@+id/btnDialerCall"
-                        android:layout_width="match_parent"
-                        android:layout_height="50dp"
-                        android:text="Call via Cellular Line"
-                        android:textColor="@color/text_inverse"
-                        android:textStyle="bold"
-                        android:textSize="13sp"
-                        app:icon="@drawable/ic_phone"
-                        app:iconGravity="textStart"
-                        app:iconSize="18dp"
-                        app:iconTint="@color/text_inverse"
-                        android:background="@drawable/bg_btn_call_action"
-                        app:backgroundTint="@null"
-                        android:textAllCaps="false"
-                        android:elevation="3dp"
-                        android:layout_marginTop="6dp"
-                        android:layout_marginBottom="12dp" />
-                </LinearLayout>
-
-                <!-- ==================== SUB-VIEW 2: RECENTS / CALL LOGS ==================== -->
-                <LinearLayout
-                    android:id="@+id/containerCallsRecentsView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <!-- Search Bar -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="40dp"
-                        android:orientation="horizontal"
-                        android:background="@drawable/bg_card_cyber"
-                        android:gravity="center_vertical"
-                        android:paddingHorizontal="12dp"
-                        android:layout_marginBottom="10dp">
-
-                        <ImageView
-                            android:layout_width="16dp"
-                            android:layout_height="16dp"
-                            android:src="@drawable/ic_search"
-                            app:tint="@color/text_muted"
-                            android:contentDescription="Search" />
-
-                        <EditText
-                            android:id="@+id/etRecentsSearch"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_weight="1"
-                            android:hint="Search recents by name or number..."
-                            android:textColorHint="@color/text_muted"
-                            android:textColor="@color/text_primary"
-                            android:textSize="12sp"
-                            android:background="@null"
-                            android:paddingStart="8dp"
-                            android:paddingEnd="8dp"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:imeOptions="actionSearch" />
-
-                        <ImageView
-                            android:id="@+id/btnClearRecentsSearch"
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:src="@drawable/ic_close_circle"
-                            app:tint="@color/text_muted"
-                            android:visibility="gone"
-                            android:contentDescription="Clear Search" />
-                    </LinearLayout>
-
-                    <!-- Responsive Single-Line Filter Tabs (All | Missed | Incoming | Outgoing) -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="36dp"
-                        android:orientation="horizontal"
-                        android:background="@drawable/bg_card_cyber"
-                        android:padding="2dp"
-                        android:layout_marginBottom="12dp">
-
-                        <TextView
-                            android:id="@+id/tabRecentsAll"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_weight="1"
-                            android:text="All"
-                            android:textColor="@color/text_primary"
-                            android:textSize="11sp"
-                            android:textStyle="bold"
-                            android:gravity="center"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:ellipsize="end"
-                            android:includeFontPadding="false"
-                            android:paddingHorizontal="1dp"
-                            android:background="@drawable/bg_tab_pill_selected"
-                            android:clickable="true"
-                            android:focusable="true" />
-
-                        <TextView
-                            android:id="@+id/tabRecentsMissed"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_weight="1"
-                            android:text="Missed"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:gravity="center"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:ellipsize="end"
-                            android:includeFontPadding="false"
-                            android:paddingHorizontal="1dp"
-                            android:background="@drawable/bg_tab_pill_unselected"
-                            android:clickable="true"
-                            android:focusable="true" />
-
-                        <TextView
-                            android:id="@+id/tabRecentsIncoming"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_weight="1"
-                            android:text="Incoming"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:gravity="center"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:ellipsize="end"
-                            android:includeFontPadding="false"
-                            android:paddingHorizontal="1dp"
-                            android:background="@drawable/bg_tab_pill_unselected"
-                            android:clickable="true"
-                            android:focusable="true" />
-
-                        <TextView
-                            android:id="@+id/tabRecentsOutgoing"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_weight="1"
-                            android:text="Outgoing"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:gravity="center"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:ellipsize="end"
-                            android:includeFontPadding="false"
-                            android:paddingHorizontal="1dp"
-                            android:background="@drawable/bg_tab_pill_unselected"
-                            android:clickable="true"
-                            android:focusable="true" />
-                    </LinearLayout>
-
-                    <!-- Dynamic Recents Call History List -->
-                    <LinearLayout
-                        android:id="@+id/containerRecentsList"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical" />
-
-                    <!-- Empty State -->
-                    <TextView
-                        android:id="@+id/tvNoRecentsMsg"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="No recent calls found."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp"
-                        android:gravity="center"
-                        android:padding="24dp"
-                        android:visibility="gone" />
-                </LinearLayout>
-
-                <!-- ==================== SUB-VIEW 3: CONTACTS BROWSER ==================== -->
-                <LinearLayout
-                    android:id="@+id/containerCallsContactsView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <!-- Search Bar -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="40dp"
-                        android:orientation="horizontal"
-                        android:background="@drawable/bg_card_cyber"
-                        android:gravity="center_vertical"
-                        android:paddingHorizontal="12dp"
-                        android:layout_marginBottom="10dp">
-
-                        <ImageView
-                            android:layout_width="16dp"
-                            android:layout_height="16dp"
-                            android:src="@drawable/ic_search"
-                            app:tint="@color/text_muted"
-                            android:contentDescription="Search" />
-
-                        <EditText
-                            android:id="@+id/etContactsSearch"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_weight="1"
-                            android:hint="Search contacts by name or number..."
-                            android:textColorHint="@color/text_muted"
-                            android:textColor="@color/text_primary"
-                            android:textSize="12sp"
-                            android:background="@null"
-                            android:paddingStart="8dp"
-                            android:paddingEnd="8dp"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:imeOptions="actionSearch" />
-
-                        <ImageView
-                            android:id="@+id/btnClearContactsSearch"
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:src="@drawable/ic_close_circle"
-                            app:tint="@color/text_muted"
-                            android:visibility="gone"
-                            android:contentDescription="Clear Search" />
-                    </LinearLayout>
-
-                    <!-- Contacts Header: Count Badge & Add Contact Action -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:layout_marginBottom="10dp">
-
-                        <TextView
-                            android:id="@+id/tvContactsCountBadge"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="0 Contacts"
-                            android:textColor="@color/text_muted"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/btnAddNewContact"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="+ Add Contact"
-                            android:textColor="@color/primary"
-                            android:textSize="11sp"
-                            android:textStyle="bold"
-                            android:background="@drawable/bg_pill_chip"
-                            android:paddingHorizontal="12dp"
-                            android:paddingVertical="5dp"
-                            android:clickable="true"
-                            android:focusable="true" />
-                    </LinearLayout>
-
-                    <!-- Dynamic Contacts List -->
-                    <LinearLayout
-                        android:id="@+id/containerContactsList"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical" />
-
-                    <!-- Empty State -->
-                    <TextView
-                        android:id="@+id/tvNoContactsMsg"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="No contacts found. Grant READ_CONTACTS permission or add a new contact."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp"
-                        android:gravity="center"
-                        android:padding="24dp"
-                        android:visibility="gone" />
-                </LinearLayout>
-
-                <!-- ==================== SUB-VIEW 4: GATEWAY & AUTO-ANSWER SETTINGS ==================== -->
-                <LinearLayout
-                    android:id="@+id/containerCallsSettingsView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <!-- Auto Answer Card -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_card_cyber"
-                        android:orientation="vertical"
-                        android:padding="16dp"
-                        android:layout_marginBottom="12dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <LinearLayout
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:orientation="vertical">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Auto Answer"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Automatically answer incoming cellular calls"
-                                    android:textColor="@color/text_secondary"
-                                    android:textSize="11sp" />
-                            </LinearLayout>
-
-                            <androidx.appcompat.widget.SwitchCompat
-                                android:id="@+id/switchAutoAnswer"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:checked="true" />
-                        </LinearLayout>
-
-                        <!-- Answer Delay Row -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical"
-                            android:layout_marginTop="12dp">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Answer Delay"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp"
-                                android:layout_marginEnd="8dp" />
-
-                            <!-- 4 Delay Weighted Pill Buttons -->
-                            <LinearLayout
-                                android:layout_width="0dp"
-                                android:layout_height="32dp"
-                                android:layout_weight="1"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical">
-
-                                <TextView
-                                    android:id="@+id/btnDelay0"
-                                    android:layout_width="0dp"
-                                    android:layout_height="match_parent"
-                                    android:layout_weight="1"
-                                    android:text="0s"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold"
-                                    android:textColor="@color/text_secondary"
-                                    android:gravity="center"
-                                    android:singleLine="true"
-                                    android:maxLines="1"
-                                    android:ellipsize="none"
-                                    android:background="@drawable/bg_btn_secondary"
-                                    android:clickable="true"
-                                    android:focusable="true"
-                                    android:layout_marginEnd="4dp" />
-
-                                <TextView
-                                    android:id="@+id/btnDelay3"
-                                    android:layout_width="0dp"
-                                    android:layout_height="match_parent"
-                                    android:layout_weight="1"
-                                    android:text="3s"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold"
-                                    android:textColor="@color/text_inverse"
-                                    android:gravity="center"
-                                    android:singleLine="true"
-                                    android:maxLines="1"
-                                    android:ellipsize="none"
-                                    android:background="@drawable/bg_btn_gradient_primary"
-                                    android:clickable="true"
-                                    android:focusable="true"
-                                    android:layout_marginEnd="4dp" />
-
-                                <TextView
-                                    android:id="@+id/btnDelay5"
-                                    android:layout_width="0dp"
-                                    android:layout_height="match_parent"
-                                    android:layout_weight="1"
-                                    android:text="5s"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold"
-                                    android:textColor="@color/text_secondary"
-                                    android:gravity="center"
-                                    android:singleLine="true"
-                                    android:maxLines="1"
-                                    android:ellipsize="none"
-                                    android:background="@drawable/bg_btn_secondary"
-                                    android:clickable="true"
-                                    android:focusable="true"
-                                    android:layout_marginEnd="4dp" />
-
-                                <TextView
-                                    android:id="@+id/btnDelay10"
-                                    android:layout_width="0dp"
-                                    android:layout_height="match_parent"
-                                    android:layout_weight="1"
-                                    android:text="10s"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold"
-                                    android:textColor="@color/text_secondary"
-                                    android:gravity="center"
-                                    android:singleLine="true"
-                                    android:maxLines="1"
-                                    android:ellipsize="none"
-                                    android:background="@drawable/bg_btn_secondary"
-                                    android:clickable="true"
-                                    android:focusable="true" />
-                            </LinearLayout>
-                        </LinearLayout>
-
-                        <!-- Ring Timeout Row -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical"
-                            android:layout_marginTop="12dp">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Ring Timeout"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/tvRingTimeout"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="30 seconds ▾"
-                                android:textColor="@color/text_primary"
-                                android:textSize="12sp"
-                                android:textStyle="bold"
-                                android:background="@drawable/bg_metric_tile"
-                                android:paddingHorizontal="10dp"
-                                android:paddingVertical="6dp" />
-                        </LinearLayout>
-
-                        <!-- Auto Reject Unknown Row -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical"
-                            android:layout_marginTop="12dp">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Auto Reject Unknown"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp" />
-
-                            <androidx.appcompat.widget.SwitchCompat
-                                android:id="@+id/switchAutoRejectUnknown"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:checked="false" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <!-- Call Handling Card -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_card_cyber"
-                        android:orientation="vertical"
-                        android:padding="16dp"
-                        android:layout_marginBottom="12dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="CALL HANDLING &amp; AUDIO BRIDGING"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp"
-                            android:textStyle="bold"
-                            android:letterSpacing="0.05"
-                            android:layout_marginBottom="8dp" />
-
-                        <!-- Row 1: Auto Speaker -->
-                        <LinearLayout
-                            android:id="@+id/rowAutoSpeaker"
-                            android:layout_width="match_parent"
-                            android:layout_height="36dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_speaker"
-                                app:tint="@color/primary" />
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Auto Speaker"
-                                android:textColor="@color/text_primary"
-                                android:textSize="12sp"
-                                android:layout_marginStart="8dp" />
-
-                            <TextView
-                                android:id="@+id/tvAutoSpeakerVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="On ›"
-                                android:textColor="@color/text_muted"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-
-                        <!-- Row 2: Auto Mute Mic -->
-                        <LinearLayout
-                            android:id="@+id/rowAutoMute"
-                            android:layout_width="match_parent"
-                            android:layout_height="36dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_mic"
-                                app:tint="@color/text_muted" />
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Auto Mute Mic"
-                                android:textColor="@color/text_primary"
-                                android:textSize="12sp"
-                                android:layout_marginStart="8dp" />
-
-                            <TextView
-                                android:id="@+id/tvAutoMuteVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Off ›"
-                                android:textColor="@color/text_muted"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-
-                        <!-- Row 3: Vibration on Call -->
-                        <LinearLayout
-                            android:id="@+id/rowVibration"
-                            android:layout_width="match_parent"
-                            android:layout_height="36dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_notifications"
-                                app:tint="@color/primary" />
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Vibration on Call"
-                                android:textColor="@color/text_primary"
-                                android:textSize="12sp"
-                                android:layout_marginStart="8dp" />
-
-                            <TextView
-                                android:id="@+id/tvVibrationVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="On ›"
-                                android:textColor="@color/text_muted"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-
-                        <!-- Row 4: Call Recording -->
-                        <LinearLayout
-                            android:id="@+id/rowRecording"
-                            android:layout_width="match_parent"
-                            android:layout_height="36dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_terminal"
-                                app:tint="@color/primary" />
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Call Recording"
-                                android:textColor="@color/text_primary"
-                                android:textSize="12sp"
-                                android:layout_marginStart="8dp" />
-
-                            <TextView
-                                android:id="@+id/tvRecordingVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Unavailable ›"
-                                android:textColor="@color/status_warning"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-
-                        <!-- Row 5: DTMF Detection -->
-                        <LinearLayout
-                            android:id="@+id/rowDtmf"
-                            android:layout_width="match_parent"
-                            android:layout_height="36dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_keypad"
-                                app:tint="@color/primary" />
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="DTMF In-Call Tones"
-                                android:textColor="@color/text_primary"
-                                android:textSize="12sp"
-                                android:layout_marginStart="8dp" />
-
-                            <TextView
-                                android:id="@+id/tvDtmfVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="On ›"
-                                android:textColor="@color/text_muted"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </LinearLayout>
             </LinearLayout>
 
             <!-- ==================== SCREEN 4: AI VOICE AGENT ==================== -->
@@ -4187,6 +2789,1470 @@ Grant READ_CALL_LOG permission or make cellular calls."
 
         </LinearLayout>
     </ScrollView>
+
+    <!-- ==================== SCREEN 3: CALLS & NATIVE DIALER (Non-Scrolling Full-Height) ==================== -->
+    <LinearLayout
+        android:id="@+id/screenCalls"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone">
+
+        <!-- Active In-Call Station Card (Prominently displayed when call is active/ringing/dialing) -->
+        <LinearLayout
+            android:id="@+id/cardActiveCall"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_card_cyber_selected"
+            android:orientation="vertical"
+            android:padding="14dp"
+            android:layout_marginBottom="6dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/tvActiveCallTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Active Call"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvCallStatePill"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="● STANDBY"
+                    android:textColor="@color/status_warning"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_pill_status"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp" />
+            </LinearLayout>
+
+            <!-- Caller Info & Avatar -->
+            <LinearLayout
+                android:id="@+id/layoutInCallCallerInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:paddingVertical="6dp">
+
+                <ImageView
+                    android:id="@+id/ivInCallAvatar"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/ic_person"
+                    app:tint="@color/primary"
+                    android:background="@drawable/bg_metric_tile"
+                    android:padding="8dp"
+                    android:layout_marginBottom="6dp" />
+
+                <TextView
+                    android:id="@+id/tvCallNumber"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ready for incoming calls"
+                    android:textColor="@color/text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:gravity="center" />
+
+                <TextView
+                    android:id="@+id/tvCallLineDetails"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Active Line • Cellular Bridge"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:layout_marginTop="2dp" />
+
+                <TextView
+                    android:id="@+id/tvCallDuration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00:00"
+                    android:textColor="@color/primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:layout_marginTop="6dp" />
+            </LinearLayout>
+
+            <!-- Incoming Call Action Buttons (Answer & Reject) -->
+            <LinearLayout
+                android:id="@+id/layoutIncomingCallActions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="6dp"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/btnCallReject"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="Decline"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:background="@drawable/bg_btn_danger"
+                    app:backgroundTint="@null"
+                    android:textAllCaps="false"
+                    android:layout_marginEnd="6dp" />
+
+                <Button
+                    android:id="@+id/btnCallAnswer"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="Answer"
+                    android:textColor="@color/text_inverse"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:background="@drawable/bg_btn_gradient_primary"
+                    app:backgroundTint="@null"
+                    android:textAllCaps="false"
+                    android:layout_marginStart="6dp" />
+            </LinearLayout>
+
+            <!-- In-Call Control Circle Buttons Row (Evenly Weighted 5 Slots) -->
+            <LinearLayout
+                android:id="@+id/layoutActiveCallControls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="6dp">
+
+                <!-- Mic Mute Button Slot -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center">
+                    <ImageButton
+                        android:id="@+id/btnCallMute"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:src="@drawable/ic_mic"
+                        android:background="@drawable/bg_btn_circle_action"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="Mute" />
+                </LinearLayout>
+
+                <!-- Keypad DTMF Button Slot -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center">
+                    <ImageButton
+                        android:id="@+id/btnCallKeypad"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:src="@drawable/ic_keypad"
+                        android:background="@drawable/bg_btn_circle_action"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="Keypad" />
+                </LinearLayout>
+
+                <!-- Speaker Button Slot -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center">
+                    <ImageButton
+                        android:id="@+id/btnCallSpeaker"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:src="@drawable/ic_speaker"
+                        android:background="@drawable/bg_btn_circle_action"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="Speaker" />
+                </LinearLayout>
+
+                <!-- Pause / Hold Button Slot -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center">
+                    <ImageButton
+                        android:id="@+id/btnCallPause"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:src="@drawable/ic_pause"
+                        android:background="@drawable/bg_btn_circle_action"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="Hold" />
+                </LinearLayout>
+
+                <!-- Hangup / End Button Slot -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center">
+                    <ImageButton
+                        android:id="@+id/btnCallHangup"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:src="@drawable/ic_call_end"
+                        android:background="@drawable/bg_btn_circle_danger"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="End Call" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 4 Calls Segmented Sub-Tabs: Keypad | Recents | Contacts | Settings -->
+        <LinearLayout
+            android:id="@+id/layoutCallsSubTabs"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:orientation="horizontal"
+            android:background="@drawable/bg_card_cyber"
+            android:padding="2dp"
+            android:layout_marginBottom="6dp">
+
+            <Button
+                android:id="@+id/tabCallsKeypad"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Dialer"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingHorizontal="2dp"
+                android:minWidth="0dp"
+                android:includeFontPadding="false"
+                android:background="@drawable/bg_tab_pill_selected"
+                app:backgroundTint="@null"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/tabCallsRecents"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Recents"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:singleLine="true"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingHorizontal="2dp"
+                android:minWidth="0dp"
+                android:includeFontPadding="false"
+                android:background="@drawable/bg_tab_pill_unselected"
+                app:backgroundTint="@null"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/tabCallsContacts"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Contacts"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:singleLine="true"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingHorizontal="2dp"
+                android:minWidth="0dp"
+                android:includeFontPadding="false"
+                android:background="@drawable/bg_tab_pill_unselected"
+                app:backgroundTint="@null"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/tabCallsSettings"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Gateway"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:singleLine="true"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingHorizontal="2dp"
+                android:minWidth="0dp"
+                android:includeFontPadding="false"
+                android:background="@drawable/bg_tab_pill_unselected"
+                app:backgroundTint="@null"
+                android:textAllCaps="false" />
+        </LinearLayout>
+
+        <!-- ==================== SUB-VIEW 1: DIALER KEYPAD ==================== -->
+        <LinearLayout
+            android:id="@+id/containerCallsKeypadView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <!-- Real-Time Suggestions Dedicated Flexible Viewport (Flexible Upper Region) -->
+            <FrameLayout
+                android:id="@+id/layoutSuggestionsWrapper"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:minHeight="40dp"
+                android:layout_marginBottom="4dp">
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:fillViewport="true"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/containerNumberSuggestions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+                </ScrollView>
+
+                <TextView
+                    android:id="@+id/tvSuggestionsPlaceholder"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:text="Enter digits to search contacts &amp; recents"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp"
+                    android:visibility="visible" />
+            </FrameLayout>
+
+            <!-- Static Bottom-Anchored Cluster (Directly Attached Input + 12 Keys + Call Button) -->
+            <LinearLayout
+                android:id="@+id/containerBottomDialerCluster"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Dialed Number Input / Display Card (Directly Attached to Keypad) -->
+                <LinearLayout
+                    android:id="@+id/cardDialedNumberDisplay"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:orientation="horizontal"
+                    android:background="@drawable/bg_card_cyber"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="14dp"
+                    android:layout_marginBottom="4dp">
+
+                    <TextView
+                        android:id="@+id/tvDialedNumber"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Enter phone number..."
+                        android:textColorHint="@color/text_muted"
+                        android:textColor="@color/text_primary"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace"
+                        android:singleLine="true"
+                        android:ellipsize="start" />
+
+                    <ImageView
+                        android:id="@+id/btnDialerBackspace"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:src="@drawable/ic_backspace"
+                        app:tint="@color/text_muted"
+                        android:padding="4dp"
+                        android:visibility="invisible"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Backspace" />
+                </LinearLayout>
+
+                <!-- 12-Key Polished Native Dialpad Grid -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="2dp">
+
+                    <!-- Row 1: 1, 2, 3 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="3dp">
+
+                        <!-- Key 1 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer1"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginEnd="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="1"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text=" "
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+
+                        <!-- Key 2 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer2"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginHorizontal="2dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="2"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="A B C"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+
+                        <!-- Key 3 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer3"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginStart="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="3"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="D E F"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Row 2: 4, 5, 6 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="3dp">
+
+                        <!-- Key 4 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer4"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginEnd="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="4"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="G H I"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+
+                        <!-- Key 5 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer5"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginHorizontal="2dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="5"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="J K L"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+
+                        <!-- Key 6 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer6"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginStart="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="6"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="M N O"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Row 3: 7, 8, 9 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="3dp">
+
+                        <!-- Key 7 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer7"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginEnd="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="7"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="P Q R S"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+
+                        <!-- Key 8 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer8"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginHorizontal="2dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="8"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="T U V"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+
+                        <!-- Key 9 -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer9"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginStart="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="9"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="W X Y Z"
+                                android:textColor="@color/text_muted"
+                                android:textSize="8sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Row 4: *, 0 (+ on long press), # -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal">
+
+                        <!-- Key * -->
+                        <LinearLayout
+                            android:id="@+id/btnDialerStar"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginEnd="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="*"
+                                android:textColor="@color/text_primary"
+                                android:textSize="20sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <!-- Key 0 (Long press for +) -->
+                        <LinearLayout
+                            android:id="@+id/btnDialer0"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginHorizontal="2dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="0"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="+"
+                                android:textColor="@color/primary"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <!-- Key # -->
+                        <LinearLayout
+                            android:id="@+id/btnDialerPound"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_dialer_key"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:layout_marginStart="3dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="#"
+                                android:textColor="@color/text_primary"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Large Call Action Button with Active SIM indication -->
+                <Button
+                    android:id="@+id/btnDialerCall"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Call via Cellular Line"
+                    android:textColor="@color/text_inverse"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    app:icon="@drawable/ic_phone"
+                    app:iconGravity="textStart"
+                    app:iconSize="18dp"
+                    app:iconTint="@color/text_inverse"
+                    android:background="@drawable/bg_btn_call_action"
+                    app:backgroundTint="@null"
+                    android:textAllCaps="false"
+                    android:elevation="3dp"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="4dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ==================== SUB-VIEW 2: RECENTS / CALL LOGS ==================== -->
+        <LinearLayout
+            android:id="@+id/containerCallsRecentsView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Search Bar -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:orientation="horizontal"
+                android:background="@drawable/bg_card_cyber"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_search"
+                    app:tint="@color/text_muted"
+                    android:contentDescription="Search" />
+
+                <EditText
+                    android:id="@+id/etRecentsSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:hint="Search recents by name or number..."
+                    android:textColorHint="@color/text_muted"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp"
+                    android:background="@null"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:imeOptions="actionSearch" />
+
+                <ImageView
+                    android:id="@+id/btnClearRecentsSearch"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_close_circle"
+                    app:tint="@color/text_muted"
+                    android:visibility="gone"
+                    android:contentDescription="Clear Search" />
+            </LinearLayout>
+
+            <!-- Responsive Single-Line Filter Tabs (All | Missed | Incoming | Outgoing) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:orientation="horizontal"
+                android:background="@drawable/bg_card_cyber"
+                android:padding="2dp"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/tabRecentsAll"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="All"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:paddingHorizontal="1dp"
+                    android:background="@drawable/bg_tab_pill_selected"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/tabRecentsMissed"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Missed"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:paddingHorizontal="1dp"
+                    android:background="@drawable/bg_tab_pill_unselected"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/tabRecentsIncoming"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Incoming"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:paddingHorizontal="1dp"
+                    android:background="@drawable/bg_tab_pill_unselected"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/tabRecentsOutgoing"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Outgoing"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:paddingHorizontal="1dp"
+                    android:background="@drawable/bg_tab_pill_unselected"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <!-- Scrollable Recents Call History List -->
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:fillViewport="true"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/containerRecentsList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <!-- Empty State -->
+                    <TextView
+                        android:id="@+id/tvNoRecentsMsg"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="No recent calls found."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:gravity="center"
+                        android:padding="24dp"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- ==================== SUB-VIEW 3: CONTACTS BROWSER ==================== -->
+        <LinearLayout
+            android:id="@+id/containerCallsContactsView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Search Bar -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:orientation="horizontal"
+                android:background="@drawable/bg_card_cyber"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_search"
+                    app:tint="@color/text_muted"
+                    android:contentDescription="Search" />
+
+                <EditText
+                    android:id="@+id/etContactsSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:hint="Search contacts by name or number..."
+                    android:textColorHint="@color/text_muted"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp"
+                    android:background="@null"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:imeOptions="actionSearch" />
+
+                <ImageView
+                    android:id="@+id/btnClearContactsSearch"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_close_circle"
+                    app:tint="@color/text_muted"
+                    android:visibility="gone"
+                    android:contentDescription="Clear Search" />
+            </LinearLayout>
+
+            <!-- Contacts Header: Count Badge & Add Contact Action -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:id="@+id/tvContactsCountBadge"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="0 Contacts"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btnAddNewContact"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="+ Add Contact"
+                    android:textColor="@color/primary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/bg_pill_chip"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="5dp"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <!-- Scrollable Contacts List -->
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:fillViewport="true"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/containerContactsList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <!-- Empty State -->
+                    <TextView
+                        android:id="@+id/tvNoContactsMsg"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="No contacts found. Grant READ_CONTACTS permission or add a new contact."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:gravity="center"
+                        android:padding="24dp"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- ==================== SUB-VIEW 4: GATEWAY & AUTO-ANSWER SETTINGS ==================== -->
+        <LinearLayout
+            android:id="@+id/containerCallsSettingsView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <!-- Auto Answer Card -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_card_cyber"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        android:layout_marginBottom="12dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Auto Answer"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Automatically answer incoming cellular calls"
+                                    android:textColor="@color/text_secondary"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+
+                            <androidx.appcompat.widget.SwitchCompat
+                                android:id="@+id/switchAutoAnswer"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checked="true" />
+                        </LinearLayout>
+
+                        <!-- Answer Delay Row -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginTop="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Answer Delay"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp"
+                                android:layout_marginEnd="8dp" />
+
+                            <!-- 4 Delay Weighted Pill Buttons -->
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="32dp"
+                                android:layout_weight="1"
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical">
+
+                                <TextView
+                                    android:id="@+id/btnDelay0"
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1"
+                                    android:text="0s"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/text_secondary"
+                                    android:gravity="center"
+                                    android:singleLine="true"
+                                    android:maxLines="1"
+                                    android:ellipsize="none"
+                                    android:background="@drawable/bg_btn_secondary"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:layout_marginEnd="4dp" />
+
+                                <TextView
+                                    android:id="@+id/btnDelay3"
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1"
+                                    android:text="3s"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/text_inverse"
+                                    android:gravity="center"
+                                    android:singleLine="true"
+                                    android:maxLines="1"
+                                    android:ellipsize="none"
+                                    android:background="@drawable/bg_btn_gradient_primary"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:layout_marginEnd="4dp" />
+
+                                <TextView
+                                    android:id="@+id/btnDelay5"
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1"
+                                    android:text="5s"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/text_secondary"
+                                    android:gravity="center"
+                                    android:singleLine="true"
+                                    android:maxLines="1"
+                                    android:ellipsize="none"
+                                    android:background="@drawable/bg_btn_secondary"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:layout_marginEnd="4dp" />
+
+                                <TextView
+                                    android:id="@+id/btnDelay10"
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1"
+                                    android:text="10s"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/text_secondary"
+                                    android:gravity="center"
+                                    android:singleLine="true"
+                                    android:maxLines="1"
+                                    android:ellipsize="none"
+                                    android:background="@drawable/bg_btn_secondary"
+                                    android:clickable="true"
+                                    android:focusable="true" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <!-- Ring Timeout Row -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginTop="12dp">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Ring Timeout"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/tvRingTimeout"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="30 seconds ▾"
+                                android:textColor="@color/text_primary"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                android:background="@drawable/bg_metric_tile"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="6dp" />
+                        </LinearLayout>
+
+                        <!-- Auto Reject Unknown Row -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginTop="12dp">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Auto Reject Unknown"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp" />
+
+                            <androidx.appcompat.widget.SwitchCompat
+                                android:id="@+id/switchAutoRejectUnknown"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checked="false" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Call Handling Card -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_card_cyber"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="CALL HANDLING &amp; AUDIO BRIDGING"
+                            android:textColor="@color/text_muted"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.05"
+                            android:layout_marginBottom="8dp" />
+
+                        <!-- Row 1: Auto Speaker -->
+                        <LinearLayout
+                            android:id="@+id/rowAutoSpeaker"
+                            android:layout_width="match_parent"
+                            android:layout_height="36dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:src="@drawable/ic_speaker"
+                                app:tint="@color/primary" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Auto Speaker"
+                                android:textColor="@color/text_primary"
+                                android:textSize="12sp"
+                                android:layout_marginStart="8dp" />
+
+                            <TextView
+                                android:id="@+id/tvAutoSpeakerVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="On ›"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- Row 2: Auto Mute Mic -->
+                        <LinearLayout
+                            android:id="@+id/rowAutoMute"
+                            android:layout_width="match_parent"
+                            android:layout_height="36dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:src="@drawable/ic_mic"
+                                app:tint="@color/text_muted" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Auto Mute Mic"
+                                android:textColor="@color/text_primary"
+                                android:textSize="12sp"
+                                android:layout_marginStart="8dp" />
+
+                            <TextView
+                                android:id="@+id/tvAutoMuteVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Off ›"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- Row 3: Vibration on Call -->
+                        <LinearLayout
+                            android:id="@+id/rowVibration"
+                            android:layout_width="match_parent"
+                            android:layout_height="36dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:src="@drawable/ic_notifications"
+                                app:tint="@color/primary" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Vibration on Call"
+                                android:textColor="@color/text_primary"
+                                android:textSize="12sp"
+                                android:layout_marginStart="8dp" />
+
+                            <TextView
+                                android:id="@+id/tvVibrationVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="On ›"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- Row 4: Call Recording -->
+                        <LinearLayout
+                            android:id="@+id/rowRecording"
+                            android:layout_width="match_parent"
+                            android:layout_height="36dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:src="@drawable/ic_terminal"
+                                app:tint="@color/primary" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Call Recording"
+                                android:textColor="@color/text_primary"
+                                android:textSize="12sp"
+                                android:layout_marginStart="8dp" />
+
+                            <TextView
+                                android:id="@+id/tvRecordingVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Unavailable ›"
+                                android:textColor="@color/status_warning"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- Row 5: DTMF Detection -->
+                        <LinearLayout
+                            android:id="@+id/rowDtmf"
+                            android:layout_width="match_parent"
+                            android:layout_height="36dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:src="@drawable/ic_keypad"
+                                app:tint="@color/primary" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="DTMF In-Call Tones"
+                                android:textColor="@color/text_primary"
+                                android:textSize="12sp"
+                                android:layout_marginStart="8dp" />
+
+                            <TextView
+                                android:id="@+id/tvDtmfVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="On ›"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>
 
     <!-- Bottom Navigation Bar (5 Primary Tabs Matching Master Reference) -->
     <LinearLayout

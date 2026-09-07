@@ -230,6 +230,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvHeaderTitle: TextView
     private lateinit var tvHeaderSubtitle: TextView
     private lateinit var tvHeaderStatusBadge: TextView
+    private var mainScrollView: android.widget.ScrollView? = null
 
     // UI - 13 Screen Containers
     private lateinit var screenDashboard: LinearLayout
@@ -660,6 +661,8 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (currentCallState != CallState.IDLE && containerCallsKeypadView.visibility == View.VISIBLE) {
                     containerCallsKeypadView.visibility = View.GONE
+                    ivInCallAvatar.visibility = View.VISIBLE
+                    tvCallLineDetails.visibility = View.VISIBLE
                     btnCallKeypad.setBackgroundResource(R.drawable.bg_btn_circle_action)
                     return
                 }
@@ -680,6 +683,9 @@ class MainActivity : AppCompatActivity() {
     // =========================================================================
 
     private fun initViews() {
+        // Main Content ScrollView
+        mainScrollView = findViewById(R.id.mainScrollView)
+
         // Top Bar
         btnHeaderBack = findViewById(R.id.btnHeaderBack)
         imgAppLogo = findViewById(R.id.imgAppLogo)
@@ -995,6 +1001,7 @@ class MainActivity : AppCompatActivity() {
             screenAudioVoice, screenGatewayLogs, screenVoiceTest, screenAbout
         )
         screens.forEach { it.visibility = View.GONE }
+        mainScrollView?.visibility = if (screen == Screen.CALLS) View.GONE else View.VISIBLE
 
         val isSubScreen = screen !in listOf(Screen.DASHBOARD, Screen.CALLS, Screen.SIMS, Screen.AGENT, Screen.SETTINGS)
         btnHeaderBack.visibility = if (isSubScreen) View.VISIBLE else View.GONE
@@ -1012,8 +1019,12 @@ class MainActivity : AppCompatActivity() {
                 tvHeaderTitle.text = "Phone & Dialer"
                 tvHeaderSubtitle.text = "Native Telephony & Cellular Gateway"
                 highlightBottomNav(1)
-                if (selectedCallsTab == 1) renderRecents()
-                if (selectedCallsTab == 2) renderContacts()
+                if (selectedCallsTab == 0) {
+                    containerCallsKeypadView.visibility = View.VISIBLE
+                    layoutSuggestionsWrapper.visibility = View.VISIBLE
+                    btnDialerCall.visibility = View.VISIBLE
+                } else if (selectedCallsTab == 1) renderRecents()
+                else if (selectedCallsTab == 2) renderContacts()
             }
             Screen.SIMS -> {
                 screenSims.visibility = View.VISIBLE
@@ -1166,12 +1177,22 @@ class MainActivity : AppCompatActivity() {
         btnDialerBackspace.setOnClickListener {
             if (dialedNumber.isNotEmpty()) {
                 dialedNumber = dialedNumber.dropLast(1)
-                updateDialedNumberDisplay()
+                if (currentCallState == CallState.CONNECTED || currentCallState == CallState.DIALING) {
+                    tvDialedNumber.text = if (dialedNumber.isNotEmpty()) "DTMF: $dialedNumber" else "Enter DTMF digits..."
+                    btnDialerBackspace.visibility = if (dialedNumber.isNotEmpty()) View.VISIBLE else View.INVISIBLE
+                } else {
+                    updateDialedNumberDisplay()
+                }
             }
         }
         btnDialerBackspace.setOnLongClickListener {
             dialedNumber = ""
-            updateDialedNumberDisplay()
+            if (currentCallState == CallState.CONNECTED || currentCallState == CallState.DIALING) {
+                tvDialedNumber.text = "Enter DTMF digits..."
+                btnDialerBackspace.visibility = View.INVISIBLE
+            } else {
+                updateDialedNumberDisplay()
+            }
             true
         }
 
@@ -1316,13 +1337,18 @@ class MainActivity : AppCompatActivity() {
             val isKeypadVisible = containerCallsKeypadView.visibility == View.VISIBLE
             if (isKeypadVisible) {
                 containerCallsKeypadView.visibility = View.GONE
+                ivInCallAvatar.visibility = View.VISIBLE
+                tvCallLineDetails.visibility = View.VISIBLE
                 btnCallKeypad.setBackgroundResource(R.drawable.bg_btn_circle_action)
             } else {
                 containerCallsKeypadView.visibility = View.VISIBLE
                 layoutSuggestionsWrapper.visibility = View.GONE
                 btnDialerCall.visibility = View.GONE
+                ivInCallAvatar.visibility = View.GONE
+                tvCallLineDetails.visibility = View.GONE
                 btnCallKeypad.setBackgroundResource(R.drawable.bg_btn_circle_active)
                 tvDialedNumber.text = if (dialedNumber.isNotEmpty()) "DTMF: $dialedNumber" else "Enter DTMF digits..."
+                btnDialerBackspace.visibility = if (dialedNumber.isNotEmpty()) View.VISIBLE else View.INVISIBLE
             }
         }
 
@@ -1350,6 +1376,8 @@ class MainActivity : AppCompatActivity() {
         btnCallHangup.setOnClickListener {
             CompanionInCallService.disconnectCurrentCall()
             cardActiveCall.visibility = View.GONE
+            ivInCallAvatar.visibility = View.VISIBLE
+            tvCallLineDetails.visibility = View.VISIBLE
             layoutCallsSubTabs.visibility = View.VISIBLE
             layoutSuggestionsWrapper.visibility = View.VISIBLE
             btnDialerCall.visibility = View.VISIBLE
