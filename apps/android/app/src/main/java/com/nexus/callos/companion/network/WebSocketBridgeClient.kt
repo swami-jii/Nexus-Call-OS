@@ -64,6 +64,12 @@ class WebSocketBridgeClient(
         currentUrl = wsUrl
         updateState(State.CONNECTING, "Connecting to $wsUrl...")
 
+        // Close any existing active or dangling socket before initiating a fresh connection
+        try {
+            webSocket?.close(1000, "Initiating fresh socket connection")
+        } catch (_: Exception) {}
+        webSocket = null
+
         val cleanUrl = if (!wsUrl.contains("?")) {
             "$wsUrl?device_id=$deviceId&token=$deviceToken"
         } else {

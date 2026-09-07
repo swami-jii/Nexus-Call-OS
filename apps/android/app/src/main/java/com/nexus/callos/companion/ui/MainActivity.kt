@@ -541,7 +541,9 @@ class MainActivity : AppCompatActivity() {
             }
             candidates.add("http://192.168.1.33:8000/api/android-gateway/lan-info")
             candidates.add("http://192.168.1.33:3000/api/android-gateway/lan-info")
-            candidates.add("https://possession-tagged-west-staff.trycloudflare.com/api/android-gateway/lan-info")
+            candidates.add("https://symbols-craft-dsl-stuff.trycloudflare.com/api/android-gateway/lan-info")
+            candidates.add("http://10.0.2.2:8000/api/android-gateway/lan-info")
+            candidates.add("http://127.0.0.1:8000/api/android-gateway/lan-info")
 
             val client = okhttp3.OkHttpClient.Builder()
                 .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
@@ -557,22 +559,29 @@ class MainActivity : AppCompatActivity() {
                         val json = JSONObject(body)
                         val cloudWs = json.optString("backend_ws_url")
                         val lanIp = json.optString("lan_ip")
-                        if (cloudWs.isNotBlank()) {
-                            val prefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE).edit()
-                            prefs.putString("cloud_tunnel_ws_url", cloudWs)
-                            if (lanIp.isNotBlank()) {
-                                prefs.putString("lan_ip", lanIp)
-                                prefs.putString("local_lan_ws_url", "ws://$lanIp:8000/api/android-gateway/ws/bridge")
-                            }
-                            prefs.apply()
-                            NexusApplication.log("INFO", "Network", "Synced dynamic SSOT tunnel URL: $cloudWs")
-                            withContext(Dispatchers.Main) {
-                                val curUrl = etServerUrl.text.toString().trim()
-                                val isCloud = curUrl.contains(".trycloudflare.com") || curUrl.startsWith("wss://")
-                                updatePresetButtonsHighlight(isCloud)
-                            }
-                            break
+                        val localWs = if (lanIp.isNotBlank()) "ws://$lanIp:8000/api/android-gateway/ws/bridge" else "ws://192.168.1.33:8000/api/android-gateway/ws/bridge"
+
+                        val prefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE).edit()
+                        if (cloudWs.isNotBlank()) prefs.putString("cloud_tunnel_ws_url", cloudWs)
+                        if (lanIp.isNotBlank()) {
+                            prefs.putString("lan_ip", lanIp)
+                            prefs.putString("local_lan_ws_url", localWs)
                         }
+                        prefs.apply()
+                        NexusApplication.log("INFO", "Network", "Synced dynamic SSOT tunnel URL: $cloudWs | LAN: $localWs")
+
+                        withContext(Dispatchers.Main) {
+                            val curUrl = etServerUrl.text.toString().trim()
+                            val isStale = curUrl.isBlank() || curUrl.contains("possession-tagged") || curUrl.contains("electoral-have")
+                            if (isStale) {
+                                val target = if (cloudWs.isNotBlank()) cloudWs else localWs
+                                etServerUrl.setText(target)
+                                saveServerUrl(target)
+                            }
+                            val isCloud = etServerUrl.text.toString().contains(".trycloudflare.com") || etServerUrl.text.toString().startsWith("wss://")
+                            updatePresetButtonsHighlight(isCloud)
+                        }
+                        break
                     }
                 } catch (_: Exception) {}
             }
@@ -922,7 +931,14 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Nexus Call OS Gateway is on latest version v2.5.0 (Build 180)", Toast.LENGTH_SHORT).show()
         }
         rowAboutGuide.setOnClickListener {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://electoral-have-minerals-worldwide.trycloudflare.com/#/mobile-gateway"))
+            val prefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
+            val cloudWs = prefs.getString("cloud_tunnel_ws_url", null)
+            val guideUrl = if (!cloudWs.isNullOrBlank()) {
+                cloudWs.replace("wss://", "https://").replace("ws://", "http://").substringBefore("/api/") + "/#/mobile-gateway"
+            } else {
+                "http://192.168.1.33:3000/#/mobile-gateway"
+            }
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(guideUrl))
             startActivity(browserIntent)
         }
         rowAboutPrivacy.setOnClickListener {
@@ -1352,9 +1368,10 @@ class MainActivity : AppCompatActivity() {
         }
         btnPresetLocal.setOnClickListener {
             val prefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
+            val lanIp = prefs.getString("lan_ip", null) ?: currentOverview?.lanIp ?: "192.168.1.33"
             val savedLocalUrl = prefs.getString("local_lan_ws_url", null)
                 ?: currentOverview?.localLanWsUrl
-                ?: DEFAULT_LOCAL_URL
+                ?: "ws://$lanIp:8000/api/android-gateway/ws/bridge"
             processPairingOrServerUrl(savedLocalUrl)
             updatePresetButtonsHighlight(isCloud = false)
         }
@@ -4160,7 +4177,19 @@ class MainActivity : AppCompatActivity() {
         var pairingToken: String? = null
         var signature: String? = null
 
-        if (cleanInput.startsWith("nexuscall://")) {
+        // Handle JSON payload from QR scan e.g. {"server_url": "...", "token": "..."}
+        if (cleanInput.startsWith("{") && cleanInput.endsWith("}")) {
+            try {
+                val json = JSONObject(cleanInput)
+                targetUrl = json.optString("server_url", json.optString("url", json.optString("backend_ws_url", "")))
+                if (targetUrl.isBlank()) {
+                    val httpBase = json.optString("http_base_url", "")
+                    if (httpBase.isNotBlank()) targetUrl = httpBase
+                }
+                pairingToken = if (json.has("token")) json.getString("token") else if (json.has("pairing_token")) json.getString("pairing_token") else null
+                signature = if (json.has("sig")) json.getString("sig") else if (json.has("signature")) json.getString("signature") else null
+            } catch (_: Exception) {}
+        } else if (cleanInput.startsWith("nexuscall://")) {
             val uri = Uri.parse(cleanInput)
             targetUrl = uri.getQueryParameter("server_url") ?: uri.getQueryParameter("url") ?: ""
             pairingToken = uri.getQueryParameter("token")
@@ -4176,14 +4205,26 @@ class MainActivity : AppCompatActivity() {
         if (targetUrl.contains("/#")) {
             targetUrl = targetUrl.substringBefore("/#")
         }
-        // Map frontend port 3000 to backend port 8000
-        if (targetUrl.contains(":3000")) {
+
+        // Map local frontend port 3000 to backend port 8000 for direct API access
+        if (targetUrl.contains(":3000") && (targetUrl.contains("192.168.") || targetUrl.contains("10.") || targetUrl.contains("127.0.0.1") || targetUrl.contains("localhost"))) {
             targetUrl = targetUrl.replace(":3000", ":8000")
         }
 
+        // Add scheme if missing
         if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://") &&
             !targetUrl.startsWith("ws://") && !targetUrl.startsWith("wss://")) {
-            targetUrl = "http://$targetUrl"
+            val isCloudHost = targetUrl.contains(".trycloudflare.com") || targetUrl.contains(".pinggy.link") ||
+                    targetUrl.contains(".lhr.life") || targetUrl.contains(".ngrok")
+            if (isCloudHost) {
+                targetUrl = "https://$targetUrl"
+            } else {
+                // If local IP without port, default to backend port 8000
+                if (!targetUrl.contains(":") && (targetUrl.contains("192.168.") || targetUrl.contains("10.") || targetUrl.contains("127.0.0.1") || targetUrl.contains("localhost"))) {
+                    targetUrl = "$targetUrl:8000"
+                }
+                targetUrl = "http://$targetUrl"
+            }
         }
 
         val pureBase = targetUrl.substringBefore("/api/").trimEnd('/')

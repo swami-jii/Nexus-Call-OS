@@ -21,12 +21,22 @@ class BackendApiClient {
         .build()
 
     fun getCleanBaseUrl(url: String): String {
-        val clean = url.trim()
+        var clean = url.trim()
             .replace(Regex("^(ws|wss|http|https):/+(.*)$")) { "${it.groupValues[1]}://${it.groupValues[2]}" }
             .substringBefore("/api/")
             .substringBefore("/#")
             .trimEnd('/')
-        return if (clean.startsWith("wss://") || clean.startsWith("https://") || clean.contains(".trycloudflare.com")) {
+
+        // Map local frontend port 3000 to backend port 8000 for direct API access
+        if (clean.contains(":3000") && (clean.contains("192.168.") || clean.contains("10.") || clean.contains("127.0.0.1") || clean.contains("localhost"))) {
+            clean = clean.replace(":3000", ":8000")
+        }
+
+        val isSecure = clean.startsWith("wss://") || clean.startsWith("https://") ||
+                clean.contains(".trycloudflare.com") || clean.contains(".pinggy.link") ||
+                clean.contains(".lhr.life") || clean.contains(".ngrok")
+
+        return if (isSecure) {
             clean.replace("wss://", "https://").replace("ws://", "https://").replace("http://", "https://")
         } else {
             clean.replace("ws://", "http://").replace("wss://", "http://").replace("https://", "http://")
