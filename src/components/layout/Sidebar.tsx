@@ -150,7 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }`}
     >
       {/* Brand Header */}
-      <div className={`h-16 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center shrink-0 ${
+      <div className={`h-20 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center shrink-0 ${
         isCollapsed ? 'justify-center px-1.5' : 'justify-between px-3'
       }`}>
         {!isCollapsed ? (
@@ -159,18 +159,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <img
                 src="/app-icon.png"
                 alt="Create Call Icon"
-                className="h-9 w-9 rounded-xl object-cover shadow-xs shrink-0 ring-1 ring-zinc-200/80 dark:ring-zinc-800/80"
+                className="h-10 w-10 rounded-xl object-cover shadow-xs shrink-0 ring-1 ring-zinc-200/80 dark:ring-zinc-800/80"
               />
               <div className="flex items-center min-w-0 flex-1">
                 <img
                   src="/create-call-banner-dark.png"
                   alt="Create Call OS"
-                  className="h-9 w-auto max-w-[155px] object-contain hidden dark:block"
+                  className="h-12 w-auto max-w-[172px] object-contain hidden dark:block"
                 />
                 <img
                   src="/create-call-banner-light.png"
                   alt="Create Call OS"
-                  className="h-9 w-auto max-w-[155px] object-contain block dark:hidden"
+                  className="h-12 w-auto max-w-[172px] object-contain block dark:hidden"
                 />
               </div>
             </div>
@@ -193,7 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <img
               src="/app-icon.png"
               alt="Create Call OS"
-              className="h-10 w-10 rounded-xl object-cover shadow-xs ring-1 ring-zinc-200/80 dark:ring-zinc-800/80 group-hover:scale-105 transition-transform"
+              className="h-11 w-11 rounded-xl object-cover shadow-xs ring-1 ring-zinc-200/80 dark:ring-zinc-800/80 group-hover:scale-105 transition-transform"
             />
             <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-zinc-950 group-hover:bg-teal-500 transition-colors">
               <ChevronRight className="h-3.5 w-3.5 stroke-[2.5]" />
