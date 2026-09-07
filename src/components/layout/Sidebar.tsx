@@ -155,29 +155,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }`}>
         {!isCollapsed ? (
           <>
-            <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
+            <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
               <img
                 src="/app-icon.png"
                 alt="Create Call Icon"
-                className="h-10 w-10 rounded-xl object-cover shadow-xs shrink-0 ring-1 ring-zinc-200/80 dark:ring-zinc-800/80"
+                className="h-10 w-10 object-contain drop-shadow-xs shrink-0"
               />
               <div className="flex flex-col justify-center min-w-0 flex-1">
                 <img
                   src="/create-call-banner-dark.png"
                   alt="Create Call OS"
-                  className="h-10 w-auto max-w-[165px] object-contain hidden dark:block"
+                  className="h-12 w-auto max-w-[168px] object-contain hidden dark:block"
                 />
                 <img
                   src="/create-call-banner-light.png"
                   alt="Create Call OS"
-                  className="h-10 w-auto max-w-[165px] object-contain block dark:hidden"
+                  className="h-12 w-auto max-w-[168px] object-contain block dark:hidden"
                 />
-                <div className="flex items-center justify-between gap-1 mt-0.5 select-none w-full max-w-[165px]">
-                  <span className="h-[1px] w-2.5 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
+                <div className="flex items-center justify-between gap-1 mt-0.5 select-none w-full max-w-[168px]">
+                  <span className="h-[1px] w-2 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
                   <span className="text-[7px] font-bold tracking-widest text-zinc-500 dark:text-zinc-400 uppercase whitespace-nowrap">
                     Crafting Digital Possibilities
                   </span>
-                  <span className="h-[1px] w-2.5 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
+                  <span className="h-[1px] w-2 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
                 </div>
               </div>
             </div>
@@ -200,9 +200,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <img
               src="/app-icon.png"
               alt="Create Call OS"
-              className="h-11 w-11 rounded-xl object-cover shadow-xs ring-1 ring-zinc-200/80 dark:ring-zinc-800/80 group-hover:scale-105 transition-transform"
+              className="h-11 w-11 object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
             />
-            <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-zinc-950 group-hover:bg-teal-500 transition-colors">
+            <span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-zinc-950 group-hover:bg-teal-500 transition-colors">
               <ChevronRight className="h-3.5 w-3.5 stroke-[2.5]" />
             </span>
           </button>
