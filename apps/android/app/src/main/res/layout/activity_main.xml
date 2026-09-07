@@ -2982,7 +2982,7 @@ Grant READ_CALL_LOG permission or make cellular calls."
                         android:id="@+id/btnCallSpeaker"
                         android:layout_width="42dp"
                         android:layout_height="42dp"
-                        android:src="@drawable/ic_speaker"
+                        android:src="@drawable/ic_volume"
                         android:background="@drawable/bg_btn_circle_action"
                         app:tint="@color/text_primary"
                         android:contentDescription="Speaker" />

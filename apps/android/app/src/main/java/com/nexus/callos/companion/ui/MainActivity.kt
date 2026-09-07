@@ -190,6 +190,7 @@ class MainActivity : AppCompatActivity() {
     private var recentsSearchQuery = ""
     private var contactsSearchQuery = ""
     private var dialedNumber = ""
+    private var inCallDtmfDigits = ""
     private var selectedSimTab = 0 // 0 = SIM Cards, 1 = eSIM Profiles, 2 = Preference
     private var selectedCallsTab = 0 // 0 = Keypad, 1 = Recents, 2 = Contacts, 3 = Gateway Settings
 
@@ -1175,22 +1176,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnDialerBackspace.setOnClickListener {
-            if (dialedNumber.isNotEmpty()) {
-                dialedNumber = dialedNumber.dropLast(1)
-                if (currentCallState == CallState.CONNECTED || currentCallState == CallState.DIALING) {
-                    tvDialedNumber.text = if (dialedNumber.isNotEmpty()) "DTMF: $dialedNumber" else "Enter DTMF digits..."
-                    btnDialerBackspace.visibility = if (dialedNumber.isNotEmpty()) View.VISIBLE else View.INVISIBLE
-                } else {
+            if (currentCallState == CallState.CONNECTED || currentCallState == CallState.DIALING) {
+                if (inCallDtmfDigits.isNotEmpty()) {
+                    inCallDtmfDigits = inCallDtmfDigits.dropLast(1)
+                    tvDialedNumber.text = inCallDtmfDigits
+                    btnDialerBackspace.visibility = if (inCallDtmfDigits.isNotEmpty()) View.VISIBLE else View.INVISIBLE
+                }
+            } else {
+                if (dialedNumber.isNotEmpty()) {
+                    dialedNumber = dialedNumber.dropLast(1)
                     updateDialedNumberDisplay()
                 }
             }
         }
         btnDialerBackspace.setOnLongClickListener {
-            dialedNumber = ""
             if (currentCallState == CallState.CONNECTED || currentCallState == CallState.DIALING) {
-                tvDialedNumber.text = "Enter DTMF digits..."
+                inCallDtmfDigits = ""
+                tvDialedNumber.text = ""
                 btnDialerBackspace.visibility = View.INVISIBLE
             } else {
+                dialedNumber = ""
                 updateDialedNumberDisplay()
             }
             true
@@ -1342,13 +1347,16 @@ class MainActivity : AppCompatActivity() {
                 btnCallKeypad.setBackgroundResource(R.drawable.bg_btn_circle_action)
             } else {
                 containerCallsKeypadView.visibility = View.VISIBLE
-                layoutSuggestionsWrapper.visibility = View.GONE
+                layoutSuggestionsWrapper.visibility = View.INVISIBLE
+                containerNumberSuggestions.removeAllViews()
+                tvSuggestionsPlaceholder?.visibility = View.GONE
                 btnDialerCall.visibility = View.GONE
                 ivInCallAvatar.visibility = View.GONE
                 tvCallLineDetails.visibility = View.GONE
                 btnCallKeypad.setBackgroundResource(R.drawable.bg_btn_circle_active)
-                tvDialedNumber.text = if (dialedNumber.isNotEmpty()) "DTMF: $dialedNumber" else "Enter DTMF digits..."
-                btnDialerBackspace.visibility = if (dialedNumber.isNotEmpty()) View.VISIBLE else View.INVISIBLE
+                tvDialedNumber.hint = "Touch tone digits..."
+                tvDialedNumber.text = inCallDtmfDigits
+                btnDialerBackspace.visibility = if (inCallDtmfDigits.isNotEmpty()) View.VISIBLE else View.INVISIBLE
             }
         }
 
@@ -1383,6 +1391,8 @@ class MainActivity : AppCompatActivity() {
             btnDialerCall.visibility = View.VISIBLE
             btnCallKeypad.setBackgroundResource(R.drawable.bg_btn_circle_action)
             callStartTimestamp = 0L
+            inCallDtmfDigits = ""
+            tvDialedNumber.hint = "Enter phone number..."
             dialedNumber = ""
             updateDialedNumberDisplay()
             switchCallsSubTab(selectedCallsTab)
@@ -1589,8 +1599,8 @@ class MainActivity : AppCompatActivity() {
         playToneFeedback(digit)
         if (currentCallState == CallState.CONNECTED || currentCallState == CallState.DIALING) {
             CompanionInCallService.playDtmf(digit)
-            dialedNumber += digit
-            tvDialedNumber.text = "DTMF: $dialedNumber"
+            inCallDtmfDigits += digit
+            tvDialedNumber.text = inCallDtmfDigits
             btnDialerBackspace.visibility = View.VISIBLE
         } else {
             dialedNumber += digit
@@ -1599,6 +1609,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateDialedNumberDisplay() {
+        tvDialedNumber.hint = "Enter phone number..."
         tvDialedNumber.text = dialedNumber
         btnDialerBackspace.visibility = if (dialedNumber.isNotEmpty()) View.VISIBLE else View.INVISIBLE
 
@@ -1749,20 +1760,37 @@ class MainActivity : AppCompatActivity() {
         recentsJob = lifecycleScope.launch {
             val query = recentsSearchQuery
             val filter = activeLogFilter
-            val filteredLogs = withContext(Dispatchers.IO) {
-                val allLogs = callLogManager.getCallLogs(filter, limit = 60)
-                if (query.isBlank()) {
-                    allLogs
+            val (filteredLogs, counts) = withContext(Dispatchers.IO) {
+                val allRawLogs = callLogManager.getCallLogs(null, limit = 100)
+                val allCount = allRawLogs.size
+                val missedCount = allRawLogs.count { it.type == CallLogType.MISSED }
+                val inCount = allRawLogs.count { it.type == CallLogType.INCOMING }
+                val outCount = allRawLogs.count { it.type == CallLogType.OUTGOING }
+
+                val filtered = if (filter != null) {
+                    allRawLogs.filter { it.type == filter }
+                } else {
+                    allRawLogs
+                }
+
+                val finalLogs = if (query.isBlank()) {
+                    filtered
                 } else {
                     val q = query.lowercase()
                     val cleanQuery = q.replace(Regex("[^0-9+]"), "")
-                    allLogs.filter { log ->
+                    filtered.filter { log ->
                         log.number.lowercase().contains(q) ||
                         (log.contactName?.lowercase()?.contains(q) == true) ||
                         (cleanQuery.isNotEmpty() && log.normalizedNumber.contains(cleanQuery))
                     }
                 }
+                Pair(finalLogs, listOf(allCount, missedCount, inCount, outCount))
             }
+
+            tabRecentsAll.text = "All (${counts[0]})"
+            tabRecentsMissed.text = "Missed (${counts[1]})"
+            tabRecentsIncoming.text = "Incoming (${counts[2]})"
+            tabRecentsOutgoing.text = "Outgoing (${counts[3]})"
 
             containerRecentsList.removeAllViews()
             if (filteredLogs.isEmpty()) {
@@ -1780,18 +1808,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildRecentsRow(record: CallLogRecord): View {
+        val density = resources.displayMetrics.density
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_card_subtle)
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(16, 12, 16, 12)
+            setPadding((14 * density).toInt(), (10 * density).toInt(), (14 * density).toInt(), (10 * density).toInt())
             isClickable = true
             isFocusable = true
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = 8
+                bottomMargin = (8 * density).toInt()
             }
             layoutParams = lp
             setOnClickListener {
@@ -1802,8 +1831,8 @@ class MainActivity : AppCompatActivity() {
         // Contact Photo / Avatar
         val ivAvatar = ImageView(this).apply {
             loadAvatarAsync(record.photoUri, this)
-            val lp = LinearLayout.LayoutParams(40, 40).apply {
-                marginEnd = 12
+            val lp = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+                marginEnd = (12 * density).toInt()
             }
             layoutParams = lp
         }
@@ -1843,10 +1872,11 @@ class MainActivity : AppCompatActivity() {
         colMiddle.addView(tvSub)
         row.addView(colMiddle)
 
-        // Right Column: Direction Icon & Duration
+        // Right Column: Direction Icon & Duration (Clean formatted duration with ample space)
         val colRight = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = android.view.Gravity.END
+            minimumWidth = (65 * density).toInt()
         }
 
         val ivDirection = ImageView(this).apply {
@@ -1856,15 +1886,26 @@ class MainActivity : AppCompatActivity() {
                 CallLogType.MISSED -> R.drawable.ic_call_missed
             }
             setImageResource(iconRes)
-            val lp = LinearLayout.LayoutParams(24, 24).apply {
-                bottomMargin = 2
+            val lp = LinearLayout.LayoutParams((20 * density).toInt(), (20 * density).toInt()).apply {
+                bottomMargin = (2 * density).toInt()
             }
             layoutParams = lp
         }
         colRight.addView(ivDirection)
 
+        val durationStr = when {
+            record.type == CallLogType.MISSED -> "Missed"
+            record.durationSec == 0L -> "0s"
+            record.durationSec < 60L -> "${record.durationSec}s"
+            else -> {
+                val m = record.durationSec / 60
+                val s = record.durationSec % 60
+                if (s == 0L) "${m}m" else "${m}m ${s}s"
+            }
+        }
+
         val tvDur = TextView(this).apply {
-            text = if (record.type == CallLogType.MISSED) "Missed" else record.formattedDuration
+            text = durationStr
             setTextColor(
                 ContextCompat.getColor(
                     context,
@@ -1874,7 +1915,6 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f
             maxLines = 1
             setTypeface(null, Typeface.BOLD)
-            typeface = Typeface.MONOSPACE
         }
         colRight.addView(tvDur)
         row.addView(colRight)
@@ -1915,18 +1955,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildContactRow(contact: ContactRecord): View {
+        val density = resources.displayMetrics.density
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_card_cyber)
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(16, 12, 16, 12)
+            setPadding((14 * density).toInt(), (10 * density).toInt(), (14 * density).toInt(), (10 * density).toInt())
             isClickable = true
             isFocusable = true
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = 8
+                bottomMargin = (8 * density).toInt()
             }
             layoutParams = lp
             setOnClickListener {
@@ -1941,8 +1982,8 @@ class MainActivity : AppCompatActivity() {
         val ivAvatar = ImageView(this).apply {
             val photoUri = contact.thumbnailUri ?: contact.photoUri
             loadAvatarAsync(photoUri, this)
-            val lp = LinearLayout.LayoutParams(40, 40).apply {
-                marginEnd = 12
+            val lp = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+                marginEnd = (12 * density).toInt()
             }
             layoutParams = lp
         }
@@ -1971,8 +2012,8 @@ class MainActivity : AppCompatActivity() {
             val ivStar = ImageView(this).apply {
                 setImageResource(R.drawable.ic_star)
                 setColorFilter(ContextCompat.getColor(context, R.color.status_warning))
-                val lp = LinearLayout.LayoutParams(16, 16).apply {
-                    marginStart = 6
+                val lp = LinearLayout.LayoutParams((16 * density).toInt(), (16 * density).toInt()).apply {
+                    marginStart = (6 * density).toInt()
                 }
                 layoutParams = lp
             }
@@ -1993,13 +2034,18 @@ class MainActivity : AppCompatActivity() {
         colMiddle.addView(tvPhone)
         row.addView(colMiddle)
 
-        // Right: Call Quick Action Button
+        // Right: Call Quick Action Button (Padded and Never Clipped)
         val btnCall = ImageButton(this).apply {
             setImageResource(R.drawable.ic_phone)
             background = ContextCompat.getDrawable(context, R.drawable.bg_btn_circle_action)
             setColorFilter(ContextCompat.getColor(context, R.color.text_primary))
-            val lp = LinearLayout.LayoutParams(38, 38)
+            val btnSize = (40 * density).toInt()
+            val lp = LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                marginStart = (8 * density).toInt()
+                marginEnd = (2 * density).toInt()
+            }
             layoutParams = lp
+            setPadding((10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt())
             setOnClickListener {
                 val primaryNumber = contact.phoneNumbers.firstOrNull()?.number
                 if (primaryNumber != null) {
@@ -2966,6 +3012,7 @@ class MainActivity : AppCompatActivity() {
 
         when (session.state) {
             CallState.RINGING -> {
+                inCallDtmfDigits = ""
                 cardActiveCall.visibility = View.VISIBLE
                 layoutCallsSubTabs.visibility = View.GONE
                 containerCallsKeypadView.visibility = View.GONE
@@ -2981,6 +3028,7 @@ class MainActivity : AppCompatActivity() {
                 layoutActiveCallControls.visibility = View.GONE
             }
             CallState.DIALING -> {
+                inCallDtmfDigits = ""
                 cardActiveCall.visibility = View.VISIBLE
                 layoutCallsSubTabs.visibility = View.GONE
                 containerCallsKeypadView.visibility = View.GONE
@@ -2997,6 +3045,7 @@ class MainActivity : AppCompatActivity() {
                 layoutActiveCallControls.visibility = View.VISIBLE
             }
             CallState.CONNECTED -> {
+                inCallDtmfDigits = ""
                 cardActiveCall.visibility = View.VISIBLE
                 layoutCallsSubTabs.visibility = View.GONE
                 containerCallsKeypadView.visibility = View.GONE
@@ -3037,6 +3086,8 @@ class MainActivity : AppCompatActivity() {
                 btnCallMute.setBackgroundResource(R.drawable.bg_btn_circle_action)
                 btnCallSpeaker.setBackgroundResource(R.drawable.bg_btn_circle_action)
                 btnCallPause.setBackgroundResource(R.drawable.bg_btn_circle_action)
+                inCallDtmfDigits = ""
+                tvDialedNumber.hint = "Enter phone number..."
                 dialedNumber = ""
                 updateDialedNumberDisplay()
                 switchCallsSubTab(selectedCallsTab)
@@ -3085,8 +3136,10 @@ class MainActivity : AppCompatActivity() {
                 val prefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
                 val savedAgentId = prefs.getString("active_agent_id", null)
                 val targetAgent = overview.activeAgents.find { it.id == savedAgentId }
+                    ?: overview.activeAgents.find { it.status.equals("active", ignoreCase = true) }
                     ?: overview.activeAgents.first()
                 selectedAgent = targetAgent
+                prefs.edit().putString("active_agent_id", targetAgent.id).apply()
                 renderSelectedAgent(targetAgent)
                 populateAgentsList(overview.activeAgents)
             } else {
@@ -4169,8 +4222,9 @@ class MainActivity : AppCompatActivity() {
                     tvHeaderStatusBadge.text = "LIVE"
                     tvHeaderStatusBadge.background = ContextCompat.getDrawable(this, R.drawable.bg_pill_status)
                     tvHeaderStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.status_online))
-                    btnDashConnect.text = "DISCONNECT"
-                    btnDashConnect.background = ContextCompat.getDrawable(this, R.drawable.bg_btn_secondary)
+                    btnDashConnect.text = "DISCONNECT GATEWAY"
+                    btnDashConnect.background = ContextCompat.getDrawable(this, R.drawable.bg_btn_disconnect)
+                    btnDashConnect.setTextColor(ContextCompat.getColor(this, R.color.status_offline))
                 }
                 CallBridgeForegroundService.ConnectionState.CONNECTING -> {
                     tvDashStatus.text = "CONNECTING..."
@@ -4181,6 +4235,7 @@ class MainActivity : AppCompatActivity() {
                     tvHeaderStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.status_warning))
                     btnDashConnect.text = "CANCEL"
                     btnDashConnect.background = ContextCompat.getDrawable(this, R.drawable.bg_btn_secondary)
+                    btnDashConnect.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
                 }
                 CallBridgeForegroundService.ConnectionState.ERROR -> {
                     tvDashStatus.text = "ERROR"
@@ -4191,6 +4246,7 @@ class MainActivity : AppCompatActivity() {
                     tvHeaderStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.status_offline))
                     btnDashConnect.text = "RECONNECT"
                     btnDashConnect.background = ContextCompat.getDrawable(this, R.drawable.bg_btn_gradient_primary)
+                    btnDashConnect.setTextColor(ContextCompat.getColor(this, R.color.text_inverse))
                 }
                 CallBridgeForegroundService.ConnectionState.DISCONNECTED -> {
                     tvDashStatus.text = "DISCONNECTED"
@@ -4201,6 +4257,7 @@ class MainActivity : AppCompatActivity() {
                     tvHeaderStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
                     btnDashConnect.text = "CONNECT NOW"
                     btnDashConnect.background = ContextCompat.getDrawable(this, R.drawable.bg_btn_gradient_primary)
+                    btnDashConnect.setTextColor(ContextCompat.getColor(this, R.color.text_inverse))
                 }
             }
         }

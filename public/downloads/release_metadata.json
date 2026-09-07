@@ -4,10 +4,10 @@
   "apkFileName": "Nexus-GSM-Gateway-v2.7.0.apk",
   "canonicalApkFileName": "Nexus-GSM-Gateway.apk",
   "legacyApkFileName": "Nexus-GSM-Gateway-v2.4.apk",
-  "apkSizeBytes": 7859101,
+  "apkSizeBytes": 7859329,
   "apkSizeFormatted": "7.86 MB",
-  "sha256": "9aaf42aa710eb7577628d043c7821224eaa38c29972cd6cd8f2ad80e907cadbe",
-  "buildTimestamp": "2026-09-07T19:03:00.000000+00:00",
-  "publishedAt": "2026-09-07T19:03:10.000000+00:00",
+  "sha256": "0F42E366974905A9CAA5833B2C4B3A7A94C689FFFCF6006BB2D1D522BD95F9CE",
+  "buildTimestamp": "2026-09-07T19:50:00.000000+00:00",
+  "publishedAt": "2026-09-07T19:50:10.000000+00:00",
   "isReady": true
 }
