@@ -41,9 +41,33 @@ const DEFAULT_PROFILE_EXTRAS = {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      const token = localStorage.getItem('nexus_access_token') || sessionStorage.getItem('nexus_access_token');
+      return !!token;
+    } catch {
+      return false;
+    }
+  });
+
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    try {
+      const cached = localStorage.getItem('nexus_user_profile');
+      if (cached) return JSON.parse(cached);
+      const email = localStorage.getItem('nexus_user_email') || 'admin@nexus.ai';
+      return {
+        ...DEFAULT_PROFILE_EXTRAS,
+        fullName: email.split('@')[0].toUpperCase(),
+        email,
+        phone: '',
+        role: 'operator',
+      } as UserProfile;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -51,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     
-    // Check initial auth state
+    // Check initial auth state in background
     checkAuth();
     
     return () => {
@@ -71,26 +95,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userData = await fetchAPI('/auth/me');
       if (userData && userData.email) {
-        setUser({
+        const profile: UserProfile = {
           ...DEFAULT_PROFILE_EXTRAS,
           fullName: userData.full_name || userData.email.split('@')[0],
           email: userData.email,
           phone: userData.phone_number || '',
           role: userData.role || 'operator',
-        } as UserProfile);
+        };
+        setUser(profile);
         setIsAuthenticated(true);
-      } else {
-        logout();
+        localStorage.setItem('nexus_user_profile', JSON.stringify(profile));
       }
-    } catch (error) {
-      console.warn('Backend checkAuth failed, clearing invalid session:', error);
-      logout();
+    } catch (error: any) {
+      // Do not log out on transient network timeouts or server reloads; keep session alive
+      console.warn('Background checkAuth network note:', error?.message || error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = async (credentials: any, rememberMe: boolean) => {
+  const login = async (credentials: any, rememberMe: boolean = true) => {
     const storage = rememberMe ? localStorage : sessionStorage;
     const userEmail = credentials?.email || '';
 
@@ -101,6 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('nexus_refresh_token');
 
     try {
+      setIsLoading(true);
       const data = await fetchAPI('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
@@ -121,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: data.user?.role || 'operator',
         };
         setUser(loggedInUser);
+        localStorage.setItem('nexus_user_profile', JSON.stringify(loggedInUser));
         setIsAuthenticated(true);
       } else {
         throw new Error('Authentication response did not contain access token');
@@ -146,11 +172,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('nexus_access_token');
     localStorage.removeItem('nexus_refresh_token');
     localStorage.removeItem('nexus_user_email');
+    localStorage.removeItem('nexus_user_profile');
     localStorage.removeItem('nexus_current_screen');
     sessionStorage.removeItem('nexus_access_token');
     sessionStorage.removeItem('nexus_refresh_token');
     setIsAuthenticated(false);
     setUser(null);
+    setIsLoading(false);
   };
 
   return (

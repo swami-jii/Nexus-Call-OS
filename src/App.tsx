@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { AppLayout } from './components/layout/AppLayout';
 import { ScreenId } from './types';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { BusinessRulesProvider } from './context/BusinessRulesContext';
-import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { fetchAPI } from './lib/api';
 import { DEFAULT_BUSINESS_RULES_ITEMS } from './views/IntegrationsView';
 
@@ -44,14 +44,43 @@ import { MobileGatewayView } from './views/MobileGatewayView';
 import { FileStorageView } from './views/FileStorageView';
 import { RecycleBinView } from './views/RecycleBinView';
 
-export default function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  const isCompanionRoute = () => {
+    if (typeof window === 'undefined') return false;
+    const hash = window.location.hash.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    const pathname = window.location.pathname.toLowerCase();
+    return (
+      hash.includes('mobile-gateway') ||
+      hash.includes('android-companion') ||
+      hash.includes('ios-companion') ||
+      hash.includes('iphone-companion') ||
+      hash.includes('mac-companion') ||
+      hash.includes('macos-companion') ||
+      hash.includes('windows-companion') ||
+      hash.includes('win-companion') ||
+      hash.includes('web-companion') ||
+      pathname.includes('mobile-gateway') ||
+      pathname.includes('android-companion') ||
+      pathname.includes('ios-companion') ||
+      pathname.includes('mobile') ||
+      pathname.includes('companion') ||
+      pathname.includes('download') ||
+      search.includes('mobile=true') ||
+      search.includes('companion=true')
+    );
+  };
+
   const [currentScreen, setCurrentScreenState] = useState<ScreenId>(() => {
-    if (typeof window !== 'undefined') {
-      if (window.location.hash.includes('mobile-gateway') || window.location.search.includes('mobile=true')) {
-        return 'mobile-gateway';
-      }
+    if (isCompanionRoute()) {
+      return 'mobile-gateway';
     }
     const saved = localStorage.getItem('nexus_current_screen');
+    if (saved === 'loading' || saved === 'loading-state-demo' || saved === 'empty' || saved === 'empty-state-demo' || saved === 'auth') {
+      return 'dashboard';
+    }
     return (saved as ScreenId) || 'dashboard';
   });
 
@@ -63,6 +92,17 @@ export default function App() {
       // ignore
     }
   };
+
+  // Real-time hash routing listener for standalone companion app routes
+  React.useEffect(() => {
+    const handleHash = () => {
+      if (isCompanionRoute()) {
+        setCurrentScreenState('mobile-gateway');
+      }
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
 
   // Global Workspace Canonical SSOT Bootstrap on Application Startup
   React.useEffect(() => {
@@ -88,28 +128,35 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // If Mobile Gateway is requested, render clean full-screen mobile app shell without desktop sidebar
-  if (currentScreen === 'mobile-gateway') {
+  const [authGraceReady, setAuthGraceReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setAuthGraceReady(true);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 1. Standalone Companion routes (Never require auth or desktop shell)
+  if (currentScreen === 'mobile-gateway' || isCompanionRoute()) {
+    return <MobileGatewayView onNavigate={setCurrentScreen} />;
+  }
+
+  // 2. Initial Auth Verification Loading State (With 700ms maximum safety grace)
+  if (isLoading && !authGraceReady) {
     return (
-      <ThemeProvider>
-        <ToastProvider>
-          <MobileGatewayView onNavigate={setCurrentScreen} />
-        </ToastProvider>
-      </ThemeProvider>
+      <div className="flex h-screen w-full items-center justify-center bg-zinc-950 text-zinc-200">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          <span className="text-xs font-semibold text-zinc-400">Loading Nexus Voice OS...</span>
+        </div>
+      </div>
     );
   }
 
-  // If Auth screen is selected, render standard full-screen Auth layout
-  if (currentScreen === 'auth') {
-    return (
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <AuthView onNavigate={setCurrentScreen} />
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    );
+  // 3. Unauthenticated State -> Show Auth Screen
+  if (!isAuthenticated || currentScreen === 'auth') {
+    return <AuthView onNavigate={setCurrentScreen} />;
   }
 
   const renderCurrentView = () => {
@@ -165,7 +212,7 @@ export default function App() {
         return <Error500View onNavigate={setCurrentScreen} />;
       case 'empty':
       case 'empty-state-demo':
-        return <EmptyStateView />;
+        return <EmptyStateView onNavigate={setCurrentScreen} />;
       case 'loading':
       case 'loading-state-demo':
         return <LoadingStateView />;
@@ -191,18 +238,22 @@ export default function App() {
   };
 
   return (
+    <AppLayout activeScreen={currentScreen} onNavigate={setCurrentScreen}>
+      <ErrorBoundary fallbackTitle="View Rendering Shield" fallbackDescription="This view encountered an issue while loading components or data. Click below to retry or return to dashboard.">
+        {renderCurrentView()}
+      </ErrorBoundary>
+    </AppLayout>
+  );
+}
+
+export default function App() {
+  return (
     <ErrorBoundary fallbackTitle="Nexus Application Shield" fallbackDescription="An unexpected error occurred in the application shell. You can reload or return to dashboard.">
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
             <BusinessRulesProvider>
-              <ProtectedRoute onNavigate={setCurrentScreen}>
-                <AppLayout activeScreen={currentScreen} onNavigate={setCurrentScreen}>
-                  <ErrorBoundary fallbackTitle="View Rendering Shield" fallbackDescription="This view encountered an issue while loading components or data. Click below to retry or return to dashboard.">
-                    {renderCurrentView()}
-                  </ErrorBoundary>
-                </AppLayout>
-              </ProtectedRoute>
+              <AppContent />
             </BusinessRulesProvider>
           </AuthProvider>
         </ToastProvider>

@@ -5,7 +5,7 @@ import UIKit
 
 class GatewayViewModel: ObservableObject {
     // Connection Settings
-    @Published var serverUrl: String = "ws://192.168.1.34:8000"
+    @Published var serverUrl: String = "ws://192.168.1.33:8000"
     @Published var deviceId: String = "ios-companion-\(UIDevice.current.name.lowercased().replacingOccurrences(of: " ", with: "-"))"
     @Published var deviceToken: String = ""
     @Published var autoReconnect: Bool = true

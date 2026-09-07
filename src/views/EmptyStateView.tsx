@@ -3,7 +3,7 @@ import { Layers, Plus, FileQuestion, Megaphone } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 
-export const EmptyStateView: React.FC = () => {
+export const EmptyStateView: React.FC<{ onNavigate?: (screen: any) => void }> = ({ onNavigate }) => {
   return (
     <div className="space-y-6">
       <div>
@@ -22,7 +22,13 @@ export const EmptyStateView: React.FC = () => {
           <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs">
             You have not launched any outbound AI SDR calling campaigns yet.
           </p>
-          <Button variant="primary" size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => onNavigate?.('campaigns')}
+            className="cursor-pointer"
+          >
             Create First Campaign
           </Button>
         </Card>
@@ -35,7 +41,13 @@ export const EmptyStateView: React.FC = () => {
           <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs">
             Upload PDF product manuals or crawl website documentation to provide AI RAG context.
           </p>
-          <Button variant="outline" size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => onNavigate?.('knowledge-base')}
+            className="cursor-pointer"
+          >
             Upload Document
           </Button>
         </Card>

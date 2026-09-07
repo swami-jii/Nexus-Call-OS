@@ -42,10 +42,17 @@ class MarkdownSkill(BaseSkill):
         input_text: str,
         agent_name: str = "AI Assistant",
         context: Optional[Dict[str, Any]] = None,
+        language: str = "Auto-Detect",
     ) -> str:
+        """
+        Executes skill directive. Returns the skill's sample phrase or prompt directive
+        formatted with agent persona. The cognitive LLM handles all 104+ languages dynamically.
+        """
         if self.sample_phrase:
             return self.sample_phrase.replace("AI Assistant", agent_name)
-        return f"Hello, I am {agent_name}. Regarding '{input_text}', the {self.name} skill is actively processing this request."
+        if self.system_prompt_addon:
+            return self.system_prompt_addon.replace("AI Assistant", agent_name)
+        return f"{self.name} active."
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()

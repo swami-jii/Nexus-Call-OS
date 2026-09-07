@@ -156,7 +156,7 @@ class ApiCallHistoryRepository {
     if (!contactName || contactName === 'Verified Contact') {
       contactName = isTestMic ? 'Test Browser Mic 1' : (rawPhone ? 'Direct Caller' : 'Test Browser Mic 1');
     }
-    const contactPhone = backendCall.phone_number || (isTestMic ? 'TEST-BROWSER-MIC-01' : '+91 96508 55975');
+    const contactPhone = backendCall.phone_number || (isTestMic ? 'TEST-BROWSER-MIC-01' : (rawPhone || 'Number Unavailable'));
     const summary = backendCall.summary || (parsedTranscript.length > 0 ? `Full-duplex conversation (${parsedTranscript.length} turns) completed with ${agentName}.` : 'Call processed successfully by AI Voice Assistant.');
 
     return {

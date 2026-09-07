@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { GLOBAL_LANGUAGES_CATALOG } from '../data/globalLanguagesCatalog';
 
 export interface BusinessTypeItem {
   id: string;
@@ -150,12 +151,21 @@ const DEFAULT_WORKING_HOURS: WorkingHoursItem[] = [
   { id: 'wh_3', name: 'After-Hours Emergency Shift', schedule: 'Mon-Sun 06:00 PM - 09:00 AM IST', timezone: 'Asia/Kolkata (IST +05:30)', country: 'India', working_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], is_247: false, after_hours_action: 'Emergency Call Transfer', policy: 'Voicemail & Callback Booking', status: 'Active' }
 ];
 
-const DEFAULT_LANGUAGES: LanguageItem[] = [
-  { id: 'lang_1', name: 'Hindi (India)', locale: 'hi-IN', currency: 'INR (₹)', number_format: 'Indian Lakhs/Crores (1,00,000.00)', date_format: 'DD/MM/YYYY', time_format: '12-Hour (AM/PM)', is_rtl: false, telephone_format: '+91 XXXXX XXXXX', fallback_language: 'English (United States)', flag: '🇮🇳', voiceEngine: 'ElevenLabs / Google Neural2', status: 'Active' },
-  { id: 'lang_2', name: 'Hinglish (India)', locale: 'en-IN', currency: 'INR (₹)', number_format: 'Indian Lakhs/Crores (1,00,000.00)', date_format: 'DD/MM/YYYY', time_format: '12-Hour (AM/PM)', is_rtl: false, telephone_format: '+91 XXXXX XXXXX', fallback_language: 'Hindi (India)', flag: '🇮🇳', voiceEngine: 'ElevenLabs Conversational', status: 'Active' },
-  { id: 'lang_3', name: 'English (United States)', locale: 'en-US', currency: 'USD ($)', number_format: 'Standard US (100,000.00)', date_format: 'MM/DD/YYYY', time_format: '12-Hour (AM/PM)', is_rtl: false, telephone_format: '+1 (XXX) XXX-XXXX', fallback_language: 'Spanish (Spain & LATAM)', flag: '🇺🇸', voiceEngine: 'Cartesia Sonic / ElevenLabs', status: 'Active' },
-  { id: 'lang_4', name: 'Spanish (Spain & LATAM)', locale: 'es-ES', currency: 'EUR (€)', number_format: 'European Standard (100.000,00)', date_format: 'DD/MM/YYYY', time_format: '24-Hour', is_rtl: false, telephone_format: '+34 XXX XXX XXX', fallback_language: 'English (United States)', flag: '🇪🇸', voiceEngine: 'Deepgram Aura / ElevenLabs', status: 'Active' }
-];
+const DEFAULT_LANGUAGES: LanguageItem[] = GLOBAL_LANGUAGES_CATALOG.map(lang => ({
+  id: lang.id,
+  name: `${lang.name} (${lang.country})`,
+  locale: lang.locale,
+  currency: `${lang.currencyCode} (${lang.currencySymbol})`,
+  number_format: lang.numberFormat,
+  date_format: lang.dateFormat,
+  time_format: lang.timeFormat,
+  is_rtl: lang.isRtl,
+  telephone_format: lang.telephoneFormat,
+  fallback_language: lang.country === 'India' ? 'Hindi (India)' : 'English (United States)',
+  flag: lang.flag,
+  voiceEngine: 'Dynamic Multi-Provider Voice Engine',
+  status: 'Active',
+}));
 
 const DEFAULT_POLICIES: BusinessPolicyItem[] = [
   { id: 'pol_1', name: 'Strict Call Recording & Compliance', policy_category: 'Privacy & Data Governance', policy_type: 'Mandatory (Strict Block)', execution_time: 'Before Call Connect', severity: 'High (Critical Action)', violation_action: 'Block Action Immediately', description: 'Requires mandatory disclaimer announcement before call recording.', status: 'Active' },

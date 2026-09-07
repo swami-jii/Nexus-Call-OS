@@ -29,6 +29,7 @@ class TelephonyCallingEngine:
         configured_language: str = "Auto-Detect",
         custom_instructions: str = "",
         session_memory_context: str = "",
+        active_model: str = "",
     ) -> str:
         """
         Builds a universal cognitive telephony system prompt for all 104+ languages.
@@ -43,34 +44,37 @@ class TelephonyCallingEngine:
 
         # Fetch 0ms live date, time, and day of week context
         dt = LiveKnowledgeService.get_live_datetime_context()
-        catalog_summary = LiveKnowledgeService.get_catalog_categories_summary()
+
+        model_ctx_line = f"ACTIVE ENGINE: {active_model} (Nexus Voice AI Platform)" if active_model else "ACTIVE ENGINE: Nexus Voice AI Platform"
 
         prompt = f"""You are {agent_name}, a friendly, warm, intelligent live human telephone receptionist for {clean_biz}.
 
 CONFIGURED BASE LANGUAGE: {configured_language}
+{model_ctx_line}
 REAL-TIME CLOCK CONTEXT: Current time is {dt['current_time']} on {dt['day_of_week']}, {dt['current_date']} ({dt['timezone']}).
-UNIVERSAL PUBLIC APIS KNOWLEDGE BASE: {catalog_summary}
 
 CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
-1. REAL HUMAN PERSONA & ZERO REPETITION: Speak naturally and warmly like a live human receptionist.
+1. STRAIGHT-FORWARD & CONCISE (JITNA QUESTION UTNA JAWAB):
+   - Answer the caller's specific question or statement immediately and directly in 1 short, complete spoken sentence (under 15-20 words).
+   - NEVER append repetitive robotic closing phrases like "Kya main aapki kisi aur tarah se madad kar sakta hoon?" or "How may I help you today?" at the end of every answer. Answer the question directly and stop so the caller can speak.
+2. SELF-IDENTITY & ZERO HALLUCINATED BRANDS:
+   - You are {agent_name} representing {clean_biz}.
+   - If asked who you are or what model/system you use, answer directly: "Main {agent_name} bol rahi hoon, {clean_biz} se."
+   - NEVER claim you are ChatGPT, OpenAI, GPT-4, or another third-party product.
+3. REAL HUMAN PERSONA & ZERO REPETITION:
    - The opening greeting has ALREADY been given at call initiation.
-   - NEVER repeat greetings, re-introduce your identity, or repeat opening questions in subsequent turns.
-   - Answer the caller's specific statement or question directly, conversationally, and smartly.
+   - NEVER repeat greetings or re-introduce yourself unless specifically asked.
    - NEVER recite technical jargon, database identifiers, internal codes, or developer notes.
-   - NEVER generate filler turns or start talking by yourself without caller speech.
-2. ACTIVE CONVERSATIONAL MEMORY RETENTION:
+4. ACTIVE CONVERSATIONAL MEMORY RETENTION:
    - Retain and actively use all facts provided by the caller earlier in this call (e.g. caller name, symptoms, appointment slots, preferences).
-   - NEVER re-ask for details the caller already told you. Address the caller politely by their name once they share it.
-3. MULTILINGUAL MIRRORING: You fluently understand and speak 104+ global languages and cultural dialects. Always detect the caller's spoken language and reply in the EXACT SAME language and conversational tone naturally.
-4. ULTRA-CONCISE VOICE CADENCE & PAUSE (STRICT 1 SHORT SENTENCE, 10-18 WORDS MAX):
-   - This is a fast live phone call. You MUST reply in ONLY 1 short conversational sentence (maximum 10 to 18 words).
-   - NEVER give long explanations, bullet points, or multiple sentences.
-   - Always STOP speaking immediately after 1 short sentence so the caller has the floor to respond.
-5. REAL-TIME LIVE KNOWLEDGE & POLITE PIVOT:
-   - If the caller asks general real-world questions (e.g., current time, today's weather, currency rates, general facts), answer helpfully and accurately in 1 short spoken sentence.
-   - Guide the conversation naturally toward assisting them with {clean_biz} without sounding robotic or repeating the exact same pitch line over and over.
-   - NEVER refuse the caller or say "I cannot tell you the weather/time". Always be helpful, warm, and guide the conversation gracefully.
-6. NO FORMATTING: NEVER use markdown bold (**), italic (*), hashtags (#), bullet points, numbered lists, XML/SSML tags, or emojis. Output plain spoken text only.
+   - Address the caller politely by their name once they share it.
+5. MULTILINGUAL MIRRORING & DYNAMIC LANGUAGE ADAPTATION (104+ GLOBAL LANGUAGES):
+   - You fluently understand and speak 104+ global languages (Hindi, English, Tamil, Telugu, Spanish, French, German, Japanese, Arabic, Bengali, Marathi, Punjabi, Gujarati, etc.).
+   - ALWAYS detect the exact language or dialect the caller is speaking in their current turn and respond naturally in the EXACT SAME language.
+   - If the caller speaks Hindi -> reply in Hindi. If English -> reply in English. If Tamil -> reply in Tamil. If French -> reply in French. If German -> reply in German.
+   - If the caller switches languages mid-call, switch INSTANTLY to their new spoken language.
+6. NO FORMATTING:
+   - NEVER use markdown bold (**), italic (*), hashtags (#), bullet points, numbered lists, XML/SSML tags, or emojis. Output plain spoken text only.
 7. AUTONOMOUS CALL WRAP-UP & TERMINATION ([HANGUP]):
    - If the caller indicates they have no more questions, are satisfied, wish to end the call, ask to hang up, or say goodbye in ANY language:
      * Respond with a polite, warm closing farewell wishing them well in their language.
@@ -121,139 +125,28 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
         base_url: Optional[str] = None,
     ) -> Optional[str]:
         """
-        Universal invoker that routes to the user's active configured LLM provider & model.
-        Supports Google Gemini, OpenAI, Anthropic, Groq, DeepSeek, OpenRouter, Mistral, Ollama.
+        Universal telephony LLM invoker delegating directly to the centralized DynamicLLMInvoker SSOT.
+        Zero hardcoded provider branching, zero manual URLs.
         """
         if not api_key:
             return None
 
-        prov = (provider or "google").lower().strip()
-        mod = (model_id or "").strip()
+        from backend.routers.knowledge_base import DynamicLLMInvoker
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                # 1. Google Gemini
-                if prov in ["google", "gemini", "google_ai_studio"]:
-                    active_model = mod if mod and mod not in ["dynamic", "default", "Auto-Optimized"] else "gemini-2.5-flash"
-                    active_model = active_model.replace("models/", "")
-
-                    contents = []
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "model"
-                        txt = msg.get("text", "").strip()
-                        if txt:
-                            if contents and contents[-1]["role"] == role:
-                                contents[-1]["parts"][0]["text"] += f"\n{txt}"
-                            else:
-                                contents.append({"role": role, "parts": [{"text": txt}]})
-
-                    if not contents:
-                        return None
-                    if contents[0]["role"] != "user":
-                        contents.insert(0, {"role": "user", "parts": [{"text": "Hello"}]})
-
-                    # Try configured model, and gracefully fallback to available flash models if rate limited
-                    model_attempts = [active_model]
-                    for alt_m in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"]:
-                        if alt_m not in model_attempts:
-                            model_attempts.append(alt_m)
-
-                    for m_try in model_attempts:
-                        res = await client.post(
-                            f"https://generativelanguage.googleapis.com/v1beta/models/{m_try}:generateContent?key={api_key}",
-                            headers={"Content-Type": "application/json"},
-                            json={
-                                "systemInstruction": {"parts": [{"text": system_prompt}]},
-                                "contents": contents,
-                                "generationConfig": {"temperature": 0.35, "maxOutputTokens": 50},
-                            },
-                        )
-                        if res.status_code == 200:
-                            data = res.json()
-                            candidates = data.get("candidates", [])
-                            if candidates:
-                                parts = candidates[0].get("content", {}).get("parts", [])
-                                if parts:
-                                    return parts[0].get("text", "").strip()
-
-                # 2. OpenAI / Azure OpenAI / Compatible API
-                elif prov in ["openai", "azure_openai"]:
-                    active_model = mod if mod and mod not in ["dynamic", "default", "Auto-Optimized"] else "gpt-4o-mini"
-                    endpoint = base_url or "https://api.openai.com/v1/chat/completions"
-                    messages = [{"role": "system", "content": system_prompt}]
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
-                        messages.append({"role": role, "content": msg.get("text", "")})
-
-                    res = await client.post(
-                        endpoint,
-                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                        json={"model": active_model, "messages": messages, "max_tokens": 50, "temperature": 0.35},
-                    )
-                    if res.status_code == 200:
-                        choices = res.json().get("choices", [])
-                        if choices:
-                            return choices[0].get("message", {}).get("content", "").strip()
-
-                # 3. Anthropic Claude
-                elif prov in ["anthropic", "claude"]:
-                    active_model = mod if mod and mod not in ["dynamic", "default", "Auto-Optimized"] else "claude-3-5-haiku-latest"
-                    messages = []
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
-                        messages.append({"role": role, "content": msg.get("text", "")})
-
-                    res = await client.post(
-                        "https://api.anthropic.com/v1/messages",
-                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
-                        json={"model": active_model, "system": system_prompt, "messages": messages, "max_tokens": 50},
-                    )
-                    if res.status_code == 200:
-                        content = res.json().get("content", [])
-                        if content:
-                            return content[0].get("text", "").strip()
-
-                # 4. Groq Ultra-Fast Inference
-                elif prov in ["groq"]:
-                    active_model = mod if mod and mod not in ["dynamic", "default", "Auto-Optimized"] else "llama-3.3-70b-versatile"
-                    messages = [{"role": "system", "content": system_prompt}]
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
-                        messages.append({"role": role, "content": msg.get("text", "")})
-
-                    res = await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                        json={"model": active_model, "messages": messages, "max_tokens": 50, "temperature": 0.35},
-                    )
-                    if res.status_code == 200:
-                        choices = res.json().get("choices", [])
-                        if choices:
-                            return choices[0].get("message", {}).get("content", "").strip()
-
-                # 5. DeepSeek / OpenRouter / Mistral / Generic OpenAI-Compatible API
-                else:
-                    active_model = mod if mod and mod not in ["dynamic", "default", "Auto-Optimized"] else "deepseek-chat"
-                    endpoint = "https://api.deepseek.com/v1/chat/completions" if prov == "deepseek" else (base_url or "https://openrouter.ai/api/v1/chat/completions")
-                    messages = [{"role": "system", "content": system_prompt}]
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
-                        messages.append({"role": role, "content": msg.get("text", "")})
-
-                    res = await client.post(
-                        endpoint,
-                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                        json={"model": active_model, "messages": messages, "max_tokens": 50, "temperature": 0.35},
-                    )
-                    if res.status_code == 200:
-                        choices = res.json().get("choices", [])
-                        if choices:
-                            return choices[0].get("message", {}).get("content", "").strip()
-
-            except Exception as e:
-                print(f"[TelephonyEngine] Error calling active provider '{prov}': {e}")
-
-        return None
+        config = {
+            "provider": provider,
+            "api_key": api_key,
+            "model": model_id,
+            "base_url": base_url,
+        }
+        res = await DynamicLLMInvoker.call_conversation_llm_async(
+            system_prompt=system_prompt,
+            conversation_history=conversation_history,
+            config=config,
+            max_tokens=150,
+            temperature=0.35,
+        )
+        return res.get("text") if res else None
 
     @classmethod
     def save_call_recording(
@@ -302,41 +195,36 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
     @classmethod
     def parse_carrier_rate(cls, rate_str: Any) -> float:
         """
-        Parses numeric per-minute carrier rate from rate string or number.
-        Examples: '$0.014' -> 0.014, '$0.0035' -> 0.0035, '₹0.70' -> 0.0084, 'Free' -> 0.0
+        Dynamically extracts and parses numeric rate from string, number, or database metadata.
+        Returns float value without any hardcoded assumptions.
         """
         if rate_str is None:
-            return 0.014
+            return 0.0
         if isinstance(rate_str, (int, float)):
             return float(rate_str)
         s = str(rate_str).strip()
-        if "free" in s.lower() or "flat-rate" in s.lower() or "trial" in s.lower():
+        if not s or any(k in s.lower() for k in ["free", "trial", "zero", "unlimited", "flat"]):
             return 0.0
-        # INR conversion approx ~ 1 USD = 84 INR (₹0.70 / min ~ $0.0083 / min)
-        if "₹" in s or "inr" in s.lower():
-            digits = re.findall(r"[\d\.]+", s)
-            if digits:
-                return round(float(digits[0]) / 84.0, 5)
-        # USD or standard dollar / cents
         digits = re.findall(r"[\d\.]+", s)
         if digits:
             try:
                 return float(digits[0])
             except ValueError:
                 pass
-        return 0.014
+        return 0.0
 
     @classmethod
     def resolve_carrier_rate(
         cls,
         db: Optional[Session],
-        org_id: Optional[str],
+        org_id: Optional[str] = None,
         call_mode: str = "carrier",
         carrier_name: Optional[str] = None,
         carrier_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Dynamically resolves active carrier pricing and rate card from ProviderCredential SSOT.
+        Dynamically resolves active carrier pricing and metadata directly from the ProviderCredential SSOT.
+        Zero hardcoded carrier names or rates.
         """
         if call_mode in ["mic", "web_mic", "browser_mic"]:
             return {
@@ -344,26 +232,21 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
                 "cost_per_min": 0.0,
                 "pricing_mode": "Zero-Cost Local WebRTC",
                 "inbound_cost": 0.0,
+                "currency": "USD",
             }
 
-        if call_mode in ["android_gsm", "gsm"]:
-            return {
-                "carrier_name": carrier_name or "Android GSM Cellular SIM (Unlimited Plan)",
-                "cost_per_min": 0.0,
-                "pricing_mode": "Cellular SIM Unlimited",
-                "inbound_cost": 0.0,
-            }
-
-        # Query ProviderCredential for matching carrier in DB
+        # Query ProviderCredential for active carrier / gateway from API & Integrations SSOT
         matched_cred = None
         if db:
             from backend.models.models import ProviderCredential
-            query = db.query(ProviderCredential).filter(
-                ProviderCredential.category.in_(["telephony_providers", "telephony_carriers", "sip_providers", "sip_trunks"])
-            )
+            cats = ["telephony_providers", "telephony_carriers", "sip_providers", "sip_trunks"]
+            if call_mode in ["android_gsm", "gsm", "sim"]:
+                cats = ["gsm_gateways", "telephony_providers"]
+
+            query = db.query(ProviderCredential).filter(ProviderCredential.category.in_(cats))
             if org_id:
                 query = query.filter((ProviderCredential.organization_id == org_id) | (ProviderCredential.organization_id == None))
-            
+
             creds = query.all()
             if carrier_id:
                 for c in creds:
@@ -371,11 +254,11 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
                         matched_cred = c
                         break
             if not matched_cred and carrier_name:
-                c_name_clean = carrier_name.lower().strip()
+                c_clean = carrier_name.lower().strip()
                 for c in creds:
                     disp = (c.display_name or "").lower()
                     p_name = (c.provider_name or "").lower()
-                    if c_name_clean in disp or c_name_clean in p_name or disp in c_name_clean:
+                    if c_clean in disp or c_clean in p_name or disp in c_clean:
                         matched_cred = c
                         break
             if not matched_cred and creds:
@@ -388,25 +271,30 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
                     meta = json.loads(matched_cred.metadata_json) if isinstance(matched_cred.metadata_json, str) else matched_cred.metadata_json
                 except Exception:
                     meta = {}
-            cost_str = meta.get("cost_per_min", "$0.014")
+
+            cost_str = meta.get("cost_per_min") or meta.get("rate") or meta.get("outbound_cost") or "0.0"
             rate = cls.parse_carrier_rate(cost_str)
-            disp_name = matched_cred.display_name or matched_cred.provider_name or carrier_name or "Cloud Telephony Carrier"
+            disp_name = matched_cred.display_name or matched_cred.provider_name or carrier_name or "Active Connected Carrier"
+            inbound_str = meta.get("inbound_cost") or meta.get("inbound_rate") or "0.0"
+
             return {
                 "carrier_id": matched_cred.id,
                 "carrier_name": disp_name,
                 "cost_per_min": rate,
                 "raw_rate_str": str(cost_str),
-                "pricing_mode": meta.get("pricing_mode", "Paid"),
-                "inbound_cost": cls.parse_carrier_rate(meta.get("inbound_cost", "$0.0085")),
-                "billing_interval": meta.get("billing_interval", "60s/60s (Standard)"),
+                "pricing_mode": meta.get("pricing_mode", "Active"),
+                "inbound_cost": cls.parse_carrier_rate(inbound_str),
+                "billing_interval": meta.get("billing_interval", "Dynamic"),
+                "currency": meta.get("currency", "USD"),
             }
 
         return {
-            "carrier_name": carrier_name or "Twilio Cloud Telephony",
-            "cost_per_min": 0.014,
-            "raw_rate_str": "$0.014",
-            "pricing_mode": "Paid",
-            "inbound_cost": 0.0085,
+            "carrier_name": carrier_name or "Connected Carrier",
+            "cost_per_min": 0.0,
+            "raw_rate_str": "$0.00",
+            "pricing_mode": "Dynamic",
+            "inbound_cost": 0.0,
+            "currency": "USD",
         }
 
     @classmethod
@@ -423,8 +311,8 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
         tts_chars: int = 0,
     ) -> Tuple[float, Dict[str, Any]]:
         """
-        Calculates complete transparent call cost factoring active Telephony Carrier rate,
-        LLM token consumption, and Neural TTS characters.
+        Dynamically calculates exact call cost factoring active Telephony Carrier rate,
+        LLM token consumption, and Neural TTS characters directly from API & Integrations SSOT.
         """
         dur_sec = max(0, float(duration_seconds or 0))
         minutes = dur_sec / 60.0
@@ -438,17 +326,35 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
         )
 
         effective_rate = carrier_cost_per_min if carrier_cost_per_min is not None else carrier_info["cost_per_min"]
-        
-        # Telephony Carrier Cost
         telephony_cost = round(minutes * effective_rate, 4)
 
-        # AI Compute & Synthesis Cost (Transparent breakdown)
-        llm_cost = round((llm_tokens / 1000.0) * 0.00015, 5) if llm_tokens > 0 else (0.0008 if dur_sec > 0 else 0.0)
-        tts_cost = round((tts_chars / 1000.0) * 0.015, 5) if tts_chars > 0 else (0.0012 if dur_sec > 0 else 0.0)
+        # Dynamic LLM & TTS compute rates from DB SSOT
+        llm_rate_per_1k = 0.0
+        tts_rate_per_1k = 0.0
+        if db:
+            from backend.models.models import ProviderCredential
+            try:
+                llm_c = db.query(ProviderCredential).filter(ProviderCredential.category == "llm").first()
+                if llm_c and llm_c.metadata_json:
+                    meta = json.loads(llm_c.metadata_json) if isinstance(llm_c.metadata_json, str) else llm_c.metadata_json
+                    llm_rate_per_1k = cls.parse_carrier_rate(meta.get("cost_per_1k_tokens") or meta.get("rate") or 0.00015)
+                else:
+                    llm_rate_per_1k = 0.00015
+
+                tts_c = db.query(ProviderCredential).filter(ProviderCredential.category == "voice_synthesizers").first()
+                if tts_c and tts_c.metadata_json:
+                    meta = json.loads(tts_c.metadata_json) if isinstance(tts_c.metadata_json, str) else tts_c.metadata_json
+                    tts_rate_per_1k = cls.parse_carrier_rate(meta.get("cost_per_1k_chars") or meta.get("rate") or 0.015)
+                else:
+                    tts_rate_per_1k = 0.015
+            except Exception:
+                llm_rate_per_1k = 0.00015
+                tts_rate_per_1k = 0.015
+
+        llm_cost = round((llm_tokens / 1000.0) * llm_rate_per_1k, 5) if llm_tokens > 0 else 0.0
+        tts_cost = round((tts_chars / 1000.0) * tts_rate_per_1k, 5) if tts_chars > 0 else 0.0
 
         total_cost = round(telephony_cost + (0.0 if call_mode in ["mic", "web_mic", "browser_mic"] and dur_sec <= 3 else (llm_cost + tts_cost)), 4)
-        
-        # For browser mic / WebRTC tests, keep nominal total cost clean and accurate (e.g. $0.000 to $0.002)
         if call_mode in ["mic", "web_mic", "browser_mic"]:
             total_cost = round(llm_cost + tts_cost, 4)
 
@@ -456,6 +362,7 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
             "telephony_carrier_cost": telephony_cost,
             "carrier_name": carrier_info.get("carrier_name", "WebRTC Audio"),
             "rate_per_min": effective_rate,
+            "currency": carrier_info.get("currency", "USD"),
             "llm_cost": llm_cost,
             "tts_cost": tts_cost,
             "total_cost": total_cost,

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # Generic Paginated Response
@@ -60,6 +60,8 @@ class OTPVerifyRequest(BaseModel):
 
 
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     email: str
     full_name: str | None = None
@@ -70,10 +72,6 @@ class UserOut(BaseModel):
     is_verified: bool = True
     profile_data: str | None = None
     created_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
-
 
 
 class UserUpdate(BaseModel):
@@ -112,13 +110,12 @@ class AgentUpdate(BaseModel):
 
 
 class AgentOut(AgentBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Campaign Schemas
@@ -149,13 +146,12 @@ class CampaignUpdate(BaseModel):
 
 
 class CampaignOut(CampaignBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Phone Number Schemas
@@ -182,12 +178,11 @@ class PhoneNumberUpdate(BaseModel):
 
 
 class PhoneNumberOut(PhoneNumberBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Contact Schemas
@@ -222,13 +217,12 @@ class ContactUpdate(BaseModel):
 
 
 class ContactOut(ContactBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Knowledge Document Schemas
@@ -258,12 +252,11 @@ class KnowledgeUpdate(BaseModel):
 
 
 class KnowledgeOut(KnowledgeBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Call Log Schemas
@@ -298,12 +291,11 @@ class NotificationCreate(NotificationBase):
 
 
 class NotificationOut(NotificationBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Call Log Schemas
@@ -329,12 +321,11 @@ class CallLogCreate(CallLogBase):
 
 
 class CallLogOut(CallLogBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Integration Schemas
@@ -350,13 +341,12 @@ class IntegrationCreate(IntegrationBase):
 
 
 class IntegrationOut(IntegrationBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None
     last_synced_at: datetime
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # API Key Schemas
@@ -369,6 +359,8 @@ class ApiKeyCreate(BaseModel):
 
 
 class ApiKeyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     key_prefix: str
@@ -380,13 +372,11 @@ class ApiKeyOut(BaseModel):
     last_used_at: datetime | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
-
 
 # Billing & Subscription Schemas
 class BillingAccountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     balance_usd: float
     currency: str
@@ -394,20 +384,16 @@ class BillingAccountOut(BaseModel):
     auto_recharge: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class SubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     plan_id: str
     status: str
     current_period_start: datetime
     current_period_end: datetime
     cancel_at_period_end: bool
-
-    class Config:
-        from_attributes = True
 
 
 class CouponValidateRequest(BaseModel):
@@ -430,13 +416,12 @@ class CouponUpdate(BaseModel):
 
 
 class CouponOut(CouponBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     current_uses: int
     expires_at: datetime | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Workflow Schemas
@@ -463,13 +448,12 @@ class WorkflowUpdate(BaseModel):
 
 
 class WorkflowOut(WorkflowBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     organization_id: str | None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Settings & Audit Schemas
@@ -484,6 +468,8 @@ class SettingsUpdate(BaseModel):
 
 
 class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str | None
     action: str
@@ -492,5 +478,3 @@ class AuditLogOut(BaseModel):
     ip_address: str | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True

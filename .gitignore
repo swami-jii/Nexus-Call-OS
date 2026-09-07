@@ -33,6 +33,14 @@ DerivedData/
 
 # Temporary / Scratch
 scratch/
+.cache/
+backend/.cache/
+*.log
+*_err.txt
+*_log.txt
+tunnel_url.txt
+public/tunnel_url.txt
+*.exe
 uploads/cache/
 uploads/.recycle_bin/
 uploads/recordings/*.mp3
@@ -40,6 +48,6 @@ uploads/recordings/*.webm
 uploads/recordings/*.wav
 !uploads/recordings/.gitkeep
 
-
-
-
+# Build Tools / SDKs
+tools/
+*.zip.tmp

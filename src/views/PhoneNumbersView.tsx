@@ -52,7 +52,7 @@ export const PhoneNumbersView: React.FC<PhoneNumbersViewProps> = ({ onNavigate }
 
   // Workflow Form Fields (Rule 4)
   const [friendlyName, setFriendlyName] = useState('Reception & Support Line');
-  const [phoneNumberValue, setPhoneNumberValue] = useState('+91 98765 43210');
+  const [phoneNumberValue, setPhoneNumberValue] = useState('');
   const [detectedCarrier, setDetectedCarrier] = useState('Unknown Carrier');
   const [simType, setSimType] = useState('Physical SIM');
   const [businessType, setBusinessType] = useState('dental_clinic');
@@ -501,7 +501,15 @@ export const PhoneNumbersView: React.FC<PhoneNumbersViewProps> = ({ onNavigate }
                   Connect any Android phone or SIM already owned by you.
                 </p>
               </div>
-              <Button size="sm" variant="primary" className="w-full mt-4">
+              <Button
+                size="sm"
+                variant="primary"
+                className="w-full mt-4 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedWorkflow('existing');
+                }}
+              >
                 Connect Number
               </Button>
             </Card>
@@ -523,7 +531,15 @@ export const PhoneNumbersView: React.FC<PhoneNumbersViewProps> = ({ onNavigate }
                   Purchase a virtual business phone number from supported providers.
                 </p>
               </div>
-              <Button size="sm" variant="outline" className="w-full mt-4">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full mt-4 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedWorkflow('buy');
+                }}
+              >
                 Browse Numbers
               </Button>
             </Card>
@@ -545,7 +561,15 @@ export const PhoneNumbersView: React.FC<PhoneNumbersViewProps> = ({ onNavigate }
                   Connect your existing cloud telephony provider.
                 </p>
               </div>
-              <Button size="sm" variant="outline" className="w-full mt-4">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full mt-4 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedWorkflow('sip');
+                }}
+              >
                 Configure SIP
               </Button>
             </Card>

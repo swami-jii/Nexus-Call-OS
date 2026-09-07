@@ -1,7 +1,6 @@
 import base64
 import time
 
-from backend.integrations.manager import provider_manager
 from backend.voice_pipeline.calling_optimizer import calling_optimizer
 from backend.voice_pipeline.session_manager import CallSession, session_manager
 

@@ -38,6 +38,7 @@ class BaseSkill(ABC):
         input_text: str,
         agent_name: str = "AI Assistant",
         context: Optional[Dict[str, Any]] = None,
+        language: str = "Auto-Detect",
     ) -> str:
         """
         Execute skill logic when active turn matches or is explicitly selected.

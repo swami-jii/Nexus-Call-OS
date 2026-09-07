@@ -1,214 +1,328 @@
 package com.nexus.callos.companion.network
 
-import android.os.Build
-import android.util.Log
-import kotlinx.coroutines.*
-import okhttp3.*
+import android.os.Handler
+import android.os.Looper
+import com.nexus.callos.companion.NexusApplication
+import com.nexus.callos.companion.model.DeviceTelemetry
+import com.nexus.callos.companion.model.SimSubscriptionInfo
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class WebSocketBridgeClient(
-    private val serverUrl: String,
-    private val deviceId: String = "android-primary",
-    private val deviceToken: String? = null,
-    private val onIncomingAudio: (ByteArray) -> Unit,
-    private val onStateChanged: (state: ConnectionState, detail: String?) -> Unit = { _, _ -> },
-    var telemetryProvider: (() -> JSONObject)? = null,
-    var onLatencyMeasured: ((latencyMs: Int) -> Unit)? = null
+    private val deviceId: String,
+    private val deviceToken: String,
+    private val telemetryProvider: (() -> Triple<DeviceTelemetry, Pair<List<SimSubscriptionInfo>, Int>, Triple<Boolean, Int, Boolean>>)? = null,
+    private val onRemoteSettingChanged: ((String, Any) -> Unit)? = null
 ) {
 
-    enum class ConnectionState {
+    enum class State {
         DISCONNECTED,
         CONNECTING,
         CONNECTED,
-        RECONNECTING
-    }
-
-    companion object {
-        private const val TAG = "NexusWSBridge"
-        private const val NORMAL_CLOSURE_STATUS = 1000
+        ERROR
     }
 
     private val client = OkHttpClient.Builder()
-        .readTimeout(0, TimeUnit.MILLISECONDS)
         .pingInterval(15, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
     private var webSocket: WebSocket? = null
-    private var isManualDisconnect = false
-    private var reconnectScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var heartbeatJob: Job? = null
-    private var reconnectAttempts = 0
-    private var lastPingTimeMs: Long = 0
+    private var currentState = State.DISCONNECTED
+    private val isManualDisconnect = AtomicBoolean(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    var measuredLatencyMs: Int = -1
-        private set
+    private var currentUrl = ""
+    private var pingStartTime = 0L
 
-    fun connect() {
-        isManualDisconnect = false
-        onStateChanged(ConnectionState.CONNECTING, "Connecting to Nexus Call OS...")
-        Log.d(TAG, "Connecting to Nexus Call OS: $serverUrl (device: $deviceId)")
+    var onStateChanged: ((State, String?) -> Unit)? = null
+    var onLatencyUpdated: ((Int) -> Unit)? = null
+    var onAiAudioReceived: ((ByteArray) -> Unit)? = null
+    var onConfigUpdated: (() -> Unit)? = null
 
-        // Append query params if not in url
-        val targetUrl = if (serverUrl.contains("device_id=")) {
-            serverUrl
+    private val pingRunnable = object : Runnable {
+        override fun run() {
+            if (currentState == State.CONNECTED) {
+                sendPing()
+                mainHandler.postDelayed(this, 10000L)
+            }
+        }
+    }
+
+    fun connect(wsUrl: String) {
+        isManualDisconnect.set(false)
+        currentUrl = wsUrl
+        updateState(State.CONNECTING, "Connecting to $wsUrl...")
+
+        val cleanUrl = if (!wsUrl.contains("?")) {
+            "$wsUrl?device_id=$deviceId&token=$deviceToken"
         } else {
-            val delimiter = if (serverUrl.contains("?")) "&" else "?"
-            val tokenParam = if (!deviceToken.isNullOrBlank()) "&token=$deviceToken" else ""
-            "$serverUrl${delimiter}device_id=$deviceId$tokenParam"
+            "$wsUrl&device_id=$deviceId&token=$deviceToken"
         }
 
-        val requestBuilder = Request.Builder().url(targetUrl)
-        if (!deviceToken.isNullOrBlank()) {
-            requestBuilder.addHeader("Authorization", "Bearer $deviceToken")
-            requestBuilder.addHeader("X-Device-Token", deviceToken)
-        }
-
-        val request = requestBuilder.build()
-
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(ws: WebSocket, response: Response) {
-                reconnectAttempts = 0
-                Log.d(TAG, "WebSocket transport connected. Sending AUTH handshake...")
-
-                // Send dynamic authentic telemetry in AUTH frame
-                val authFrame = telemetryProvider?.invoke() ?: JSONObject()
-                val brand = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
-                val model = Build.MODEL
-                val fullName = if (model.startsWith(brand, ignoreCase = true)) model else "$brand $model"
-                val osVersionFormatted = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
-
-                authFrame.put("event", "AUTH")
-                authFrame.put("device_id", deviceId)
-                authFrame.put("device_token", deviceToken ?: "")
-                authFrame.put("platform", "android")
-                authFrame.put("os_version", osVersionFormatted)
-                authFrame.put("name", fullName)
-                authFrame.put("model", fullName)
-                ws.send(authFrame.toString())
-
-
-                startHeartbeat(ws)
-            }
-
-            override fun onMessage(ws: WebSocket, bytes: ByteString) {
-                onIncomingAudio(bytes.toByteArray())
-            }
-
-            override fun onMessage(ws: WebSocket, text: String) {
-                Log.d(TAG, "Received frame: $text")
-                try {
-                    val json = JSONObject(text)
-                    val eventType = json.optString("type")
-                    val eventName = json.optString("event")
-
-                    if (eventType == "AUTH_SUCCESS" || eventName == "AUTH_SUCCESS") {
-                        Log.d(TAG, "Device $deviceId authenticated successfully with Nexus Call OS!")
-                        onStateChanged(ConnectionState.CONNECTED, "Online & Authenticated (Bridge Active)")
-                    } else if (eventType == "AUTH_ERROR" || eventName == "AUTH_ERROR") {
-                        val err = json.optString("error", "Authentication failed")
-                        Log.e(TAG, "Auth failed: $err")
-                        onStateChanged(ConnectionState.DISCONNECTED, "Auth Failed: $err")
-                    } else if (eventType == "PONG" || eventName == "PONG") {
-                        // Heartbeat ACK - calculate real measured RTT latency
-                        if (lastPingTimeMs > 0) {
-                            val rtt = (System.currentTimeMillis() - lastPingTimeMs).toInt()
-                            measuredLatencyMs = maxOf(1, rtt)
-                            onLatencyMeasured?.invoke(measuredLatencyMs)
-                            Log.d(TAG, "Measured RTT Latency: ${measuredLatencyMs}ms")
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to parse text frame", e)
-                }
-            }
-
-            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket closing: $code / $reason")
-                ws.close(NORMAL_CLOSURE_STATUS, null)
-            }
-
-            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket closed: $code / $reason")
-                stopHeartbeat()
-                if (!isManualDisconnect) {
-                    scheduleReconnect("Connection closed ($code)")
-                } else {
-                    onStateChanged(ConnectionState.DISCONNECTED, "Disconnected")
-                }
-            }
-
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket failure: ${t.message}")
-                stopHeartbeat()
-                if (!isManualDisconnect) {
-                    scheduleReconnect(t.message)
-                } else {
-                    onStateChanged(ConnectionState.DISCONNECTED, t.message)
-                }
-            }
-        })
-    }
-
-    private fun startHeartbeat(ws: WebSocket) {
-        heartbeatJob?.cancel()
-        heartbeatJob = reconnectScope.launch {
-            while (isActive) {
-                delay(5000)
-                try {
-                    lastPingTimeMs = System.currentTimeMillis()
-                    val ping = telemetryProvider?.invoke() ?: JSONObject()
-                    ping.put("event", "PING")
-                    ping.put("device_id", deviceId)
-                    if (measuredLatencyMs >= 0) {
-                        ping.put("latency_ms", measuredLatencyMs)
-                    }
-                    ws.send(ping.toString())
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error sending telemetry heartbeat", e)
-                }
-            }
-        }
-    }
-
-    private fun stopHeartbeat() {
-        heartbeatJob?.cancel()
-        heartbeatJob = null
-    }
-
-    fun sendAudioChunk(pcmChunk: ByteArray): Boolean {
-        return webSocket?.send(pcmChunk.toByteString()) ?: false
-    }
-
-    fun sendEvent(event: JSONObject): Boolean {
-        return webSocket?.send(event.toString()) ?: false
-    }
-
-    private fun scheduleReconnect(errorDetail: String? = null) {
-        if (isManualDisconnect) return
-        reconnectAttempts++
-        val delayMs = minOf(1000L * (1 shl minOf(reconnectAttempts, 5)), 30000L)
-        onStateChanged(ConnectionState.RECONNECTING, "Reconnecting in ${delayMs / 1000}s (Attempt $reconnectAttempts)")
-        Log.d(TAG, "Scheduling reconnect in $delayMs ms (attempt $reconnectAttempts)")
-
-        reconnectScope.launch {
-            delay(delayMs)
-            if (!isManualDisconnect) {
-                connect()
-            }
+        try {
+            val request = Request.Builder().url(cleanUrl).build()
+            webSocket = client.newWebSocket(request, createListener())
+        } catch (e: Exception) {
+            NexusApplication.log("ERROR", "WSBridge", "Failed to initialize WebSocket: ${e.message}")
+            updateState(State.ERROR, e.message)
+            scheduleReconnect()
         }
     }
 
     fun disconnect() {
-        isManualDisconnect = true
-        stopHeartbeat()
-        reconnectScope.cancel()
-        reconnectScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        webSocket?.close(NORMAL_CLOSURE_STATUS, "Service stopped by user")
+        isManualDisconnect.set(true)
+        mainHandler.removeCallbacks(pingRunnable)
+        try {
+            webSocket?.close(1000, "User disconnected")
+        } catch (e: Exception) {
+            // Ignore
+        }
         webSocket = null
-        onStateChanged(ConnectionState.DISCONNECTED, "Disconnected")
-        Log.d(TAG, "WebSocket Bridge Disconnected manually")
+        updateState(State.DISCONNECTED, "Disconnected by user")
+    }
+
+    fun isConnected(): Boolean = currentState == State.CONNECTED
+
+    private fun createListener() = object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) {
+            NexusApplication.log("INFO", "WSBridge", "WebSocket TCP connection established. Sending AUTH handshake...")
+            sendAuthHandshake()
+        }
+
+        override fun onMessage(webSocket: WebSocket, text: String) {
+            handleTextMessage(text)
+        }
+
+        override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            onAiAudioReceived?.invoke(bytes.toByteArray())
+        }
+
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            NexusApplication.log("INFO", "WSBridge", "WebSocket closing: $code / $reason")
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            NexusApplication.log("INFO", "WSBridge", "WebSocket closed: $code / $reason")
+            updateState(State.DISCONNECTED, reason)
+            scheduleReconnect()
+        }
+
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            NexusApplication.log("WARN", "WSBridge", "WebSocket transport failure: ${t.message}")
+            updateState(State.ERROR, t.message)
+            scheduleReconnect()
+        }
+    }
+
+    private fun handleTextMessage(text: String) {
+        try {
+            val json = JSONObject(text)
+            val type = json.optString("type")
+            val event = json.optString("event")
+
+            if (type == "AUTH_SUCCESS" || event == "AUTH_SUCCESS") {
+                NexusApplication.log("INFO", "WSBridge", "✓ Authenticated with Nexus OS successfully.")
+                updateState(State.CONNECTED, "Online & Connected")
+                mainHandler.post(pingRunnable)
+            } else if (type == "PONG") {
+                if (pingStartTime > 0) {
+                    val rtt = (System.currentTimeMillis() - pingStartTime).toInt()
+                    onLatencyUpdated?.invoke(rtt)
+                }
+            } else if (type == "AUTH_ERROR") {
+                NexusApplication.log("ERROR", "WSBridge", "Authentication rejected by backend.")
+                updateState(State.ERROR, "Authentication failed")
+            } else if (event == "SET_AUTO_ANSWER") {
+                val autoAns = json.optBoolean("auto_answer", true)
+                onRemoteSettingChanged?.invoke("auto_answer", autoAns)
+                mainHandler.post { onConfigUpdated?.invoke() }
+            } else if (event == "SET_AUTO_ANSWER_DELAY") {
+                val delay = json.optInt("delay_sec", 3)
+                onRemoteSettingChanged?.invoke("auto_answer_delay_sec", delay)
+                mainHandler.post { onConfigUpdated?.invoke() }
+            } else if (event == "SET_OUTBOUND_AI") {
+                val outbound = json.optBoolean("outbound_ai_enabled", true)
+                onRemoteSettingChanged?.invoke("outbound_ai_enabled", outbound)
+                mainHandler.post { onConfigUpdated?.invoke() }
+            } else if (type == "AGENT_CONFIG_UPDATED" || event == "AGENT_CONFIG_UPDATED" || type == "CONFIG_UPDATE" || event == "CONFIG_UPDATE") {
+                NexusApplication.log("INFO", "WSBridge", "Received live AGENT_CONFIG_UPDATED event from Nexus OS.")
+                mainHandler.post {
+                    onConfigUpdated?.invoke()
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore parse errors
+        }
+    }
+
+    private fun sendAuthHandshake() {
+        val payload = JSONObject().apply {
+            put("event", "AUTH")
+            put("device_token", deviceToken)
+            put("device_id", deviceId)
+            put("timestamp", System.currentTimeMillis() / 1000)
+
+            telemetryProvider?.invoke()?.let { (telemetry, subsPair, controls) ->
+                val (subs, selectedSubId) = subsPair
+                val (autoAns, delaySec, outboundAi) = controls
+
+                val subsArray = JSONArray()
+                subs.forEach { sub ->
+                    subsArray.put(
+                        JSONObject().apply {
+                            put("sub_id", sub.subId)
+                            put("slot_index", sub.slotIndex)
+                            put("carrier", sub.carrierName)
+                            put("number", sub.number ?: "")
+                            put("is_esim", sub.isEsim)
+                            put("signal_dbm", sub.signalDbm)
+                        }
+                    )
+                }
+
+                val primaryNum = subs.firstOrNull { it.subId == selectedSubId }?.number
+                    ?: subs.firstOrNull { !it.number.isNullOrBlank() }?.number
+                    ?: ""
+
+                put("model", "${telemetry.manufacturer} ${telemetry.model}")
+                put("name", "${telemetry.manufacturer} ${telemetry.model}")
+                put("os_version", telemetry.osVersion)
+                put("battery_level", telemetry.batteryLevel)
+                put("is_charging", telemetry.isCharging)
+                put("network_type", telemetry.networkType)
+                put("carrier_name", telemetry.carrierName)
+                put("sim_number", primaryNum)
+                put("signal_dbm", telemetry.signalDbm)
+                put("latency_ms", telemetry.latencyMs)
+                put("subscriptions", subsArray)
+                put("selected_sub_id", selectedSubId)
+                put("auto_answer", autoAns)
+                put("auto_answer_delay_sec", delaySec)
+                put("outbound_ai_enabled", outboundAi)
+            }
+        }
+        webSocket?.send(payload.toString())
+    }
+
+    fun sendTelemetry(telemetry: DeviceTelemetry, subs: List<SimSubscriptionInfo>, selectedSubId: Int) {
+        if (currentState != State.CONNECTED) return
+
+        val subsArray = JSONArray()
+        subs.forEach { sub ->
+            subsArray.put(
+                JSONObject().apply {
+                    put("sub_id", sub.subId)
+                    put("slot_index", sub.slotIndex)
+                    put("carrier", sub.carrierName)
+                    put("number", sub.number ?: "")
+                    put("is_esim", sub.isEsim)
+                    put("signal_dbm", sub.signalDbm)
+                }
+            )
+        }
+
+        val primaryNum = subs.firstOrNull { it.subId == selectedSubId }?.number
+            ?: subs.firstOrNull { !it.number.isNullOrBlank() }?.number
+            ?: ""
+
+        val payload = JSONObject().apply {
+            put("event", "TELEMETRY")
+            put("model", "${telemetry.manufacturer} ${telemetry.model}")
+            put("os_version", telemetry.osVersion)
+            put("battery_level", telemetry.batteryLevel)
+            put("is_charging", telemetry.isCharging)
+            put("network_type", telemetry.networkType)
+            put("carrier_name", telemetry.carrierName)
+            put("sim_number", primaryNum)
+            put("signal_dbm", telemetry.signalDbm)
+            put("latency_ms", telemetry.latencyMs)
+            put("subscriptions", subsArray)
+            put("selected_sub_id", selectedSubId)
+        }
+
+        webSocket?.send(payload.toString())
+    }
+
+    fun sendCallActive(callerNumber: String?) {
+        val payload = JSONObject().apply {
+            put("event", "CALL_ACTIVE")
+            put("caller_number", callerNumber ?: "Unknown")
+            put("timestamp", System.currentTimeMillis() / 1000)
+        }
+        webSocket?.send(payload.toString())
+    }
+
+    fun sendCallEnded(durationSec: Long) {
+        val payload = JSONObject().apply {
+            put("event", "CALL_ENDED")
+            put("duration_sec", durationSec)
+            put("timestamp", System.currentTimeMillis() / 1000)
+        }
+        webSocket?.send(payload.toString())
+    }
+
+    fun sendAudioFrame(pcmChunk: ByteArray) {
+        if (currentState == State.CONNECTED) {
+            webSocket?.send(pcmChunk.toByteString())
+        }
+    }
+
+    private fun sendPing() {
+        pingStartTime = System.currentTimeMillis()
+        val payload = JSONObject().apply {
+            put("event", "PING")
+            put("timestamp", pingStartTime)
+
+            telemetryProvider?.invoke()?.let { (telemetry, subsPair, controls) ->
+                val (subs, selectedSubId) = subsPair
+                val (autoAns, delaySec, outboundAi) = controls
+
+                val primaryNum = subs.firstOrNull { it.subId == selectedSubId }?.number
+                    ?: subs.firstOrNull { !it.number.isNullOrBlank() }?.number
+                    ?: ""
+
+                put("model", "${telemetry.manufacturer} ${telemetry.model}")
+                put("os_version", telemetry.osVersion)
+                put("battery_level", telemetry.batteryLevel)
+                put("is_charging", telemetry.isCharging)
+                put("network_type", telemetry.networkType)
+                put("carrier_name", telemetry.carrierName)
+                put("sim_number", primaryNum)
+                put("signal_dbm", telemetry.signalDbm)
+                put("latency_ms", telemetry.latencyMs)
+                put("auto_answer", autoAns)
+                put("auto_answer_delay_sec", delaySec)
+                put("outbound_ai_enabled", outboundAi)
+            }
+        }
+        webSocket?.send(payload.toString())
+    }
+
+    private fun updateState(newState: State, msg: String?) {
+        currentState = newState
+        mainHandler.post {
+            onStateChanged?.invoke(newState, msg)
+        }
+    }
+
+    private fun scheduleReconnect() {
+        if (isManualDisconnect.get() || currentUrl.isBlank()) return
+        mainHandler.postDelayed({
+            if (!isManualDisconnect.get() && currentState != State.CONNECTED) {
+                NexusApplication.log("INFO", "WSBridge", "Attempting automatic reconnection...")
+                connect(currentUrl)
+            }
+        }, 5000L)
     }
 }

@@ -365,7 +365,7 @@ class LiveKnowledgeService:
     async def resolve_realtime_knowledge_query(cls, user_text: str) -> Optional[str]:
         """
         Silently evaluates caller inquiry dynamically and retrieves real-time ground truth facts in <50ms.
-        Dispatches to Free Public APIs (Weather, Dictionaries, Music, Countries, Currency, Search).
+        Dispatches to Free Public APIs (Weather, Dictionaries, Music, Countries, Currency, Search, Catalog).
         Zero-hardcoded and language-agnostic across 104+ global languages.
         """
         txt = user_text.strip()
@@ -374,18 +374,36 @@ class LiveKnowledgeService:
 
         # Factual query resolution for weather or explicit knowledge lookups
         words = txt.split()
-        if len(words) >= 2 and "?" in txt or any(len(w) >= 3 for w in words):
-            # Dynamic lookup for weather if query references atmospheric conditions
+        if len(words) >= 1:
+            # 1. Dynamic lookup for real-time clock / time / date
+            if re.search(r'\b(time|clock|samay|samye|waqt|baje|ghadi|date|tarikh|din|aaj)\b', txt, re.IGNORECASE):
+                dt = cls.get_live_datetime_context()
+                return f"REAL-TIME CLOCK & DATE GROUND TRUTH: Current time is {dt['current_time']} on {dt['day_of_week']}, {dt['current_date']} (Timezone: {dt['timezone']})."
+
+            # 2. Dynamic lookup for weather if query references atmospheric conditions
             if re.search(r'\b(weather|temperature|forecast|climate|mausam|mosam)\b', txt, re.IGNORECASE):
                 res = await cls.get_live_weather(txt)
                 if res:
                     return f"REAL-TIME WEATHER GROUND TRUTH: {res}"
 
-            # Dynamic lookup for financial currencies
+            # 3. Dynamic lookup for financial currencies
             if re.search(r'\b(currency|forex|dollar|rupee|usd|inr|crypto|bitcoin|btc|ethereum|eth|solana)\b', txt, re.IGNORECASE):
                 from_c = "BTC" if "btc" in txt.lower() or "bitcoin" in txt.lower() else ("ETH" if "eth" in txt.lower() or "ethereum" in txt.lower() else ("USD" if "dollar" in txt.lower() or "usd" in txt.lower() else "EUR"))
                 res = await cls.get_live_currency_rate(from_curr=from_c, to_curr="INR")
                 if res:
                     return f"REAL-TIME FINANCIAL GROUND TRUTH: {res}"
+
+            # 4. Dynamic lookup in Public APIs catalog (e.g. phone specs, APIs, validations)
+            if re.search(r'\b(api|apis|spec|specification|specs|phone spec|lookup|catalog)\b', txt, re.IGNORECASE):
+                cat_results = cls.search_public_apis_catalog(txt, limit=2)
+                if cat_results:
+                    api_summaries = "; ".join([f"{a.get('api')}: {a.get('description')} ({a.get('url')})" for a in cat_results])
+                    return f"PUBLIC APIS CATALOG GROUND TRUTH: {api_summaries}"
+
+            # 5. Dynamic Encyclopedic / Factual Web Search
+            if len(words) >= 3 and any(w in txt.lower() for w in ["kya hai", "what is", "who is", "tell me about", "kaha hai", "where is", "details of"]):
+                search_res = await cls.get_live_search_summary(txt)
+                if search_res:
+                    return f"FACTUAL SEARCH GROUND TRUTH: {search_res}"
 
         return None

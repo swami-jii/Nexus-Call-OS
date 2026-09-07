@@ -1166,6 +1166,138 @@ class DynamicLLMInvoker:
         return {"text": None, "error": f"Failed to execute reasoning with provider '{provider}'."}
 
     @classmethod
+    async def call_conversation_llm_async(
+        cls,
+        system_prompt: str,
+        conversation_history: list[dict[str, str]],
+        config: dict,
+        max_tokens: int = 150,
+        temperature: float = 0.35,
+    ) -> dict:
+        """
+        Executes multi-turn conversation LLM completion asynchronously across any connected provider
+        strictly using dynamic Tab 1 / API & Integrations SSOT config.
+        """
+        provider = (config.get("provider") or "").lower().strip()
+        api_key = config.get("api_key", "")
+        model = str(config.get("model") or "").strip()
+        base_url = config.get("base_url")
+
+        if not api_key and provider not in ["ollama"]:
+            return {"text": None, "error": f"Missing credentials for provider '{provider}'."}
+
+        target_model = model
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                # 1. Google Gemini Protocol
+                if provider in ["gemini", "google", "google_ai_studio", "google_cloud"]:
+                    clean_model = target_model.replace("models/", "").strip()
+                    if not clean_model:
+                        return {"text": None, "error": "No valid model specified."}
+
+                    contents = []
+                    for msg in conversation_history:
+                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "model"
+                        txt = (msg.get("text") or "").strip()
+                        if txt:
+                            if contents and contents[-1]["role"] == role:
+                                contents[-1]["parts"][0]["text"] += f"\n{txt}"
+                            else:
+                                contents.append({"role": role, "parts": [{"text": txt}]})
+
+                    if not contents:
+                        return {"text": None, "error": "Empty conversation."}
+                    if contents[0]["role"] != "user":
+                        contents.insert(0, {"role": "user", "parts": [{"text": "Hello"}]})
+
+                    clean_key = api_key.replace("Bearer ", "").strip()
+                    endpoint = f"{base_url.rstrip('/')}/models/{clean_model}:generateContent?key={clean_key}" if base_url else f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={clean_key}"
+
+                    res = await client.post(
+                        endpoint,
+                        headers={"Content-Type": "application/json"},
+                        json={
+                            "systemInstruction": {"parts": [{"text": system_prompt}]},
+                            "contents": contents,
+                            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+                        },
+                        timeout=8.0,
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                return {"text": parts[0].get("text", "").strip(), "error": None}
+                    else:
+                        err_msg = res.text[:200]
+                        return {"text": None, "error": f"Google Gemini API error ({res.status_code}): {err_msg}"}
+
+                # 2. Anthropic Claude Protocol
+                elif provider in ["anthropic", "claude"]:
+                    messages = []
+                    for msg in conversation_history:
+                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
+                        txt = (msg.get("text") or "").strip()
+                        if txt:
+                            messages.append({"role": role, "content": txt})
+
+                    endpoint = f"{base_url.rstrip('/')}/messages" if base_url else "https://api.anthropic.com/v1/messages"
+                    res = await client.post(
+                        endpoint,
+                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+                        json={"model": target_model, "system": system_prompt, "messages": messages, "max_tokens": max_tokens},
+                        timeout=8.0,
+                    )
+                    if res.status_code == 200:
+                        content = res.json().get("content", [])
+                        if content:
+                            return {"text": content[0].get("text", "").strip(), "error": None}
+                    else:
+                        return {"text": None, "error": f"Anthropic API error ({res.status_code}): {res.text[:200]}"}
+
+                # 3. Universal OpenAI-Compatible Standard (All connected providers in API & Integrations SSOT)
+                else:
+                    if base_url:
+                        endpoint = base_url.strip().rstrip("/")
+                        if not endpoint.endswith("/chat/completions"):
+                            endpoint = f"{endpoint}/chat/completions"
+                    else:
+                        endpoint = "https://api.openai.com/v1/chat/completions"
+
+                    messages = [{"role": "system", "content": system_prompt}]
+                    for msg in conversation_history:
+                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
+                        txt = (msg.get("text") or "").strip()
+                        if txt:
+                            messages.append({"role": role, "content": txt})
+
+                    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+                    if "openrouter" in provider:
+                        headers["HTTP-Referer"] = "http://localhost:3000"
+                        headers["X-Title"] = "Nexus Call OS"
+
+                    res = await client.post(
+                        endpoint,
+                        headers=headers,
+                        json={"model": target_model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
+                        timeout=8.0,
+                    )
+                    if res.status_code == 200:
+                        choices = res.json().get("choices", [])
+                        if choices:
+                            return {"text": choices[0].get("message", {}).get("content", "").strip(), "error": None}
+                    else:
+                        return {"text": None, "error": f"Provider '{provider}' error ({res.status_code}): {res.text[:200]}"}
+
+            except Exception as e:
+                return {"text": None, "error": str(e)}
+
+        return {"text": None, "error": f"Failed to execute call with provider '{provider}'."}
+
+    @classmethod
     def call_multimodal_llm(
         cls,
         system_prompt: str,
@@ -1182,16 +1314,13 @@ class DynamicLLMInvoker:
         if provider == "none" or (not api_key and provider not in ["ollama"]):
             return {"text": None, "error": f"Missing API credentials for provider '{provider}'."}
 
-        target_model = model or "gemini-2.0-flash-exp"
+        target_model = model.replace("models/", "").strip()
+        if not target_model:
+            return {"text": None, "error": f"No active model specified for provider '{provider}'."}
 
         # 1. Google Gemini Multimodal Visual Inspection
         if provider in ["google", "gemini", "google_ai_studio", "google_cloud"]:
             try:
-                if "3.1" in target_model.lower() or "3-flash" in target_model.lower():
-                    target_model = "gemini-3-flash-preview"
-                elif "2.0" in target_model.lower() or "1.5" in target_model.lower():
-                    target_model = "gemini-2.5-flash"
-
                 clean_key = api_key.replace("Bearer ", "").strip()
                 if clean_key.startswith("ya29."):
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent"

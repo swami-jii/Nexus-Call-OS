@@ -116,6 +116,20 @@ class CoreRuntimeOrchestrator:
             "event_flow": flow.get_pipeline_history(),
         }
 
+    async def process_turn(
+        self,
+        session_id: str,
+        user_speech: str,
+        agent_id: Optional[str] = None,
+        ai_response_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Convenience alias for process_user_speech_turn."""
+        return await self.process_user_speech_turn(
+            session_id=session_id,
+            user_speech_text=user_speech,
+            ai_response_override=ai_response_override,
+        )
+
     async def end_voice_session(self, session_id: str, reason: str = "normal_clearing") -> Dict[str, Any]:
         """End voice session and perform complete 6-stage cleanup."""
         flow = self._event_flows.get(session_id)

@@ -9,12 +9,12 @@ from backend.database.session import get_db
 from backend.integrations.deepgram_provider import DeepgramProvider
 from backend.integrations.elevenlabs_provider import ElevenLabsProvider
 from backend.integrations.llm_provider import GeminiProvider, OpenAIProvider
-from backend.integrations.manager import provider_manager
 from backend.integrations.twilio_provider import TwilioProvider
 from backend.models.models import User
 from backend.integrations.registry_service import registry_service
 from backend.voice_pipeline.calling_optimizer import calling_optimizer
 from backend.routers.credentials import resolve_credential_key
+from backend.integrations.manager import provider_manager
 
 router = APIRouter(prefix="/api/providers", tags=["Voice Provider Layer"])
 

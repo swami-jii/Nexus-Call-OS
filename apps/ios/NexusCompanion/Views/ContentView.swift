@@ -98,7 +98,7 @@ struct ConnectionStatusCard: View {
                 Text("Backend Gateway URL")
                     .font(.caption2)
                     .foregroundColor(.gray)
-                TextField("ws://192.168.1.34:8000", text: $viewModel.serverUrl)
+                TextField("ws://192.168.1.33:8000", text: $viewModel.serverUrl)
                     .font(.system(size: 13, design: .monospaced))
                     .padding(10)
                     .background(Color.black.opacity(0.3))

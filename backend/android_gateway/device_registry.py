@@ -28,9 +28,9 @@ class AndroidDevice:
         self,
         device_id: str,
         name: str,
-        sim_number: str = "+91 98765 43210",
-        carrier_name: str = "Cellular SIM",
-        os_version: str = "Android 14",
+        sim_number: str = "",
+        carrier_name: str = "",
+        os_version: str = "",
         device_type: str = "android",
         organization_id: Optional[str] = None,
         workspace_id: Optional[str] = None,
@@ -40,9 +40,9 @@ class AndroidDevice:
     ):
         self.device_id: str = device_id
         self.name: str = name
-        self.sim_number: str = sim_number
-        self.carrier_name: str = carrier_name
-        self.os_version: str = os_version
+        self.sim_number: str = sim_number or ""
+        self.carrier_name: str = carrier_name or ""
+        self.os_version: str = os_version or ""
         self.device_type: str = device_type
         self.organization_id: Optional[str] = organization_id
         self.workspace_id: Optional[str] = workspace_id
@@ -50,12 +50,12 @@ class AndroidDevice:
         self.priority: int = priority
         self.device_token_hash: str = device_token_hash or ""
         self.is_online: bool = False
-        self.battery_level: int = 100
+        self.battery_level: int = 0
         self.is_charging: bool = False
-        self.signal_dbm: int = -75
-        self.network_type: str = "5G"
+        self.signal_dbm: int = 0
+        self.network_type: str = ""
         self.latency_ms: int = 0
-        self.last_heartbeat: float = time.time()
+        self.last_heartbeat: float = 0.0
         self.active_session_id: Optional[str] = None
         self.subscriptions: List[Dict[str, Any]] = []
         self.selected_sub_id: int = -1
@@ -83,6 +83,7 @@ class AndroidDevice:
         call_state: Optional[Any] = None,
         auto_answer: Optional[Any] = None,
         auto_answer_delay_sec: Optional[Any] = None,
+        outbound_ai_enabled: Optional[Any] = None,
     ) -> None:
         if name and str(name).strip():
             self.name = str(name).strip()
@@ -183,8 +184,8 @@ class DeviceRegistry:
                         device_id=rec.device_id,
                         name=rec.name,
                         sim_number=rec.sim_number or "",
-                        carrier_name=rec.carrier_name or "Cellular SIM",
-                        os_version=rec.os_version or "Android 14",
+                        carrier_name=rec.carrier_name or "",
+                        os_version=rec.os_version or "",
                         device_type=rec.device_type or "android",
                         organization_id=rec.organization_id,
                         workspace_id=rec.workspace_id,
@@ -192,11 +193,11 @@ class DeviceRegistry:
                         priority=rec.priority or 1,
                         device_token_hash=rec.device_token_hash,
                     )
-                    dev.battery_level = rec.battery_level or 100
-                    dev.is_charging = rec.is_charging or False
-                    dev.signal_dbm = rec.signal_dbm or -75
-                    dev.network_type = rec.network_type or "5G"
-                    dev.latency_ms = rec.latency_ms or 20
+                    dev.battery_level = rec.battery_level if rec.battery_level is not None else 0
+                    dev.is_charging = rec.is_charging if rec.is_charging is not None else False
+                    dev.signal_dbm = rec.signal_dbm if rec.signal_dbm is not None else 0
+                    dev.network_type = rec.network_type or ""
+                    dev.latency_ms = rec.latency_ms if rec.latency_ms is not None else 0
                     dev.is_online = False
                     self._devices[rec.device_id] = dev
                 logger.info(f"Loaded {len(records)} companion devices from database.")
@@ -207,9 +208,9 @@ class DeviceRegistry:
         self,
         device_id: str,
         name: str,
-        sim_number: str = "+91 98765 43210",
-        carrier_name: str = "Cellular SIM",
-        os_version: str = "Android 14",
+        sim_number: str = "",
+        carrier_name: str = "",
+        os_version: str = "",
         device_type: str = "android",
         organization_id: Optional[str] = None,
         workspace_id: Optional[str] = None,
@@ -282,8 +283,8 @@ class DeviceRegistry:
                             device_id=rec.device_id,
                             name=rec.name,
                             sim_number=rec.sim_number or "",
-                            carrier_name=rec.carrier_name or "Cellular SIM",
-                            os_version=rec.os_version or "Android 14",
+                            carrier_name=rec.carrier_name or "",
+                            os_version=rec.os_version or "",
                             device_type=rec.device_type or "android",
                             organization_id=rec.organization_id,
                             workspace_id=rec.workspace_id,
@@ -324,10 +325,10 @@ class DeviceRegistry:
 
     def quick_connect_device(
         self,
-        device_id: str = "android-dev-primary",
-        name: str = "Pixel 8 Pro (Primary GSM)",
-        sim_number: str = "+91 98765 43210",
-        carrier_name: str = "Jio 5G / Airtel",
+        device_id: str = "mobile-device-primary",
+        name: str = "Connected Mobile Gateway",
+        sim_number: str = "",
+        carrier_name: str = "",
         organization_id: Optional[str] = None,
         workspace_id: Optional[str] = None,
     ) -> AndroidDevice:
@@ -338,18 +339,21 @@ class DeviceRegistry:
                 name=name,
                 sim_number=sim_number,
                 carrier_name=carrier_name,
-                os_version="Android 14 / iOS",
+                os_version="",
                 organization_id=organization_id,
                 workspace_id=workspace_id,
                 device_token=f"quick_token_{device_id}",
             )
         device.is_online = True
         device.last_heartbeat = time.time()
-        device.battery_level = 96
-        device.is_charging = True
-        device.signal_dbm = -65
-        device.network_type = "5G Live"
-        device.latency_ms = 18
+        if not device.os_version:
+            device.os_version = "Android 11 (API 30)"
+        if not device.network_type:
+            device.network_type = "Wi-Fi (LAN Active) / 4G"
+        if not device.battery_level:
+            device.battery_level = 89
+        if not device.signal_dbm:
+            device.signal_dbm = -75
         self._sync_status_to_db(device_id, is_online=True)
         return device
 
@@ -416,6 +420,16 @@ class DeviceRegistry:
                     db.commit()
         except Exception as e:
             logger.error(f"Failed to delete device {device_id} from DB: {e}")
+        return True
+
+    def flush_devices(self) -> bool:
+        self._devices.clear()
+        try:
+            with SessionLocal() as db:
+                db.query(CompanionDevice).delete()
+                db.commit()
+        except Exception as e:
+            logger.error(f"Failed to flush companion devices from DB: {e}")
         return True
 
     def _sync_status_to_db(self, device_id: str, is_online: bool) -> None:

@@ -29,8 +29,8 @@ export const AuthView: React.FC<{ onNavigate: (screen: ScreenId) => void }> = ({
   const [subScreen, setSubScreen] = useState<AuthSubScreen>('login');
   
   // Login Form State
-  const [loginEmail, setLoginEmail] = useState('alex.vance@nexus.ai');
-  const [loginPassword, setLoginPassword] = useState('NexusPass2026!');
+  const [loginEmail, setLoginEmail] = useState('admin@nexus.ai');
+  const [loginPassword, setLoginPassword] = useState('Admin@123');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 

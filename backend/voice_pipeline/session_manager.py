@@ -18,10 +18,10 @@ class CallSession:
     conversation_history: list[dict[str, str]] = field(default_factory=list)
     provider_states: dict[str, Any] = field(
         default_factory=lambda: {
-            "telephony": "Twilio",
-            "stt": "Deepgram",
-            "tts": "ElevenLabs",
-            "llm": "Gemini",
+            "telephony": "Active Carrier",
+            "stt": "Active STT Engine",
+            "tts": "Active TTS Engine",
+            "llm": "Active LLM Model",
         }
     )
     latency_ms: dict[str, float] = field(
@@ -68,7 +68,7 @@ class CallSession:
         )
         calculated = CostTracker.calculate_call_cost(
             duration_seconds=duration_sec,
-            llm_provider=self.provider_states.get("llm", "Gemini"),
+            llm_provider=self.provider_states.get("llm", ""),
             llm_tokens=self.tokens_used,
             tts_chars=tts_chars,
         )

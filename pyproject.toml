@@ -25,3 +25,9 @@ reportGeneralTypeIssues = "none"
 reportAttributeAccessIssue = "none"
 reportOptionalMemberAccess = "none"
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["backend/tests"]
+python_files = ["test_*.py"]
+
+

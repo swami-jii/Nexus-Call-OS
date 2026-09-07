@@ -3444,3 +3444,43 @@ export const getCountryByDialCode = (dialCode: string): GlobalCountryCodeItem | 
     (c) => c.dialCode.replace(/^\+/, '').trim() === clean || c.allDialCodes.some((d) => d.replace(/^\+/, '').trim() === clean)
   );
 };
+
+export interface Country {
+  name: string;
+  code: string;
+  dialCode: string;
+  flag: string;
+  format?: string;
+}
+
+export const ALL_COUNTRIES: Country[] = GLOBAL_COUNTRY_CODES_CATALOG.map((c) => ({
+  name: c.name,
+  code: c.iso2,
+  dialCode: c.dialCode,
+  flag: c.flag,
+  format: '### ### ####',
+}));
+
+export function detectCountryFromPhone(input: string): Country | null {
+  if (!input) return null;
+  const clean = input.trim().replace(/^00/, '+');
+  if (clean.startsWith('+')) {
+    const digitsOnly = clean.replace(/\D/g, '');
+    for (let len = 4; len >= 1; len--) {
+      const prefix = '+' + digitsOnly.slice(0, len);
+      const matched = GLOBAL_COUNTRY_CODES_CATALOG.find(
+        (c) => c.dialCode === prefix || c.allDialCodes.includes(prefix)
+      );
+      if (matched) {
+        return {
+          name: matched.name,
+          code: matched.iso2,
+          dialCode: matched.dialCode,
+          flag: matched.flag,
+          format: '### ### ####',
+        };
+      }
+    }
+  }
+  return null;
+}

@@ -10,9 +10,13 @@ import time
 import logging
 from typing import Any, Dict, Optional
 from backend.telephony.interfaces import ITelephonyProvider, TelephonyCallStatus
-from backend.routers.android_gateway_router import _ws_bridge_server, _device_registry
 
 logger = logging.getLogger("NexusAndroidAdapter")
+
+
+def _get_gateway_deps():
+    from backend.routers.android_gateway_router import _ws_bridge_server, _device_registry
+    return _ws_bridge_server, _device_registry
 
 
 class AndroidCompanionProviderAdapter(ITelephonyProvider):
@@ -25,7 +29,7 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
 
     async def connect(self, connection_params: Dict[str, Any]) -> bool:
         self.device_id = connection_params.get("device_id", "android-primary")
-        ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+        ws_bridge, dev_registry = _get_gateway_deps()
         
         # Verify device exists and is online
         dev = dev_registry.get_device(self.device_id)
@@ -36,6 +40,22 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
         self.is_connected = True
         self.call_status = TelephonyCallStatus.IN_PROGRESS
         dev.active_session_id = self.session_id
+        
+        # If destination phone number is provided, command Android phone to dial via configured SIM
+        phone_number = connection_params.get("phone_number")
+        if phone_number:
+            ws = ws_bridge._active_connections.get(self.device_id)
+            if ws:
+                try:
+                    await ws.send_json({
+                        "event": "OUTGOING_CALL",
+                        "session_id": self.session_id,
+                        "phone_number": phone_number,
+                        "subscription_id": dev.selected_sub_id,
+                    })
+                except Exception as e:
+                    logger.warning(f"Error sending OUTGOING_CALL to companion: {e}")
+
         logger.info(f"[AndroidAdapter] Session {self.session_id} connected to companion {self.device_id}")
         return True
 
@@ -43,7 +63,7 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
         self.is_connected = False
         self.call_status = TelephonyCallStatus.COMPLETED
         if self.device_id:
-            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            ws_bridge, dev_registry = _get_gateway_deps()
             dev = dev_registry.get_device(self.device_id)
             if dev and dev.active_session_id == self.session_id:
                 dev.active_session_id = None
@@ -52,7 +72,7 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
     async def answer_call(self) -> bool:
         self.call_status = TelephonyCallStatus.IN_PROGRESS
         if self.device_id:
-            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            ws_bridge, dev_registry = _get_gateway_deps()
             ws = ws_bridge._active_connections.get(self.device_id)
             if ws:
                 try:
@@ -65,7 +85,7 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
         self.is_connected = False
         self.call_status = TelephonyCallStatus.COMPLETED
         if self.device_id:
-            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            ws_bridge, dev_registry = _get_gateway_deps()
             ws = ws_bridge._active_connections.get(self.device_id)
             if ws:
                 try:
@@ -89,14 +109,14 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
         """Streams outbound AI speech PCM payload to companion device AudioTrack."""
         if not self.device_id or not self.is_connected:
             return False
-        ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+        ws_bridge, dev_registry = _get_gateway_deps()
         return await ws_bridge.send_audio_frame(self.device_id, pcm_payload)
 
     async def receive_audio(self) -> Optional[bytes]:
         """Pops the oldest inbound PCM audio frame received from companion microphone."""
         if not self.device_id:
             return None
-        ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+        ws_bridge, dev_registry = _get_gateway_deps()
         buffer = ws_bridge._audio_buffers.get(self.device_id)
         if buffer and len(buffer) > 0:
             return buffer.pop(0)
@@ -104,7 +124,7 @@ class AndroidCompanionProviderAdapter(ITelephonyProvider):
 
     async def send_dtmf(self, digits: str) -> bool:
         if self.device_id:
-            ws_bridge, dev_registry = _ws_bridge_server, _device_registry
+            ws_bridge, dev_registry = _get_gateway_deps()
             ws = ws_bridge._active_connections.get(self.device_id)
             if ws:
                 try:

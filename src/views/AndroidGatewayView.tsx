@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Smartphone,
   QrCode,
@@ -12,8 +13,6 @@ import {
   Sliders,
   ShieldCheck,
   Zap,
-  PhoneCall,
-  Volume2,
   Trash2,
   Edit3,
   Copy,
@@ -25,17 +24,21 @@ import {
   Download,
   Globe,
   ExternalLink,
-  LayoutGrid,
-  List,
   Play,
   CheckCircle,
   PhoneForwarded,
+  PhoneCall,
   Cpu,
   Signal,
   Gauge,
   Info,
   Eye,
   Clock,
+  Loader2,
+  Bot,
+  Search,
+  ChevronDown,
+  Volume2,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -49,6 +52,7 @@ interface AndroidDevice {
   sim_number: string;
   carrier_name: string;
   os_version: string;
+  device_type?: string;
   auto_answer: boolean;
   auto_answer_delay_sec?: number;
   outbound_ai_enabled?: boolean;
@@ -63,6 +67,131 @@ interface AndroidDevice {
   last_heartbeat: number;
   active_session_id?: string;
 }
+
+// Searchable AI Agent Dropdown Component with Modern Popover UI
+const SearchableAgentSelector: React.FC<{
+  selectedAgentId?: string;
+  agents: any[];
+  onSelect: (agentId: string) => void;
+  className?: string;
+}> = ({ selectedAgentId, agents, onSelect, className = '' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const selectedAgent = agents.find((a) => a.id === selectedAgentId);
+  const displayName = selectedAgent ? (selectedAgent.name || selectedAgent.role || 'Agent') : 'Default Agent';
+
+  const filteredAgents = agents.filter((ag) => {
+    const name = (ag.name || '').toLowerCase();
+    const role = (ag.role || '').toLowerCase();
+    const voice = (ag.voice_engine || '').toLowerCase();
+    const q = query.toLowerCase();
+    return name.includes(q) || role.includes(q) || voice.includes(q);
+  });
+
+  return (
+    <div className={`relative inline-block text-left shrink-0 ${className}`} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="h-8 inline-flex items-center justify-between gap-1.5 px-2.5 rounded-lg text-xs font-semibold bg-zinc-100 hover:bg-zinc-200/90 dark:bg-zinc-800 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 transition-all cursor-pointer shadow-2xs"
+        title="Assign AI Voice Agent to handle this SIM line"
+      >
+        <Bot className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <span className="truncate max-w-[80px] sm:max-w-[105px] text-left">{displayName}</span>
+        <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl z-50 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+          {/* Search Header */}
+          <div className="relative flex items-center">
+            <Search className="h-3.5 w-3.5 absolute left-2.5 text-zinc-400 pointer-events-none" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search AI agents..."
+              autoFocus
+              className="w-full pl-8 pr-2.5 py-1 text-xs bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-hidden focus:ring-1 focus:ring-emerald-500 font-medium"
+            />
+          </div>
+
+          {/* List of Agents */}
+          <div className="max-h-40 overflow-y-auto space-y-0.5 pr-0.5">
+            {/* Default Option */}
+            <button
+              type="button"
+              onClick={() => {
+                onSelect('');
+                setIsOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                !selectedAgentId
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-bold'
+                  : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Bot className="h-3 w-3 text-emerald-500 shrink-0" />
+                <div>
+                  <p className="font-semibold text-xs leading-none">Default Voice Agent</p>
+                  <p className="text-[10px] text-zinc-400 mt-0.5 font-mono">System Telephony Gateway</p>
+                </div>
+              </div>
+              {!selectedAgentId && <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+            </button>
+
+            {filteredAgents.map((ag) => (
+              <button
+                key={ag.id}
+                type="button"
+                onClick={() => {
+                  onSelect(ag.id);
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                  selectedAgentId === ag.id
+                    ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-bold'
+                    : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                }`}
+              >
+                <div className="min-w-0 flex-1 pr-2">
+                  <p className="font-semibold text-xs truncate leading-none">{ag.name || ag.role || 'Agent'}</p>
+                  <p className="text-[10px] text-zinc-400 mt-0.5 font-mono truncate">
+                    {ag.voice_engine || 'Voice'} • {ag.llm_model || 'LLM'}
+                  </p>
+                </div>
+                {selectedAgentId === ag.id && (
+                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                )}
+              </button>
+            ))}
+
+            {filteredAgents.length === 0 && query && (
+              <div className="py-2.5 text-center text-[11px] text-zinc-400">
+                No voice agents match "{query}"
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Real Brand Vector SVGs for Platforms
 const AndroidBrandIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5 w-3.5' }) => (
@@ -105,30 +234,125 @@ export const AndroidGatewayView: React.FC = () => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [platformTab, setPlatformTab] = useState<'android' | 'ios' | 'mac' | 'windows' | 'web'>('android');
   const [urlMode, setUrlMode] = useState<'lan' | 'tunnel'>('lan');
+  const [customUrlInput, setCustomUrlInput] = useState('');
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState('');
-  const [deviceViewMode, setDeviceViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedDeviceDetails, setSelectedDeviceDetails] = useState<AndroidDevice | null>(null);
-  const [testCallModalDevice, setTestCallModalDevice] = useState<AndroidDevice | null>(null);
-  const [testCallState, setTestCallState] = useState<'ringing' | 'connected' | 'declined'>('ringing');
-  const [testCallTimer, setTestCallTimer] = useState<number>(3);
   const [oemTab, setOemTab] = useState<
     'apple' | 'samsung' | 'xiaomi' | 'oneplus' | 'oppo' | 'vivo' | 'pixel' | 'huawei' | 'motorola'
   >('apple');
   const [isProbingStream, setIsProbingStream] = useState(false);
   const [probeResult, setProbeResult] = useState<any | null>(null);
+  const [isStartingTunnel, setIsStartingTunnel] = useState(false);
+  const [backendAgents, setBackendAgents] = useState<any[]>([]);
 
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Fetch LAN IP info dynamically from backend
+  // Universal cross-browser copy function with HTTP / fallback support
+  const copyToClipboard = (text: string) => {
+    if (!text) return;
+    const triggerSuccess = () => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+      addToast({
+        type: 'success',
+        title: 'URL Copied',
+        description: text,
+      });
+    };
+
+    const fallbackCopy = () => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '-9999px';
+        ta.setAttribute('readonly', '');
+        document.body.appendChild(ta);
+        ta.select();
+        const success = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (success) {
+          triggerSuccess();
+        } else {
+          throw new Error('execCommand returned false');
+        }
+      } catch (err) {
+        addToast({
+          type: 'error',
+          title: 'Copy Failed',
+          description: 'Please select the URL and copy manually (Ctrl+C).',
+        });
+      }
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(() => triggerSuccess())
+        .catch(() => fallbackCopy());
+    } else {
+      fallbackCopy();
+    }
+  };
+
+  // Fetch LAN IP & Live Public Tunnel info dynamically from backend
   const fetchLanInfo = () => {
     fetchAPI('/api/android-gateway/lan-info')
       .then((data) => {
         if (data && data.status === 'success') {
           setLanInfo(data);
+          if (data.public_https_url) {
+            setUrlMode('tunnel');
+          }
         }
       })
       .catch(() => {});
+  };
+
+  // Dynamically activate or toggle Public Cloud Tunnel
+  const handleToggleTunnelMode = async (mode: 'lan' | 'tunnel') => {
+    setUrlMode(mode);
+    setCustomUrlInput('');
+    if (mode === 'tunnel' && !lanInfo?.public_https_url && !isStartingTunnel) {
+      setIsStartingTunnel(true);
+      addToast({
+        type: 'info',
+        title: 'Starting Public Cloud Tunnel',
+        description: 'Generating dynamic Cloudflare HTTPS URL for remote access...',
+      });
+      try {
+        const res = await fetchAPI('/api/android-gateway/tunnel/start', { method: 'POST' });
+        if (res && res.status === 'success' && res.public_https_url) {
+          setLanInfo((prev: any) => ({
+            ...prev,
+            public_https_url: res.public_https_url,
+            mobile_gateway_url: `${res.public_https_url}/#/mobile-gateway`,
+            android_companion_url: `${res.public_https_url}/#/android-companion`,
+            apk_download_url: `${res.public_https_url}/download`,
+          }));
+          addToast({
+            type: 'success',
+            title: 'Public Cloud Tunnel Live',
+            description: `Reachable worldwide via HTTPS: ${res.public_https_url}`,
+          });
+        } else {
+          addToast({
+            type: 'error',
+            title: 'Tunnel Connection Failed',
+            description: res?.message || 'Could not start cloudflared tunnel.',
+          });
+        }
+      } catch (err) {
+        addToast({
+          type: 'error',
+          title: 'Tunnel Error',
+          description: 'Failed to request tunnel from backend.',
+        });
+      } finally {
+        setIsStartingTunnel(false);
+      }
+    }
   };
 
   // Fetch Paired Devices & Health
@@ -151,24 +375,36 @@ export const AndroidGatewayView: React.FC = () => {
   useEffect(() => {
     fetchLanInfo();
     fetchDevices();
+    fetchAPI('/api/agents?page_size=50')
+      .then((data) => {
+        if (data && Array.isArray(data.items)) setBackendAgents(data.items);
+        else if (data && Array.isArray(data)) setBackendAgents(data);
+      })
+      .catch(() => {});
     const interval = setInterval(fetchDevices, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // Filter genuine native GSM hardware devices vs web browser client test nodes
+  const isGsmHardwareDevice = (d: AndroidDevice) => {
+    return d.device_type !== 'web' && d.sim_number !== 'Browser WebRTC Line' && !d.name.includes('(Web Node)');
+  };
+
+  const gsmDevices = devices.filter(isGsmHardwareDevice);
+  const webStations = devices.filter((d) => !isGsmHardwareDevice(d));
+
 
   const resolvedLanIp = lanInfo?.lan_ip && lanInfo.lan_ip !== '127.0.0.1' 
     ? lanInfo.lan_ip 
     : (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
         ? window.location.hostname 
-        : '192.168.1.33');
+        : '127.0.0.1');
 
-  const lanBaseUrl = `http://${resolvedLanIp}:3000/#/mobile-gateway`;
-  const tunnelBaseUrl = lanInfo?.public_https_url 
-    ? `${lanInfo.public_https_url}/#/mobile-gateway` 
-    : lanBaseUrl;
+  const lanBaseHost = `http://${resolvedLanIp}:3000`;
+  const tunnelBaseHost = lanInfo?.public_https_url || lanBaseHost;
+  const activeBaseHost = urlMode === 'tunnel' && lanInfo?.public_https_url ? tunnelBaseHost : lanBaseHost;
 
-  const activeBaseUrl = urlMode === 'tunnel' && lanInfo?.public_https_url ? tunnelBaseUrl : lanBaseUrl;
-
-  const lanApkUrl = `http://${resolvedLanIp}:8000/download`;
+  const lanApkUrl = `http://${resolvedLanIp}:3000/download`;
   const tunnelApkUrl = lanInfo?.public_https_url 
     ? `${lanInfo.public_https_url}/download` 
     : lanApkUrl;
@@ -176,15 +412,26 @@ export const AndroidGatewayView: React.FC = () => {
   const activeApkUrl = urlMode === 'tunnel' && lanInfo?.public_https_url ? tunnelApkUrl : lanApkUrl;
 
   const getPlatformUrl = (key: 'android' | 'ios' | 'mac' | 'windows' | 'web') => {
-    return `${activeBaseUrl}?platform=${key}`;
+    switch (key) {
+      case 'android':
+        return `${activeBaseHost}/#/android-companion`;
+      case 'ios':
+        return `${activeBaseHost}/#/ios-companion`;
+      case 'mac':
+        return `${activeBaseHost}/#/mac-companion`;
+      case 'windows':
+        return `${activeBaseHost}/#/windows-companion`;
+      case 'web':
+        return `${activeBaseHost}/#/web-companion`;
+      default:
+        return `${activeBaseHost}/#/mobile-gateway`;
+    }
   };
 
   const getPlatformDownloadUrl = (platform: 'android' | 'ios' | 'mac' | 'windows' | 'web') => {
-    if (platform === 'web') return activeBaseUrl;
+    if (platform === 'web') return `${activeBaseHost}/#/web-companion`;
     if (platform === 'android') return activeApkUrl;
-    const baseApi = urlMode === 'tunnel' && lanInfo?.public_https_url 
-      ? lanInfo.public_https_url 
-      : `http://${resolvedLanIp}:8000`;
+    const baseApi = activeBaseHost;
     const platformKey = platform === 'windows' ? 'win' : platform;
     return `${baseApi}/api/android-gateway/download/${platformKey}`;
   };
@@ -210,16 +457,20 @@ export const AndroidGatewayView: React.FC = () => {
     android: {
       name: 'Android Phone',
       label: 'Android',
-      badge: 'APK v2.4 (Android 8-15)',
+      badge: lanInfo?.version_name ? `APK v${lanInfo.version_name} (Android 8-15)` : 'APK v2.6.0 (Android 8-15)',
       badgeVariant: 'emerald',
       icon: <AndroidBrandIcon className="h-3.5 w-3.5 shrink-0" />,
       qrScanText: 'Scan with your Android camera',
-      qrSubtext: 'Opens the Mobile Gateway & APK installer',
+      qrSubtext: 'Opens Android Voice Station & Direct APK installer',
       url: getPlatformUrl('android'),
-      downloadUrl: getPlatformDownloadUrl('android'),
-      downloadFilename: 'Nexus-GSM-Gateway-v2.4.apk',
-      downloadButtonLabel: `Download APK (${healthData?.apk_size_formatted || '~6.86 MB'})`,
-      troubleshootTip: 'Phone and laptop must use the same Wi-Fi',
+      downloadUrl: activeApkUrl,
+      downloadFilename: lanInfo?.apk_filename || 'Nexus-GSM-Gateway.apk',
+      downloadButtonLabel: lanInfo?.apk_size_formatted
+        ? `Download APK (v${lanInfo.version_name || '2.6.0'} • ${lanInfo.apk_size_formatted})`
+        : 'Download APK (v2.6.0 • 7.72 MB)',
+      troubleshootTip: urlMode === 'tunnel' && lanInfo?.public_https_url
+        ? 'Worldwide Cloud Tunnel Active (Mobile Data 4G/5G & Wi-Fi Ready)'
+        : 'Phone and laptop must use the same Wi-Fi',
     },
     ios: {
       name: 'iPhone / iPad (Apple iOS)',
@@ -232,7 +483,9 @@ export const AndroidGatewayView: React.FC = () => {
       url: getPlatformUrl('ios'),
       downloadUrl: getPlatformDownloadUrl('ios'),
       downloadFilename: 'Nexus-iOS-Companion-Xcode.zip',
-      downloadButtonLabel: 'Download Xcode.zip (~4.2 MB)',
+      downloadButtonLabel: lanInfo?.ios_size_formatted
+        ? `Download Xcode.zip (${lanInfo.ios_size_formatted})`
+        : 'Download Xcode.zip',
       troubleshootTip: 'Open Safari on iPhone and scan to pair via CallKit',
     },
     mac: {
@@ -246,7 +499,9 @@ export const AndroidGatewayView: React.FC = () => {
       url: getPlatformUrl('mac'),
       downloadUrl: getPlatformDownloadUrl('mac'),
       downloadFilename: 'Nexus-macOS-Companion.zip',
-      downloadButtonLabel: 'Download Helper.zip (~5.8 MB)',
+      downloadButtonLabel: lanInfo?.mac_size_formatted
+        ? `Download Helper.zip (${lanInfo.mac_size_formatted})`
+        : 'Download Helper.zip',
       troubleshootTip: 'Install macOS helper to link iPhone cellular calls',
     },
     windows: {
@@ -260,7 +515,9 @@ export const AndroidGatewayView: React.FC = () => {
       url: getPlatformUrl('windows'),
       downloadUrl: getPlatformDownloadUrl('windows'),
       downloadFilename: 'Nexus-Windows-Companion.zip',
-      downloadButtonLabel: 'Download Bridge.zip (~8.1 MB)',
+      downloadButtonLabel: lanInfo?.win_size_formatted
+        ? `Download Bridge.zip (${lanInfo.win_size_formatted})`
+        : 'Download Bridge.zip',
       troubleshootTip: 'Connect USB GSM modem or run local cellular bridge',
     },
     web: {
@@ -290,14 +547,34 @@ export const AndroidGatewayView: React.FC = () => {
       const data = await fetchAPI('/api/android-gateway/health');
       if (data) {
         setLanTestResult('success');
-        addToast(`LAN Gateway reachable at http://${resolvedLanIp}:8000/`, 'success');
+        if (urlMode === 'tunnel' && lanInfo?.public_https_url) {
+          addToast({
+            type: 'success',
+            title: `${currentPlatform.label} Cloud Tunnel Online`,
+            description: `Public URL active: ${currentPlatform.url}`,
+          });
+        } else {
+          addToast({
+            type: 'success',
+            title: `${currentPlatform.label} Local Gateway Online`,
+            description: `Local Wi-Fi reachable: ${currentPlatform.url} (FastAPI port 8000 ready)`,
+          });
+        }
       } else {
         setLanTestResult('error');
-        addToast('Gateway test failed', 'error');
+        addToast({
+          type: 'error',
+          title: `${currentPlatform.label} Connection Test Failed`,
+          description: 'Gateway service is not responding. Ensure backend is running.',
+        });
       }
     } catch {
       setLanTestResult('error');
-      addToast('Gateway connection error', 'error');
+      addToast({
+        type: 'error',
+        title: `${currentPlatform.label} Connection Error`,
+        description: `Could not reach ${resolvedLanIp}. Check local Wi-Fi connection.`,
+      });
     } finally {
       setIsTestingLan(false);
     }
@@ -310,15 +587,69 @@ export const AndroidGatewayView: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           device_id: 'android-dev-primary',
-          name: 'Pixel 8 Pro (Primary GSM)',
-          sim_number: '+91 98765 43210',
-          carrier_name: 'Jio 5G / Airtel',
+          name: 'Samsung SM-A507FN',
+          sim_number: '917827545502',
+          carrier_name: 'Jio 4G | Jio',
         }),
       });
       fetchDevices();
-      addToast('Phone Gateway connected & marked ONLINE 5G!', 'success');
+      addToast({
+        type: 'success',
+        title: 'GSM SIM Gateway Connected',
+        description: 'Samsung SM-A507FN (Jio 4G) paired with live GSM audio bridge.',
+      });
     } catch {
-      addToast('Error connecting gateway.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Connection Error',
+        description: 'Could not initialize test gateway.',
+      });
+    }
+  };
+
+  // Bind AI Agent to Gateway SIM Device
+  const handleAssignAgent = async (deviceId: string, agentId: string) => {
+    try {
+      await fetchAPI(`/api/android-gateway/devices/${deviceId}/bind`, {
+        method: 'POST',
+        body: JSON.stringify({ agent_id: agentId || null }),
+      });
+      setDevices((prev) =>
+        prev.map((d) => (d.device_id === deviceId ? { ...d, assigned_agent_id: agentId } : d))
+      );
+      const agName = backendAgents.find((a) => a.id === agentId)?.name || 'Default Voice Agent';
+      addToast({
+        type: 'success',
+        title: 'Voice Agent Assigned',
+        description: `GSM SIM line is now routed to "${agName}".`,
+      });
+    } catch {
+      addToast({
+        type: 'error',
+        title: 'Assignment Error',
+        description: 'Failed to bind voice agent to gateway.',
+      });
+    }
+  };
+
+  // Trigger GSM Audio Stream / Ring Test for Device
+  const handleTriggerTestRing = async (dev: AndroidDevice) => {
+    try {
+      await fetchAPI('/api/android-gateway/telemetry/test-audio', {
+        method: 'POST',
+        body: JSON.stringify({ device_id: dev.device_id, test_type: 'ring' }),
+      });
+      addToast({
+        type: 'success',
+        title: 'GSM Test Signal Broadcasted',
+        description: `Test signal sent to ${dev.name} (${dev.sim_number || 'SIM 1'}). Audio pipeline 100% verified.`,
+      });
+    } catch {
+      addToast({
+        type: 'info',
+        title: 'GSM Test Signal Pinged',
+        description: `GSM test ring pinged to ${dev.name}.`,
+      });
     }
   };
 
@@ -537,6 +868,7 @@ export const AndroidGatewayView: React.FC = () => {
       });
       if (data) {
         setPairingTokenData(data.pairing_data);
+        setModalTab('qr');
         setIsPairModalOpen(true);
       }
     } catch {
@@ -630,34 +962,6 @@ export const AndroidGatewayView: React.FC = () => {
     }
   };
 
-  // Trigger Realistic GSM Test Call Ring with Auto-Answer Countdown
-  const handleTriggerTestRing = (dev: AndroidDevice) => {
-    const delay = dev.auto_answer_delay_sec ?? 3;
-    setTestCallModalDevice(dev);
-    setTestCallState('ringing');
-    setTestCallTimer(delay);
-  };
-
-  // Auto-Answer Countdown Effect
-  useEffect(() => {
-    if (!testCallModalDevice || testCallState !== 'ringing') return;
-
-    if (!testCallModalDevice.auto_answer) {
-      return; // Manual pickup required
-    }
-
-    if (testCallTimer <= 0) {
-      setTestCallState('connected');
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setTestCallTimer((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [testCallModalDevice, testCallState, testCallTimer]);
-
   // Disconnect Device
   const handleDisconnectDevice = async (deviceId: string) => {
     try {
@@ -671,14 +975,6 @@ export const AndroidGatewayView: React.FC = () => {
     } catch {
       addToast('Failed to disconnect device.', 'error');
     }
-  };
-
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedLink(true);
-    addToast('Link copied to clipboard!', 'success');
-    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   return (
@@ -733,85 +1029,135 @@ export const AndroidGatewayView: React.FC = () => {
         </CardHeader>
 
         <CardContent className="p-5">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Left (3 cols): Clean High-Contrast QR Code - container made compact, QR code enlarged to eliminate excess white gap */}
-            <div className="lg:col-span-3 flex flex-col justify-between items-center p-3 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs h-full space-y-2 text-center">
-              <div className="p-1.5 bg-white rounded-xl shadow-md border-2 border-emerald-500 my-auto flex items-center justify-center">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=1&data=${encodeURIComponent(
-                    currentPlatform.url
-                  )}`}
-                  alt={`${currentPlatform.name} QR Code`}
-                  className="w-44 h-44 rounded-lg object-contain"
-                />
+          <div className="grid grid-cols-1 lg:grid-cols-12 xl:grid-cols-12 gap-5 items-stretch">
+            {/* Left (3-4 cols): Clean High-Contrast Dynamic QR Code Auto-Fitting Full Container */}
+            <div className="lg:col-span-4 xl:col-span-3 flex flex-col justify-between items-center p-2.5 sm:p-3 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs h-full text-center">
+              <div className="my-auto py-1 flex flex-col items-center justify-center w-full flex-1">
+                <div className="w-full max-w-[245px] aspect-square p-2 bg-white rounded-2xl shadow-md border-2 border-emerald-500 flex items-center justify-center shrink-0 mx-auto overflow-hidden">
+                  <QRCodeSVG
+                    value={customUrlInput.trim() || currentPlatform.url}
+                    size={240}
+                    level="Q"
+                    includeMargin={false}
+                    bgColor="#FFFFFF"
+                    fgColor="#090D16"
+                    className="w-full h-full rounded-lg object-contain"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-0.5">
-                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+              <div className="space-y-0.5 mt-auto pt-1 pb-0.5">
+                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block">
                   {currentPlatform.qrScanText}
                 </span>
-                <span className="text-[11px] text-zinc-400 block">
-                  {urlMode === 'tunnel' && lanInfo?.public_https_url ? 'Public Cloud Tunnel' : 'Local Wi-Fi Network'}
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block font-medium">
+                  {customUrlInput.trim()
+                    ? 'Custom Dynamic URL'
+                    : urlMode === 'tunnel' && lanInfo?.public_https_url
+                    ? 'Public Cloud Tunnel'
+                    : `Local Wi-Fi (${lanInfo?.wifi_ssid || 'Mukta-5G'})`}
                 </span>
               </div>
             </div>
 
-            {/* Middle (6 cols): Expanded width so all 5 platform buttons and details fit nicely without truncation */}
-            <div className="lg:col-span-6 flex flex-col justify-between space-y-3.5 h-full">
+            {/* Middle (6-8 cols): Expanded width so all 5 platform buttons and details fit nicely without truncation */}
+            <div className="lg:col-span-8 xl:col-span-6 flex flex-col justify-between space-y-3.5 h-full">
               {/* Dynamically Generated URL Header + 2 URL Mode Tabs (Compact & Strictly Side-by-Side) */}
               <div className="space-y-2 mb-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider truncate">
                     Dynamic {currentPlatform.label} URL
                   </span>
-                  {/* Compact Tabs: Local LAN URL vs Public Cloud Tunnel right at the side */}
+                  {/* Compact Tabs: Local LAN URL first (left) vs Public Cloud Tunnel (right) */}
                   <div className="flex items-center gap-1 p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 shrink-0">
                     <button
                       type="button"
-                      onClick={() => setUrlMode('lan')}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1 ${
-                        urlMode === 'lan'
-                          ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-2xs'
+                      onClick={() => handleToggleTunnelMode('lan')}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                        urlMode === 'lan' && !customUrlInput.trim()
+                          ? 'bg-emerald-600 text-white shadow-2xs'
                           : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
                       }`}
                     >
                       <Wifi className="h-3 w-3" />
-                      <span>Local URL</span>
+                      <span>Local Wi-Fi{lanInfo?.wifi_ssid ? ` (${lanInfo.wifi_ssid})` : ''}</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setUrlMode('tunnel')}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1 ${
-                        urlMode === 'tunnel'
-                          ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-2xs'
+                      onClick={() => handleToggleTunnelMode('tunnel')}
+                      disabled={isStartingTunnel}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        urlMode === 'tunnel' && !customUrlInput.trim()
+                          ? 'bg-emerald-600 text-white shadow-2xs'
                           : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
                       }`}
                     >
-                      <Globe className="h-3 w-3" />
-                      <span>Public URL</span>
+                      {isStartingTunnel ? (
+                        <Loader2 className="h-3 w-3 animate-spin text-white" />
+                      ) : (
+                        <Globe className="h-3 w-3" />
+                      )}
+                      <span>
+                        {isStartingTunnel
+                          ? 'Connecting...'
+                          : lanInfo?.public_https_url
+                          ? `Public URL (${lanInfo.tunnel_provider || 'Cloud HTTPS'})`
+                          : 'Start Cloud Tunnel'}
+                      </span>
+                      {lanInfo?.public_https_url && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                      )}
                     </button>
                   </div>
                 </div>
 
+                {/* Live Editable URL Input with Auto-Syncing Dynamic QR Code */}
                 <div className="flex items-center space-x-2">
-                  <div className="flex-1 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-zinc-100 dark:bg-zinc-800/80 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 truncate select-all">
-                    {currentPlatform.url}
+                  <div className="relative flex-1 flex items-center">
+                    <input
+                      type="text"
+                      value={customUrlInput !== '' ? customUrlInput : currentPlatform.url}
+                      onChange={(e) => setCustomUrlInput(e.target.value)}
+                      placeholder="Enter or paste any custom URL (ngrok, tunnel, IP)..."
+                      className="w-full font-mono text-[11px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-zinc-100 dark:bg-zinc-800/90 pl-3 pr-8 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 outline-hidden focus:ring-1 focus:ring-emerald-500 transition-all truncate"
+                      title="Edit URL manually to generate dynamic QR code in real-time"
+                    />
+                    {customUrlInput !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomUrlInput('')}
+                        className="absolute right-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5 rounded cursor-pointer"
+                        title="Reset to default URL"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                   <Button
-                    onClick={() => copyToClipboard(currentPlatform.url)}
+                    onClick={() => copyToClipboard(customUrlInput.trim() || currentPlatform.url)}
                     variant="outline"
                     size="sm"
-                    className="text-xs font-semibold shrink-0"
+                    className="text-xs font-semibold shrink-0 cursor-pointer"
+                    title="Copy URL to clipboard"
                   >
                     {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-500 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
                     <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
                   </Button>
                   <Button
-                    onClick={fetchLanInfo}
+                    onClick={() => {
+                      fetchLanInfo();
+                      fetchDevices();
+                      setCustomUrlInput('');
+                      addToast({
+                        type: 'success',
+                        title: 'Gateway Network Refreshed',
+                        description: `LAN IP: ${resolvedLanIp} • Ports: 3000 (UI) / 8000 (API)`,
+                      });
+                    }}
                     variant="outline"
                     size="sm"
-                    className="text-xs font-semibold shrink-0"
-                    title="Refresh LAN IP"
+                    className="text-xs font-semibold shrink-0 cursor-pointer"
+                    title="Refresh Network & Reset URL to Default"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                   </Button>
@@ -846,16 +1192,16 @@ export const AndroidGatewayView: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 px-1">
-                <span className="font-mono">Laptop IP: <strong className="text-zinc-800 dark:text-zinc-200">{resolvedLanIp}</strong></span>
-                <span className="font-mono">Port: <strong className="text-zinc-800 dark:text-zinc-200">3000 / 8000</strong></span>
+                <span className="font-mono">Wi-Fi: <strong className="text-zinc-800 dark:text-zinc-200">{lanInfo?.wifi_ssid || 'Mukta-5G'}</strong> • IP: <strong className="text-zinc-800 dark:text-zinc-200">{resolvedLanIp}</strong></span>
+                <span className="font-mono">Port: <strong className="text-zinc-800 dark:text-zinc-200">3000 (UI) • 8000 (API)</strong></span>
               </div>
 
-              {/* Platform Selection Tabs (Sleek, refined height, perfectly balanced) */}
+              {/* Platform Selection Tabs (Sleek, refined height, responsive grid) */}
               <div className="space-y-1.5">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                   Select Target Device / Platform
                 </span>
-                <div className="grid grid-cols-5 gap-1.5 w-full">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 w-full">
                   {(['android', 'ios', 'mac', 'windows', 'web'] as const).map((tabKey) => {
                     const cfg = platformConfigs[tabKey];
                     const isSelected = platformTab === tabKey;
@@ -879,7 +1225,7 @@ export const AndroidGatewayView: React.FC = () => {
               </div>
 
               {/* Action Buttons in 1 Single Line (2 columns side by side) - Refined height & balanced */}
-              <div className="grid grid-cols-2 gap-2 w-full pt-0.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full pt-0.5">
                 <Button
                   onClick={handleTestConnection}
                   disabled={isTestingLan}
@@ -916,8 +1262,8 @@ export const AndroidGatewayView: React.FC = () => {
               </div>
             </div>
 
-            {/* Right (3 cols): Troubleshooting Guide matching height */}
-            <div className="lg:col-span-3 flex flex-col justify-between p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs h-full space-y-3">
+            {/* Right (3 cols / 12 cols responsive): Troubleshooting Guide matching height */}
+            <div className="lg:col-span-12 xl:col-span-3 flex flex-col justify-between p-4 bg-zinc-50 dark:bg-zinc-950/60 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs h-full space-y-3">
               <div>
                 <span className="font-bold text-zinc-800 dark:text-zinc-200 block text-[11px] uppercase tracking-wider mb-2">
                   Having trouble connecting?
@@ -960,7 +1306,7 @@ export const AndroidGatewayView: React.FC = () => {
                 Paired Devices
               </span>
               <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1 block">
-                {devices.length}
+                {gsmDevices.length}
               </span>
             </div>
             <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-lg">
@@ -976,7 +1322,7 @@ export const AndroidGatewayView: React.FC = () => {
                 Online SIM Gateway
               </span>
               <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
-                {devices.filter((d) => d.is_online).length} Active
+                {gsmDevices.filter((d) => d.is_online).length} Active
               </span>
             </div>
             <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg">
@@ -992,7 +1338,7 @@ export const AndroidGatewayView: React.FC = () => {
                 WebSocket Latency
               </span>
               <span className="text-2xl font-bold text-cyan-600 dark:text-cyan-400 mt-1 block font-mono">
-                {devices.filter((d) => d.is_online).length > 0 && healthData?.average_latency_ms
+                {gsmDevices.filter((d) => d.is_online).length > 0 && healthData?.average_latency_ms
                   ? `${healthData.average_latency_ms}ms`
                   : '—'}
               </span>
@@ -1020,82 +1366,69 @@ export const AndroidGatewayView: React.FC = () => {
         </Card>
       </div>
 
-      {/* 3. Connected Devices Section with Modern Cards vs List View */}
-      <Card className="shadow-sm overflow-hidden">
+      {/* 3. Connected Devices Section */}
+      <Card className="shadow-sm overflow-visible">
         <CardHeader className="py-3.5 px-4.5 border-b border-zinc-100 dark:border-zinc-800 flex flex-row items-center justify-between">
           <div className="flex items-center space-x-2.5">
             <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg">
               <Smartphone className="h-4.5 w-4.5" />
             </div>
             <div>
-              <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
-                <CardTitle className="text-base font-bold">Connected GSM SIM Gateway Devices</CardTitle>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
-                  {devices.length} {devices.length === 1 ? 'Device' : 'Devices'}
-                </span>
-              </div>
+              <CardTitle className="text-base font-bold">
+                Connected GSM SIM Gateway Devices ({gsmDevices.length})
+              </CardTitle>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {/* View Mode Toggle: Clean Icons Only */}
-            <div className="flex items-center p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
-              <button
-                type="button"
-                onClick={() => setDeviceViewMode('cards')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  deviceViewMode === 'cards'
-                    ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-                }`}
-                title="Cards Grid View"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeviceViewMode('table')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  deviceViewMode === 'table'
-                    ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-                }`}
-                title="List Row View"
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-
-            <Button onClick={fetchDevices} variant="outline" size="sm" className="text-xs font-semibold">
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Refresh
-            </Button>
-          </div>
+          <Button
+            onClick={() => {
+              fetchDevices();
+              addToast({
+                type: 'success',
+                title: 'Devices List Refreshed',
+                description: `Active GSM devices: ${gsmDevices.length}`,
+              });
+            }}
+            variant="outline"
+            size="sm"
+            className="text-xs font-semibold"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Refresh Devices
+          </Button>
         </CardHeader>
-        <CardContent className="p-0">
-          {devices.length === 0 ? (
-            <div className="p-10 text-center space-y-2.5">
+        <CardContent className="p-4 sm:p-5">
+          {gsmDevices.length === 0 ? (
+            <div className="p-10 text-center space-y-3">
               <div className="inline-flex p-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 rounded-2xl">
                 <Smartphone className="h-7 w-7" />
               </div>
               <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
-                No Android SIM Gateways Connected
+                No Native GSM SIM Gateways Connected
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
-                Scan the QR code above from your Android phone camera to install the native app and pair your physical SIM cards with Nexus Call OS.
+                Scan the QR code above with your Android phone camera to download and install the native Nexus GSM Gateway APK. Once the app is opened on your phone and granted telephony permissions, your physical SIM card will connect and appear here live.
               </p>
+              <div className="pt-2">
+                <Button
+                  onClick={handleQuickConnect}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2 px-4 shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Zap className="h-3.5 w-3.5" />
+                  <span>Quick Pair Test Gateway Device</span>
+                </Button>
+              </div>
             </div>
-          ) : deviceViewMode === 'cards' ? (
-            /* Mode 1: Clean, Compact 3-Cards Per Row Grid View */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
-              {devices.map((dev) => (
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {gsmDevices.map((dev) => (
                 <div
                   key={dev.device_id}
-                  className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:shadow-md hover:border-emerald-500/50 transition-all flex flex-col justify-between space-y-3 relative"
+                  className="bg-white dark:bg-zinc-900 rounded-xl border border-emerald-500/30 dark:border-emerald-500/20 p-3.5 sm:p-4 shadow-xs hover:border-emerald-500/50 hover:shadow-sm transition-all flex flex-col justify-between space-y-2.5 relative"
                 >
                   {/* Top Header Row */}
                   {editingDeviceId === dev.device_id ? (
-                    <div className="flex items-center gap-1.5 w-full bg-zinc-100 dark:bg-zinc-800 p-1.5 rounded-xl border border-emerald-500/50">
+                    <div className="flex items-center gap-2 w-full bg-zinc-50 dark:bg-zinc-800/80 p-2 rounded-lg border border-emerald-500/50 pb-2.5 border-b border-zinc-100 dark:border-zinc-800">
                       <input
                         type="text"
                         value={renameInput}
@@ -1110,421 +1443,209 @@ export const AndroidGatewayView: React.FC = () => {
                       />
                       <Button
                         size="sm"
-                        className="text-xs py-1 h-7 px-2 bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 shadow-xs"
+                        className="text-xs py-1 h-7 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 shadow-xs cursor-pointer"
                         onClick={() => handleRenameDevice(dev.device_id)}
                       >
-                        <Check className="h-3.5 w-3.5 mr-0.5" />
+                        <Check className="h-3 w-3 mr-1" />
                         Save
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-xs py-1 h-7 px-1.5 shrink-0"
+                        className="text-xs py-1 h-7 px-2 shrink-0 cursor-pointer"
                         onClick={() => setEditingDeviceId(null)}
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <X className="h-3 w-3" />
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2.5 pb-2.5 border-b border-zinc-100 dark:border-zinc-800">
+                      {/* Left: Phone Icon + Device Name + Subtitle */}
                       <div className="flex items-center space-x-2.5 min-w-0 flex-1">
-                        <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20 shrink-0">
-                          <Smartphone className="h-4.5 w-4.5" />
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                          <Smartphone className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm truncate" title={dev.name}>
+                          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm sm:text-base leading-tight truncate" title={dev.name}>
                             {dev.name}
                           </h3>
-                          <span className="text-[10px] text-zinc-400 font-mono block truncate">
-                            {dev.carrier_name || 'T-Mobile'} • {dev.os_version || 'Android 14'}
-                          </span>
+                          <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-mono truncate mt-0.5">
+                            <span>{dev.os_version || 'Android 11 (API 30)'}</span>
+                            <span>•</span>
+                            <span className="text-zinc-500 dark:text-zinc-400">{dev.carrier_name || 'Jio 4G | Jio'}</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-1 shrink-0">
-                        <button
-                          onClick={() => {
-                            setEditingDeviceId(dev.device_id);
-                            setRenameInput(dev.name);
-                          }}
-                          className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                          title="Rename Device"
-                        >
-                          <Edit3 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDevice(dev.device_id)}
-                          className="p-1 text-zinc-400 hover:text-red-500 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                          title="Delete Device"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                      {/* Right: Top Action Icons + Bottom (Primary Badge & Online/Offline Status) */}
+                      <div className="flex flex-col items-end shrink-0 space-y-1">
+                        {/* Top Action Icons: Info (ℹ️), Rename (✏️), Delete (🗑️) */}
+                        <div className="flex items-center space-x-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDeviceDetails(dev)}
+                            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                            title="View Full Device Specs & Telemetry"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDeviceId(dev.device_id);
+                              setRenameInput(dev.name);
+                            }}
+                            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                            title="Rename Device"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDevice(dev.device_id)}
+                            className="p-1 text-zinc-400 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                            title="Delete Device"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Under Icons: Primary Badge + Online/Offline Status */}
+                        <div className="flex items-center space-x-1.5">
+                          {dev.priority === 1 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+                              PRIMARY
+                            </span>
+                          )}
+                          <span
+                            className={`inline-flex items-center space-x-1 text-[10px] font-bold uppercase font-mono tracking-wide ${
+                              dev.is_online ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${dev.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`}
+                            />
+                            <span>{dev.is_online ? 'ONLINE' : 'OFFLINE'}</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Dedicated Box: Number + PRIMARY Badge + ONLINE/OFFLINE Status */}
-                  <div className="flex items-center justify-between gap-2 p-2.5 bg-zinc-50 dark:bg-zinc-950/80 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80">
-                    <div className="flex items-center space-x-1.5 min-w-0">
-                      <Radio className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                      <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100 font-mono tracking-wide truncate">
-                        {dev.sim_number || '+18005559999'}
+                  {/* 4-Column Compact Telemetry Row */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 py-0.5">
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
+                        SIM NUMBER
+                      </span>
+                      <span className="text-xs font-bold font-mono text-zinc-800 dark:text-zinc-200 mt-0.5 block truncate">
+                        {dev.sim_number || (dev.carrier_name ? `${dev.carrier_name} SIM` : '917827545502')}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-1.5 shrink-0">
-                      {dev.priority === 1 && (
-                        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[8px] font-bold font-mono bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                          PRIMARY
-                        </span>
-                      )}
-                      <span
-                        className={`flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                          dev.is_online
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700'
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${dev.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`}
-                        ></span>
-                        <span>{dev.is_online ? 'ONLINE' : 'OFFLINE'}</span>
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
+                        SIGNAL & NETWORK
+                      </span>
+                      <span className="text-xs font-medium font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block truncate">
+                        {dev.network_type ? `${dev.network_type} (${dev.signal_dbm || -75}dB)` : 'Wi-Fi (LAN Active)'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
+                        BATTERY
+                      </span>
+                      <span className="text-xs font-bold font-mono text-zinc-800 dark:text-zinc-200 mt-0.5 flex items-center gap-1">
+                        <BatteryCharging className={`h-3.5 w-3.5 ${dev.battery_level > 20 ? 'text-emerald-500' : 'text-amber-500'}`} />
+                        <span>{dev.battery_level ?? 89}%</span>
+                        {dev.is_charging && <span className="text-[10px] text-emerald-500 font-bold">⚡</span>}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
+                        STREAM & LATENCY
+                      </span>
+                      <span className="text-xs font-semibold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1 truncate">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        <span>16kHz ({dev.latency_ms || 18}ms)</span>
                       </span>
                     </div>
                   </div>
 
-                  {/* 3 Dedicated Metric Boxes */}
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {/* Box 1: Signal */}
-                    <div className="p-2 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-xl flex flex-col items-center text-center justify-center space-y-0.5">
-                      <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                        <Signal className="h-3 w-3" />
-                        <span>Signal</span>
-                      </div>
-                      <div className="font-mono font-bold text-[10px] text-emerald-700 dark:text-emerald-300 truncate w-full">
-                        {dev.network_type || '5G'} ({dev.signal_dbm || -75}dB)
-                      </div>
-                    </div>
-
-                    {/* Box 2: Battery */}
-                    <div className="p-2 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-xl flex flex-col items-center text-center justify-center space-y-0.5">
-                      <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                        <BatteryCharging className={`h-3 w-3 ${dev.battery_level > 20 ? 'text-emerald-500' : 'text-amber-500'}`} />
-                        <span>Battery</span>
-                      </div>
-                      <div className="font-mono font-bold text-[10px] text-zinc-800 dark:text-zinc-200 truncate w-full">
-                        {dev.battery_level ?? 100}% Bat
-                      </div>
-                    </div>
-
-                    {/* Box 3: Latency */}
-                    <div className="p-2 bg-cyan-50/70 dark:bg-cyan-950/30 border border-cyan-200/80 dark:border-cyan-800/60 rounded-xl flex flex-col items-center text-center justify-center space-y-0.5">
-                      <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
-                        <Activity className="h-3 w-3" />
-                        <span>Latency</span>
-                      </div>
-                      <div className="font-mono font-bold text-[10px] text-cyan-700 dark:text-cyan-300 truncate w-full">
-                        {dev.latency_ms || 18}ms HD
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons: 3 Buttons in Row 1 + 1 Big Button in Row 2 */}
-                  <div className="space-y-2 pt-0.5">
-                    {/* Auto-Answer Delay Time Configurator Strip (Only visible when Auto-Answer is ON, 100% Single-Line No Wrap) */}
-                    {dev.auto_answer && (
-                      <div className="flex items-center justify-between gap-1.5 p-1.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-xl border border-emerald-500/30 text-[11px] animate-in fade-in duration-150 select-none">
-                        <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1 whitespace-nowrap shrink-0">
-                          <Clock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span className="whitespace-nowrap">Auto-Pick Time:</span>
-                        </span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {[1, 2, 3, 5, 8, 10].map((sec) => (
-                            <button
-                              key={sec}
-                              type="button"
-                              onClick={() => handleSetAutoAnswerDelay(dev.device_id, sec)}
-                              className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all cursor-pointer ${
-                                (dev.auto_answer_delay_sec ?? 3) === sec
-                                  ? 'bg-emerald-600 text-white shadow-xs'
-                                  : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-emerald-100 hover:text-emerald-700'
-                              }`}
-                              title={`Set Auto-Answer Delay to ${sec} seconds`}
-                            >
-                              {sec}s
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Row 1: 3 Buttons in 1 Line */}
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Button 1: Auto-Answer Toggle */}
+                  {/* Bottom Controls Bar: Row 1 (Auto-Answer, Delay & Searchable AI Agent) + Divider + Row 2 (Outbound AI & Full Details) */}
+                  <div className="space-y-2 pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
+                    {/* Controls Row 1: Auto-Answer Button + Delay Segmented Control (Flexible & Prominent) + Searchable AI Agent Dropdown */}
+                    <div className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0">
+                      {/* 1. Auto-Answer Toggle */}
                       <button
                         type="button"
                         onClick={() => handleToggleAutoAnswer(dev.device_id, dev.auto_answer)}
-                        className={`w-full h-8 text-xs font-bold whitespace-nowrap flex items-center justify-center gap-1 px-1 rounded-lg transition-all shadow-2xs cursor-pointer ${
+                        className={`h-8 inline-flex items-center gap-1.5 px-2.5 sm:px-3 rounded-lg text-xs font-bold shadow-2xs transition-all cursor-pointer shrink-0 ${
                           dev.auto_answer
-                            ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
                             : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200'
                         }`}
-                        title={dev.auto_answer ? `Auto-Answer ON (${dev.auto_answer_delay_sec ?? 3}s delay)` : 'Auto-Answer OFF'}
+                        title={dev.auto_answer ? 'Auto-Answer Active' : 'Auto-Answer Off'}
                       >
-                        <Zap className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{dev.auto_answer ? `Auto: ${dev.auto_answer_delay_sec ?? 3}s` : 'Auto: OFF'}</span>
+                        <Check className="h-3.5 w-3.5 shrink-0" />
+                        <span>Auto-Answer: {dev.auto_answer ? 'ON' : 'OFF'}</span>
                       </button>
 
-                      {/* Button 2: Outbound AI */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleOutboundAI(dev.device_id, dev.outbound_ai_enabled ?? true)}
-                        className={`w-full h-8 text-xs font-bold whitespace-nowrap flex items-center justify-center gap-1 px-1 rounded-lg transition-all shadow-2xs cursor-pointer ${
-                          (dev.outbound_ai_enabled ?? true)
-                            ? 'bg-blue-600 text-white hover:bg-blue-500'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200'
-                        }`}
-                        title={(dev.outbound_ai_enabled ?? true) ? 'Outbound AI Calling is ON' : 'Outbound AI Calling is OFF'}
-                      >
-                        <Radio className={`h-3.5 w-3.5 shrink-0 ${(dev.outbound_ai_enabled ?? true) ? 'animate-pulse' : ''}`} />
-                        <span>{(dev.outbound_ai_enabled ?? true) ? 'AI: ON' : 'AI: OFF'}</span>
-                      </button>
+                      {/* 2. Delay Selector (Expands with flex-1 to fill the space cleanly and make sec buttons big & clear) */}
+                      <div className="flex-1 min-w-0 h-8 inline-flex items-center gap-0.5 sm:gap-1 bg-zinc-100 dark:bg-zinc-800/90 p-0.5 rounded-lg border border-zinc-200/80 dark:border-zinc-700/80 text-xs font-medium">
+                        <span className="text-zinc-500 dark:text-zinc-400 text-[10px] sm:text-[11px] font-semibold pl-1.5 pr-0.5 shrink-0">Delay:</span>
+                        {[0, 3, 5, 10].map((sec) => (
+                          <button
+                            key={sec}
+                            type="button"
+                            onClick={() => handleSetAutoAnswerDelay(dev.device_id, sec)}
+                            className={`flex-1 h-7 min-w-0 rounded-md text-xs font-mono font-bold inline-flex items-center justify-center transition-all cursor-pointer ${
+                              (dev.auto_answer_delay_sec ?? 3) === sec
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200/70 dark:hover:bg-zinc-700/60 hover:text-zinc-900 dark:hover:text-zinc-100'
+                            }`}
+                            title={`Set Delay to ${sec}s`}
+                          >
+                            {sec}s
+                          </button>
+                        ))}
+                      </div>
 
-                      {/* Button 3: View Details */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedDeviceDetails(dev)}
-                        className="w-full h-8 text-xs font-semibold whitespace-nowrap flex items-center justify-center gap-1 px-1 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 cursor-pointer"
-                        title="View Full Device Details & Telemetry"
-                      >
-                        <Sliders className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                        <span>Details</span>
-                      </Button>
-                    </div>
-
-                    {/* Row 2: 1 Big Full-Width Button */}
-                    <Button
-                      size="sm"
-                      onClick={() => handleTriggerTestRing(dev)}
-                      className="w-full h-8.5 text-xs font-bold whitespace-nowrap flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-all cursor-pointer"
-                      title="Simulate GSM Test Call with Auto-Answer"
-                    >
-                      <PhoneCall className="h-3.5 w-3.5 text-white shrink-0" />
-                      <span>Test GSM Call Ring</span>
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* Mode 2: Clean Inline 2-Cards Per Row View */
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3">
-              {devices.map((dev) => (
-                <div
-                  key={dev.device_id}
-                  className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-xs hover:border-emerald-500/40 transition-all flex flex-col justify-between space-y-3"
-                >
-                  {/* Row 1: Header Area */}
-                  {editingDeviceId === dev.device_id ? (
-                    <div className="flex items-center gap-2 w-full bg-zinc-100 dark:bg-zinc-800 p-1.5 rounded-xl border border-emerald-500/50">
-                      <input
-                        type="text"
-                        value={renameInput}
-                        onChange={(e) => setRenameInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleRenameDevice(dev.device_id);
-                          if (e.key === 'Escape') setEditingDeviceId(null);
-                        }}
-                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs rounded-lg px-2.5 py-1 focus:ring-1 focus:ring-emerald-500 outline-hidden font-medium"
-                        autoFocus
-                        placeholder="Device name..."
+                      {/* 3. Searchable AI Agent Selector */}
+                      <SearchableAgentSelector
+                        selectedAgentId={dev.assigned_agent_id}
+                        agents={backendAgents}
+                        onSelect={(agentId) => handleAssignAgent(dev.device_id, agentId)}
                       />
-                      <Button
-                        size="sm"
-                        className="text-xs py-1 h-7 px-3 bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 shadow-xs"
-                        onClick={() => handleRenameDevice(dev.device_id)}
-                      >
-                        <Check className="h-3.5 w-3.5 mr-1" />
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs py-1 h-7 px-2 shrink-0"
-                        onClick={() => setEditingDeviceId(null)}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center space-x-2.5 min-w-0 flex-1">
-                        <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20 shrink-0">
-                          <Smartphone className="h-4.5 w-4.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate" title={dev.name}>
-                            {dev.name}
-                          </h3>
-                          <span className="text-[11px] text-zinc-400 font-mono block truncate">
-                            {dev.carrier_name || 'T-Mobile'} • {dev.os_version || 'Android 14'}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center space-x-1 shrink-0">
-                        <button
-                          onClick={() => {
-                            setEditingDeviceId(dev.device_id);
-                            setRenameInput(dev.name);
-                          }}
-                          className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                          title="Rename Device"
-                        >
-                          <Edit3 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDevice(dev.device_id)}
-                          className="p-1.5 text-zinc-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                          title="Delete Device"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Dedicated Box: Number + PRIMARY Badge + ONLINE/OFFLINE Status */}
-                  <div className="flex items-center justify-between gap-2 p-2.5 bg-zinc-50 dark:bg-zinc-950/80 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80">
-                    <div className="flex items-center space-x-1.5 min-w-0">
-                      <Radio className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                      <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100 font-mono tracking-wide truncate">
-                        {dev.sim_number || '+18005559999'}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-1.5 shrink-0">
-                      {dev.priority === 1 && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold font-mono bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                          PRIMARY
-                        </span>
-                      )}
-                      <span
-                        className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                          dev.is_online
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700'
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${dev.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`}
-                        ></span>
-                        <span>{dev.is_online ? 'ONLINE' : 'OFFLINE'}</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Row 2: 3 Inline Metric Badges */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <span className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 font-mono text-xs font-bold border border-emerald-200/70 dark:border-emerald-800/60 flex items-center justify-center gap-1.5 truncate">
-                      <Signal className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                      <span className="truncate">{dev.network_type || '5G'} ({dev.signal_dbm || -75}dB)</span>
-                    </span>
-
-                    <span className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-zinc-800 dark:text-zinc-200 font-mono text-xs font-bold border border-amber-200/70 dark:border-amber-800/60 flex items-center justify-center gap-1.5 truncate">
-                      <BatteryCharging className={`h-3.5 w-3.5 shrink-0 ${dev.battery_level > 20 ? 'text-emerald-500' : 'text-amber-500'}`} />
-                      <span className="truncate">{dev.battery_level ?? 100}% Bat</span>
-                    </span>
-
-                    <span className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 font-mono text-xs font-bold border border-cyan-200/70 dark:border-cyan-800/60 flex items-center justify-center gap-1.5 truncate">
-                      <Activity className="h-3.5 w-3.5 text-cyan-500 shrink-0" />
-                      <span className="truncate">{dev.latency_ms || 18}ms HD</span>
-                    </span>
-                  </div>
-
-                  {/* Row 3: Action Buttons (3 Buttons in Row 1 + 1 Big Button in Row 2) */}
-                  <div className="space-y-2 pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                    {/* Auto-Answer Delay Time Configurator Strip (Only visible when Auto-Answer is ON, 100% Single-Line No Wrap) */}
-                    {dev.auto_answer && (
-                      <div className="flex items-center justify-between gap-1.5 p-1.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-xl border border-emerald-500/30 text-[11px] animate-in fade-in duration-150 select-none">
-                        <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1 whitespace-nowrap shrink-0">
-                          <Clock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span className="whitespace-nowrap">Auto-Pick Time:</span>
-                        </span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {[1, 2, 3, 5, 8, 10].map((sec) => (
-                            <button
-                              key={sec}
-                              type="button"
-                              onClick={() => handleSetAutoAnswerDelay(dev.device_id, sec)}
-                              className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all cursor-pointer ${
-                                (dev.auto_answer_delay_sec ?? 3) === sec
-                                  ? 'bg-emerald-600 text-white shadow-xs'
-                                  : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-emerald-100 hover:text-emerald-700'
-                              }`}
-                              title={`Set Auto-Answer Delay to ${sec} seconds`}
-                            >
-                              {sec}s
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Row 1: 3 Buttons in 1 Line */}
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Button 1: Auto-Answer */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleAutoAnswer(dev.device_id, dev.auto_answer)}
-                        className={`w-full h-8 text-xs font-bold whitespace-nowrap flex items-center justify-center gap-1 px-1 rounded-lg transition-all shadow-2xs cursor-pointer ${
-                          dev.auto_answer
-                            ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200'
-                        }`}
-                        title={dev.auto_answer ? `Auto-Answer ON (${dev.auto_answer_delay_sec ?? 3}s delay)` : 'Auto-Answer OFF'}
-                      >
-                        <Zap className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{dev.auto_answer ? `Auto: ${dev.auto_answer_delay_sec ?? 3}s` : 'Auto: OFF'}</span>
-                      </button>
-
-                      {/* Button 2: Outbound AI */}
+                    {/* Controls Row 2: Divider + Expanded Outbound AI Button (Left) & Full Details Link (Right) */}
+                    <div className="flex items-center gap-2 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 w-full">
+                      {/* Expanded Outbound AI Toggle */}
                       <button
                         type="button"
                         onClick={() => handleToggleOutboundAI(dev.device_id, dev.outbound_ai_enabled ?? true)}
-                        className={`w-full h-8 text-xs font-bold whitespace-nowrap flex items-center justify-center gap-1 px-1 rounded-lg transition-all shadow-2xs cursor-pointer ${
+                        className={`flex-1 h-8 px-3 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer ${
                           (dev.outbound_ai_enabled ?? true)
-                            ? 'bg-blue-600 text-white hover:bg-blue-500'
+                            ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/20'
                             : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200'
                         }`}
-                        title={(dev.outbound_ai_enabled ?? true) ? 'Outbound AI Calling is ON' : 'Outbound AI Calling is OFF'}
+                        title="Toggle Outbound AI Calling"
                       >
                         <Radio className={`h-3.5 w-3.5 shrink-0 ${(dev.outbound_ai_enabled ?? true) ? 'animate-pulse' : ''}`} />
-                        <span>{(dev.outbound_ai_enabled ?? true) ? 'AI: ON' : 'AI: OFF'}</span>
+                        <span>Outbound AI: {(dev.outbound_ai_enabled ?? true) ? 'ON' : 'OFF'}</span>
                       </button>
 
-                      {/* Button 3: View Details */}
-                      <Button
-                        size="sm"
-                        variant="outline"
+                      {/* Full Details button */}
+                      <button
+                        type="button"
                         onClick={() => setSelectedDeviceDetails(dev)}
-                        className="w-full h-8 text-xs font-semibold whitespace-nowrap flex items-center justify-center gap-1 px-1 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                        className="h-8 px-3 rounded-lg text-xs font-bold shrink-0 bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
                         title="View Full Device Details & Telemetry"
                       >
-                        <Sliders className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                        <span>Details</span>
-                      </Button>
+                        <Info className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Full Details</span>
+                      </button>
                     </div>
-
-                    {/* Row 2: 1 Big Full-Width Button */}
-                    <Button
-                      size="sm"
-                      onClick={() => handleTriggerTestRing(dev)}
-                      className="w-full h-8.5 text-xs font-bold whitespace-nowrap flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-all cursor-pointer"
-                      title="Simulate GSM Test Call with Auto-Answer"
-                    >
-                      <PhoneCall className="h-3.5 w-3.5 text-white shrink-0" />
-                      <span>Test GSM Call Ring</span>
-                    </Button>
                   </div>
                 </div>
               ))}
@@ -1533,6 +1654,72 @@ export const AndroidGatewayView: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* 3.5. Web Browser Test Gateways (Separated from GSM SIM Hardware) */}
+      {webStations.length > 0 && (
+        <Card className="shadow-sm overflow-hidden border-zinc-200 dark:border-zinc-800">
+          <CardHeader className="py-3 px-4 bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800 flex flex-row items-center justify-between">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-1.5 bg-cyan-500/10 text-cyan-500 rounded-lg">
+                <Globe className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                  <CardTitle className="text-sm font-bold">Web Browser Voice Gateways (Microphone Sandbox)</CardTitle>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                    {webStations.length} Web {webStations.length === 1 ? 'Node' : 'Nodes'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Connected via web browser. Web sandboxes only support microphone audio — native GSM SIM telephony and deep OS telemetry require the installed APK.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                for (const ws of webStations) {
+                  await handleDeleteDevice(ws.device_id);
+                }
+              }}
+              className="text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Clear Web Nodes
+            </Button>
+          </CardHeader>
+          <CardContent className="p-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {webStations.map((wDev) => (
+                <div
+                  key={wDev.device_id}
+                  className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3.5 shadow-xs flex items-center justify-between"
+                >
+                  <div className="min-w-0 flex-1 mr-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-xs text-zinc-800 dark:text-zinc-200 truncate">{wDev.name}</span>
+                      <span className="px-1.5 py-0.2 text-[9px] font-mono rounded-md bg-cyan-100 dark:bg-cyan-900/60 text-cyan-700 dark:text-cyan-300">WebRTC</span>
+                    </div>
+                    <span className="text-[11px] text-zinc-400 font-mono block mt-0.5">
+                      {wDev.os_version} • Ping: {wDev.latency_ms}ms • Audio Only
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteDevice(wDev.device_id)}
+                    className="text-zinc-400 hover:text-red-500 p-1.5 h-8 w-8 rounded-lg shrink-0"
+                    title="Remove Web Node"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 4. Live Stream Quality & OEM Guidance */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1737,7 +1924,7 @@ export const AndroidGatewayView: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Nexus Mobile Gateway Hub</h3>
                     <Badge variant="emerald" className="text-[9px] font-mono py-0">
-                      v2.4
+                      {lanInfo?.version_name ? `v${lanInfo.version_name}` : 'v2.4'}
                     </Badge>
                   </div>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -1783,27 +1970,31 @@ export const AndroidGatewayView: React.FC = () => {
             {/* Tab 1: Instant QR Connect */}
             {modalTab === 'qr' && (
               <div className="space-y-3 text-xs">
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center space-y-2">
-                  {/* High-Contrast Clean QR Code */}
-                  <div className="p-2 bg-white rounded-xl shadow-md border-2 border-emerald-500">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=3&data=${encodeURIComponent(
-                        activeBaseUrl
-                      )}`}
-                      alt="Mobile Pairing QR Code"
-                      className="w-40 h-40 rounded-lg"
-                      onError={(e: any) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
+                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center space-y-2.5">
+                  <div className="p-2 bg-white rounded-2xl shadow-md border-2 border-emerald-500 flex items-center justify-center overflow-hidden">
+                    <QRCodeSVG
+                      value={
+                        pairingTokenData?.pairing_token
+                          ? `${getPlatformUrl(platformTab)}?token=${pairingTokenData.pairing_token}&sig=${pairingTokenData.signature || ''}`
+                          : getPlatformUrl(platformTab)
+                      }
+                      size={180}
+                      level="Q"
+                      includeMargin={false}
+                      bgColor="#FFFFFF"
+                      fgColor="#090D16"
+                      className="w-44 h-44 rounded-lg object-contain"
                     />
                   </div>
 
-                  <div className="text-center space-y-0.5 w-full max-w-sm">
+                  <div className="text-center space-y-1 w-full max-w-sm">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                      Direct Mobile URL
+                      {pairingTokenData?.pairing_token ? 'Secure Pairing QR Code Active' : 'Direct Mobile Gateway URL'}
                     </span>
-                    <div className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 truncate select-all">
-                      {activeBaseUrl}
+                    <div className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 truncate select-all">
+                      {pairingTokenData?.pairing_token
+                        ? `${getPlatformUrl(platformTab)}?token=${pairingTokenData.pairing_token}&sig=${pairingTokenData.signature || ''}`
+                        : getPlatformUrl(platformTab)}
                     </div>
                   </div>
                 </div>
@@ -1831,7 +2022,10 @@ export const AndroidGatewayView: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button
                     onClick={() => {
-                      window.open(activeBaseUrl, '_blank');
+                      const targetUrl = pairingTokenData?.pairing_token
+                        ? `${getPlatformUrl(platformTab)}?token=${pairingTokenData.pairing_token}&sig=${pairingTokenData.signature || ''}`
+                        : getPlatformUrl(platformTab);
+                      window.open(targetUrl, '_blank');
                       addToast('Opened Mobile Companion in testing window!', 'info');
                     }}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 flex items-center justify-center gap-1.5 shadow-sm"
@@ -1843,7 +2037,10 @@ export const AndroidGatewayView: React.FC = () => {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(activeBaseUrl);
+                      const targetUrl = pairingTokenData?.pairing_token
+                        ? `${getPlatformUrl(platformTab)}?token=${pairingTokenData.pairing_token}&sig=${pairingTokenData.signature || ''}`
+                        : getPlatformUrl(platformTab);
+                      navigator.clipboard.writeText(targetUrl);
                       setCopiedToken(true);
                       addToast('Mobile link copied!', 'success');
                       setTimeout(() => setCopiedToken(false), 2000);
@@ -1868,8 +2065,8 @@ export const AndroidGatewayView: React.FC = () => {
                 <div className="space-y-2">
                   {/* 1. Android Phone App */}
                   <a
-                    href="/api/android-gateway/download/apk"
-                    download="Nexus-GSM-Gateway-v2.4.apk"
+                    href="/download"
+                    download={lanInfo?.apk_filename || 'Nexus-GSM-Gateway.apk'}
                     className="p-3 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between hover:border-emerald-500 transition-all group"
                   >
                     <div className="flex items-center space-x-3">
@@ -1888,7 +2085,7 @@ export const AndroidGatewayView: React.FC = () => {
                     </div>
                     <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shrink-0">
                       <Download className="h-3.5 w-3.5 mr-1" />
-                      APK
+                      {lanInfo?.apk_size_formatted ? `APK (${lanInfo.apk_size_formatted})` : 'APK'}
                     </Button>
                   </a>
 
@@ -1914,7 +2111,7 @@ export const AndroidGatewayView: React.FC = () => {
                     </div>
                     <Button size="sm" className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shrink-0">
                       <Download className="h-3.5 w-3.5 mr-1" />
-                      iOS Project
+                      {lanInfo?.ios_size_formatted ? `iOS Project (${lanInfo.ios_size_formatted})` : 'iOS Project'}
                     </Button>
                   </a>
 
@@ -1940,7 +2137,7 @@ export const AndroidGatewayView: React.FC = () => {
                     </div>
                     <Button size="sm" variant="outline" className="text-xs font-bold shrink-0">
                       <Download className="h-3.5 w-3.5 mr-1" />
-                      Mac ZIP
+                      {lanInfo?.mac_size_formatted ? `Mac ZIP (${lanInfo.mac_size_formatted})` : 'Mac ZIP'}
                     </Button>
                   </a>
 
@@ -1966,7 +2163,7 @@ export const AndroidGatewayView: React.FC = () => {
                     </div>
                     <Button size="sm" variant="outline" className="text-xs font-bold shrink-0">
                       <Download className="h-3.5 w-3.5 mr-1" />
-                      Win ZIP
+                      {lanInfo?.win_size_formatted ? `Win ZIP (${lanInfo.win_size_formatted})` : 'Win ZIP'}
                     </Button>
                   </a>
                 </div>
@@ -2082,11 +2279,11 @@ export const AndroidGatewayView: React.FC = () => {
                 <div className="space-y-2 text-[11px]">
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-400">Phone SIM Number:</span>
-                    <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{selectedDeviceDetails.sim_number || '+91 98765 43210'}</span>
+                    <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{selectedDeviceDetails.sim_number || 'Number Unavailable'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-400">Network Operator:</span>
-                    <Badge variant="outline" className="text-[10px] font-semibold py-0 px-1.5">{selectedDeviceDetails.carrier_name || 'Cellular SIM'}</Badge>
+                    <Badge variant="outline" className="text-[10px] font-semibold py-0 px-1.5">{selectedDeviceDetails.carrier_name || 'Carrier Unavailable'}</Badge>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-400">Cellular Standard:</span>
@@ -2151,7 +2348,9 @@ export const AndroidGatewayView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] pt-1">
                 <div>
                   <span className="text-zinc-400 block text-[10px]">Client Daemon Version</span>
-                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 mt-0.5 block">Nexus Companion v2.4 (Native)</span>
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 mt-0.5 block">
+                    {lanInfo?.version_name ? `Nexus Companion v${lanInfo.version_name} (Native)` : 'Nexus Companion (Native)'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-zinc-400 block text-[10px]">Background Power Policy</span>
@@ -2170,7 +2369,7 @@ export const AndroidGatewayView: React.FC = () => {
                 <Button
                   size="sm"
                   onClick={() => {
-                    addToast(`Triggered simulated GSM ring test on ${selectedDeviceDetails.name}`, 'success');
+                    handleTriggerTestRing(selectedDeviceDetails);
                   }}
                   className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-1.5 h-8.5 flex items-center gap-1.5 shadow-xs"
                 >

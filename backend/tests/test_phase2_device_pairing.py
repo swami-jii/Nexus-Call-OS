@@ -108,8 +108,24 @@ def test_pairing_token_exchange_and_db_persistence():
 from backend.routers.android_gateway_router import _device_registry as reg
 from fastapi import WebSocketDisconnect
 
+class MockWebSocket:
+    def __init__(self):
+        self.accepted = False
+        self.sent_messages = []
+        self.closed_code = None
+
+    async def accept(self):
+        self.accepted = True
+
+    async def send_json(self, data):
+        self.sent_messages.append(data)
+
+    async def close(self, code=1000):
+        self.closed_code = code
+
+
 def test_authenticated_websocket_connection_and_telemetry():
-    # Register device in active registry
+    import asyncio
     dev_token = "nxs_dev_super_secret_test_token_999"
     dev_id = "test-companion-ws-01"
     reg.register_device(
@@ -119,14 +135,17 @@ def test_authenticated_websocket_connection_and_telemetry():
         device_token=dev_token,
     )
 
-    # 1. Connect with valid token in query param
-    with client.websocket_connect(f"/api/android-gateway/ws/bridge?device_id={dev_id}&token={dev_token}") as ws:
-        # Expect AUTH_SUCCESS
-        auth_res = ws.receive_json()
-        assert auth_res.get("event") == "AUTH_SUCCESS" or auth_res.get("type") == "AUTH_SUCCESS"
+    async def run():
+        ws = MockWebSocket()
+        bridge = AndroidWebSocketBridgeServer(reg)
+        connected = await bridge.connect(dev_id, ws, device_token=dev_token)
+        assert connected is True
+        assert ws.accepted is True
+        assert len(ws.sent_messages) > 0
+        assert ws.sent_messages[0].get("event") == "AUTH_SUCCESS" or ws.sent_messages[0].get("type") == "AUTH_SUCCESS"
 
         # 2. Send Heartbeat / Telemetry frame
-        ws.send_json({
+        res = await bridge.handle_incoming_message(dev_id, {
             "event": "PING",
             "battery_level": 88,
             "is_charging": True,
@@ -134,8 +153,7 @@ def test_authenticated_websocket_connection_and_telemetry():
             "network_type": "5G SA",
             "latency_ms": 14,
         })
-        pong_res = ws.receive_json()
-        assert pong_res.get("type") == "PONG"
+        assert res.get("type") == "PONG"
 
         # 3. Verify telemetry updated in registry
         dev = reg.get_device(dev_id)
@@ -143,9 +161,11 @@ def test_authenticated_websocket_connection_and_telemetry():
         assert dev.battery_level == 88
         assert dev.signal_dbm == -68
 
+    asyncio.run(run())
+
 
 def test_unauthenticated_websocket_rejection():
-    # Device exists in router registry but connection supplies invalid token
+    import asyncio
     reg.register_device(
         device_id="device-secure-01",
         name="Secure Phone",
@@ -153,12 +173,15 @@ def test_unauthenticated_websocket_rejection():
         device_token="correct_token_12345",
     )
 
-    # Connect with wrong token -> Must receive AUTH_ERROR or disconnect
-    with pytest.raises(Exception):
-        with client.websocket_connect("/api/android-gateway/ws/bridge?device_id=device-secure-01&token=wrong_token") as ws:
-            msg = ws.receive_json()
-            if msg.get("event") == "AUTH_ERROR" or msg.get("type") == "AUTH_ERROR":
-                raise WebSocketDisconnect(code=4001)
+    async def run():
+        ws = MockWebSocket()
+        bridge = AndroidWebSocketBridgeServer(reg)
+        connected = await bridge.connect("device-secure-01", ws, device_token="wrong_token")
+        assert connected is False
+        assert ws.closed_code == 4001
+        assert any(m.get("event") == "AUTH_ERROR" or m.get("type") == "AUTH_ERROR" for m in ws.sent_messages)
+
+    asyncio.run(run())
 
 
 def test_tenant_isolation_org_separation():

@@ -19,19 +19,34 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addToast = useCallback(
     (
-      typeOrObj: ToastMessage['type'] | Omit<ToastMessage, 'id'>,
-      title?: string,
+      typeOrObj: ToastMessage['type'] | Omit<ToastMessage, 'id'> | string,
+      titleOrType?: string,
       description?: string
     ) => {
       let toastItem: Omit<ToastMessage, 'id'>;
+      const validTypes = ['success', 'error', 'info', 'warning'];
 
       if (typeof typeOrObj === 'object') {
         toastItem = typeOrObj;
+      } else if (validTypes.includes(typeOrObj as string)) {
+        // Called as addToast('success', 'Title', 'Description')
+        toastItem = {
+          type: typeOrObj as ToastMessage['type'],
+          title: titleOrType || 'Notification',
+          description,
+        };
+      } else if (titleOrType && validTypes.includes(titleOrType)) {
+        // Called as addToast('Title Message', 'success', 'Description')
+        toastItem = {
+          type: titleOrType as ToastMessage['type'],
+          title: typeOrObj as string,
+          description,
+        };
       } else {
         toastItem = {
-          type: typeOrObj || 'info',
-          title: title || 'Notification',
-          description,
+          type: 'info',
+          title: (typeOrObj as string) || 'Notification',
+          description: titleOrType,
         };
       }
 

@@ -3,7 +3,7 @@ import httpx
 import urllib.parse
 import re
 
-async def test_geo(q):
+async def resolve_geo(q):
     stop_words = r'(?i)\b(what|what\'s|whats|is|the|live|current|realtime|real-time|tell|me|about|how|forecast|weather|temperature|climate|mausam|mosam|temp|garmi|sardi|thand|barish|rain|in|of|for|at|today|now|kaisa|kese|kaise|hai|batao|bataiye|kya|hoga|shehar|city|please|ka|ki|ke|me|mein|par|ko|se)\b'
     clean = re.sub(stop_words, '', q).strip()
     clean = re.sub(r'[^\w\s]', '', clean).strip()
@@ -30,12 +30,12 @@ async def test_geo(q):
             print(f"'{q}' -> No results found for '{clean}'")
 
 async def main():
-    await test_geo("What is the live weather in Delhi?")
-    await test_geo("Mumbai ka mausam kaisa hai")
-    await test_geo("London weather today")
-    await test_geo("Tokyo weather")
-    await test_geo("Bangalore temperature")
-    await test_geo("New York weather")
+    await resolve_geo("What is the live weather in Delhi?")
+    await resolve_geo("Mumbai ka mausam kaisa hai")
+    await resolve_geo("London weather today")
+    await resolve_geo("Tokyo weather")
+    await resolve_geo("Bangalore temperature")
+    await resolve_geo("New York weather")
 
 if __name__ == "__main__":
     asyncio.run(main())

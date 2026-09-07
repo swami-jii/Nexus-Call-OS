@@ -52,7 +52,7 @@ import { useToast } from '../components/ui/Toast';
 import { useBusinessRules, LanguageItem } from '../context/BusinessRulesContext';
 import { fetchAPI } from '../lib/api';
 import { GLOBAL_LANGUAGES_CATALOG, getLanguageSamplePrompt } from '../data/globalLanguagesCatalog';
-import { DEFAULT_SKILLS, fetchSkillsFromBackend, AgentSkill } from '../skills';
+import { fetchSkillsFromBackend, AgentSkill } from '../skills';
 
 interface AgentPromptTagDropdownPanelProps {
   title: string;
@@ -706,7 +706,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
   >([]);
   const [isChatSending, setIsChatSending] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<string>('none');
-  const [availableSkills, setAvailableSkills] = useState<AgentSkill[]>(DEFAULT_SKILLS);
+  const [availableSkills, setAvailableSkills] = useState<AgentSkill[]>([]);
 
   useEffect(() => {
     fetchSkillsFromBackend().then((skills) => {
@@ -751,12 +751,12 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
     systemPrompt: 'You are an empathetic, professional AI voice assistant.',
     temperature: 0.3,
     maxDurationSeconds: 600,
-    businessTypeId: 'bt_1',
-    departmentId: 'dep_1',
-    workingHoursId: 'wh_1',
-    sttProvider: 'faster_whisper',
+    businessTypeId: '',
+    departmentId: '',
+    workingHoursId: '',
+    sttProvider: '',
     knowledgeBaseId: '',
-    assignedGsmLine: 'samsung-sm-a507fn-01',
+    assignedGsmLine: '',
     autoRecord: true,
   });
 
@@ -771,12 +771,12 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
     systemPrompt: '',
     temperature: 0.3,
     maxDurationSeconds: 600,
-    businessTypeId: 'bt_1',
-    departmentId: 'dep_1',
-    workingHoursId: 'wh_1',
-    sttProvider: 'faster_whisper',
+    businessTypeId: '',
+    departmentId: '',
+    workingHoursId: '',
+    sttProvider: '',
     knowledgeBaseId: '',
-    assignedGsmLine: 'samsung-sm-a507fn-01',
+    assignedGsmLine: '',
     autoRecord: true,
   });
 
@@ -785,15 +785,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       const saved = localStorage.getItem('nexus_custom_items');
       const parsed = saved ? JSON.parse(saved) : {};
       return {
-        customKnowledgeCollections: parsed.knowledge_collections || [
-          { id: 'kb_1', name: 'Clinical FAQ & Pricing Docs', chunk_count: 142 },
-          { id: 'kb_2', name: 'Company Policy & SLA Handbook', chunk_count: 89 },
-          { id: 'kb_3', name: 'Sales Catalog & Inventory Guide', chunk_count: 210 },
-        ],
-        customGsmDevices: parsed.android_devices || [
-          { id: 'samsung-sm-a507fn-01', name: 'Samsung SM-A507FN (Jio 4G SIM)', sim_number: '+91 78275 45502' },
-          { id: 'android-primary', name: 'Primary Mobile Gateway (+91 98765 43210)', sim_number: '+91 98765 43210' },
-        ],
+        customKnowledgeCollections: parsed.knowledge_collections || [],
+        customGsmDevices: parsed.android_devices || [],
       };
     } catch {
       return {
@@ -1379,7 +1372,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       workingHoursId: (agent as any).workingHoursId || 'wh_1',
       sttProvider: (agent as any).sttProvider || 'faster_whisper',
       knowledgeBaseId: (agent as any).knowledgeBaseId || '',
-      assignedGsmLine: (agent as any).assignedGsmLine || 'samsung-sm-a507fn-01',
+      assignedGsmLine: (agent as any).assignedGsmLine || '',
       autoRecord: (agent as any).autoRecord ?? true,
     });
 

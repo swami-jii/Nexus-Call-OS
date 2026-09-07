@@ -514,7 +514,7 @@ export const CallHistoryView: React.FC = () => {
                         {selectedCall.contactName || 'Unknown Contact'}
                       </div>
                       <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
-                        {selectedCall.contactPhone || '+91 96508 55921'}
+                        {selectedCall.contactPhone || 'Number Unavailable'}
                       </div>
                     </div>
                   </div>

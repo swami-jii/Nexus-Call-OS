@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, Form, Request, Response
 from sqlalchemy.orm import Session
 
 from backend.database.session import get_db
-from backend.integrations.manager import provider_manager
 from backend.repositories.repositories import call_repo
 from backend.services.webhook_dispatcher import emit_domain_event
 from backend.voice_pipeline.session_manager import session_manager

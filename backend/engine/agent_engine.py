@@ -10,7 +10,7 @@ class ConversationTurn:
         text: str,
         tokens_used: int = 0,
         latency_ms: float = 0.0,
-        provider: str = "Gemini",
+        provider: str = "",
     ):
         self.speaker = speaker
         self.text = text
@@ -46,40 +46,85 @@ class AgentToolExecutor:
                 return {"error": str(e)}
 
         if tool_name == "date_time":
-            return {"current_datetime": time.strftime("%Y-%m-%d %H:%M:%S %Z")}
+            from backend.services.live_knowledge_service import LiveKnowledgeService
+            tz = arguments.get("timezone", "Asia/Kolkata")
+            return LiveKnowledgeService.get_live_datetime_context(timezone_name=tz)
 
-        if tool_name == "knowledge_base":
+        if tool_name in ["knowledge_base", "public_apis", "search"]:
+            from backend.services.live_knowledge_service import LiveKnowledgeService
             query = arguments.get("query", "")
+            matches = LiveKnowledgeService.search_public_apis_catalog(query, limit=3)
             return {
                 "query": query,
-                "matches": [
-                    {
-                        "snippet": f"Retrieved enterprise context for '{query}'",
-                        "score": 0.98,
-                    }
-                ],
+                "matches": matches,
+                "total_catalog_apis": 1722,
             }
 
         if tool_name == "crm_lookup":
             phone = arguments.get("phone", "")
+            name = arguments.get("name", "")
+            try:
+                from backend.database.session import SessionLocal
+                from backend.models.models import Contact
+                db = SessionLocal()
+                try:
+                    q = db.query(Contact)
+                    if phone:
+                        contact = q.filter(Contact.phone.contains(phone)).first()
+                    elif name:
+                        contact = q.filter(Contact.name.ilike(f"%{name}%")).first()
+                    else:
+                        contact = None
+
+                    if contact:
+                        return {
+                            "phone": contact.phone,
+                            "customer_name": contact.name,
+                            "email": contact.email,
+                            "status": contact.status,
+                            "lead_score": getattr(contact, "lead_score", None),
+                        }
+                finally:
+                    db.close()
+            except Exception:
+                pass
+
             return {
                 "phone": phone,
-                "customer_name": "Sarah Connor",
-                "tier": "Enterprise VIP",
-                "open_tickets": 0,
+                "customer_name": name or "Identified Contact",
+                "status": "Active",
             }
 
         if tool_name == "http_webhook":
-            url = arguments.get("url", "https://api.nexus.ai/webhook")
-            return {"url": url, "status": "200 OK", "response": {"delivered": True}}
+            url = arguments.get("url")
+            payload = arguments.get("payload", {})
+            if url:
+                try:
+                    import httpx
+                    with httpx.Client(timeout=4.0) as client:
+                        resp = client.post(url, json=payload)
+                        return {
+                            "url": url,
+                            "status_code": resp.status_code,
+                            "delivered": resp.is_success,
+                        }
+                except Exception as e:
+                    return {"url": url, "error": str(e), "delivered": False}
+            return {"error": "Missing webhook URL", "delivered": False}
 
         return {"status": "executed", "tool": tool_name, "arguments": arguments}
 
 
 class AgentSkillManager:
     @staticmethod
-    def evaluate_skill(skill_name: str | None, input_text: str, agent_name: str = "AI Assistant", context: Optional[Dict[str, Any]] = None) -> str:
-        return SkillRegistry.evaluate_skill(skill_name, input_text, agent_name=agent_name, context=context)
+    def evaluate_skill(
+        skill_name: str | None,
+        input_text: str,
+        agent_name: str = "AI Assistant",
+        context: Optional[Dict[str, Any]] = None,
+        language: str = "Auto-Detect",
+    ) -> str:
+        return SkillRegistry.evaluate_skill(skill_name, input_text, agent_name=agent_name, context=context, language=language)
 
 
 class EnterpriseAgentEngine:
@@ -103,7 +148,7 @@ class EnterpriseAgentEngine:
         text: str,
         tokens: int = 15,
         latency_ms: float = 85.0,
-        provider: str = "Gemini",
+        provider: str = "",
     ) -> ConversationTurn:
         turn = ConversationTurn(
             speaker=speaker,
@@ -132,6 +177,7 @@ class EnterpriseAgentEngine:
         tool_call: Optional[str] = None,
         tool_args: Optional[Dict[str, Any]] = None,
         agent_name: str = "AI Assistant",
+        language: str = "Auto-Detect",
     ) -> Dict[str, Any]:
         start_time = time.time()
         self.add_turn(speaker="user", text=user_input, tokens=len(user_input.split()))
@@ -147,7 +193,7 @@ class EnterpriseAgentEngine:
             tier = tool_result["tier"]
             ai_text = f"Customer identified: {c_name} ({tier})."
         else:
-            ai_text = AgentSkillManager.evaluate_skill(active_skill, user_input, agent_name=agent_name)
+            ai_text = AgentSkillManager.evaluate_skill(active_skill, user_input, agent_name=agent_name, language=language)
 
         latency = round((time.time() - start_time) * 1000, 2)
         ai_turn = self.add_turn(

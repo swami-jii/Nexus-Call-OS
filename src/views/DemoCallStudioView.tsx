@@ -56,7 +56,7 @@ import { CommandPaletteSelect, SelectOption } from '../components/ui/CommandPale
 import { useBusinessRules } from '../context/BusinessRulesContext';
 import { fetchAPI } from '../lib/api';
 import { DEFAULT_BUSINESS_RULES_ITEMS } from './IntegrationsView';
-import { detectCountryFromPhone } from '../data/countries';
+import { detectCountryFromPhone } from '../data/globalCountryCodesCatalog';
 import {
   GLOBAL_COUNTRY_CODES_CATALOG,
   GlobalCountryCodeItem,
@@ -257,13 +257,13 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       map.set(id, {
         id,
         name: d.name || 'Android GSM Gateway',
-        simNumber: d.sim_number || '+91 98765 43210',
-        carrier: d.carrier_name || 'Cellular SIM',
-        osVersion: d.os_version || 'Android 14',
-        batteryLevel: d.battery_level ?? 95,
-        isCharging: d.is_charging ?? true,
-        signalDbm: d.signal_dbm ?? -68,
-        networkType: d.network_type || 'Wi-Fi / 5G',
+        simNumber: d.sim_number || '',
+        carrier: d.carrier_name || 'Carrier Unavailable',
+        osVersion: d.os_version || 'Android',
+        batteryLevel: d.battery_level ?? 0,
+        isCharging: d.is_charging ?? false,
+        signalDbm: d.signal_dbm ?? 0,
+        networkType: d.network_type || 'Cellular',
         isOnline: d.is_online !== false,
         autoAnswer: d.auto_answer ?? true,
         autoAnswerDelaySec: d.auto_answer_delay_sec ?? 3,
@@ -279,13 +279,13 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         map.set(id, {
           id,
           name: d.name || d.device_name || 'Android GSM Phone',
-          simNumber: d.sim_number || d.phone_number || '+91 98765 43210',
-          carrier: d.carrier_name || d.carrier || 'Cellular SIM',
-          osVersion: d.os_version || 'Android 14',
-          batteryLevel: d.battery_level ?? 92,
-          isCharging: d.is_charging ?? true,
-          signalDbm: d.signal_dbm ?? -70,
-          networkType: d.network_type || '5G',
+          simNumber: d.sim_number || d.phone_number || '',
+          carrier: d.carrier_name || d.carrier || 'Carrier Unavailable',
+          osVersion: d.os_version || 'Android',
+          batteryLevel: d.battery_level ?? 0,
+          isCharging: d.is_charging ?? false,
+          signalDbm: d.signal_dbm ?? 0,
+          networkType: d.network_type || 'Cellular',
           isOnline: d.is_online !== false,
           autoAnswer: d.auto_answer ?? true,
           autoAnswerDelaySec: d.auto_answer_delay_sec ?? 3,
@@ -294,28 +294,6 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         });
       }
     });
-
-    // 3. Fallback to default genuine Samsung GSM node if empty
-    if (map.size === 0) {
-      return [{
-        id: 'samsung-sm-a507fn-01',
-        name: 'Samsung SM-A507FN',
-        simNumber: '+91 78275 45502',
-        carrier: 'Jio 4G | Jio',
-        osVersion: 'Android 11 (API 30)',
-        batteryLevel: 92,
-        isCharging: true,
-        signalDbm: -68,
-        networkType: 'Wi-Fi (LAN Active)',
-        isOnline: true,
-        autoAnswer: true,
-        autoAnswerDelaySec: 3,
-        subscriptions: [
-          { subId: 1, displayName: 'Jio 4G', carrierName: 'Jio', number: '+91 78275 45502', signalDbm: -68 }
-        ],
-        selectedSubId: 1,
-      }];
-    }
 
     return Array.from(map.values());
   }, [apiGsmDevices, customRegistry]);
@@ -985,30 +963,27 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
 
   const androidDeviceSelectOptions: SelectOption[] = useMemo(() => {
     if (realAndroidDevices.length === 0) {
-      return [{ value: 'android-primary', label: '📱 Primary Mobile Phone (+91 98765 43210)', description: 'Cellular SIM Gateway', group: 'SIM & GSM Gateways (Telephony Tab)' }];
+      return [{ value: 'no-device', label: '📱 No Android Gateway Connected', description: 'Pair physical device via QR Code', group: 'SIM & GSM Gateways (Telephony Tab)' }];
     }
     return realAndroidDevices.map((d) => ({
       value: d.id,
-      label: `📱 ${d.name} (${d.simNumber})`,
+      label: `📱 ${d.name}${d.simNumber ? ` (${d.simNumber})` : ''}`,
       description: `${d.carrier} • OS: ${d.osVersion} • Battery: ${d.batteryLevel}% • Signal: ${d.signalDbm}dBm`,
       group: 'SIM & GSM Gateways (Telephony Tab)',
     }));
   }, [realAndroidDevices]);
 
   const simCardSelectOptions: SelectOption[] = [
-    { value: 'sim1', label: '📶 SIM Slot 1: Primary 5G (Jio / Airtel - Unlimited)', description: 'Primary VoLTE / 5G HD Voice Line', group: 'SIM Card Slots' },
-    { value: 'sim2', label: '📶 SIM Slot 2: Secondary Cellular (Vodafone / Vi)', description: 'Secondary Cellular SIM Card', group: 'SIM Card Slots' },
-    { value: 'auto', label: '⚡ Auto-Select Best Signal SIM', description: 'Automatically routes via highest dBm signal', group: 'SIM Card Slots' },
+    { value: 'sim1', label: '📶 SIM Slot 1 (Primary)', description: 'Primary VoLTE / Cellular Line', group: 'SIM Card Slots' },
+    { value: 'sim2', label: '📶 SIM Slot 2 (Secondary)', description: 'Secondary VoLTE / Cellular Line', group: 'SIM Card Slots' },
+    { value: 'auto', label: '⚡ Auto-Select Best Signal SIM', description: 'Routes via highest dBm active subscription', group: 'SIM Card Slots' },
   ];
 
   const callerIdCliSelectOptions: SelectOption[] = useMemo(() => {
     const activeCarrier = cloudAndSipCarriers.find((c: any) => c.id === selectedLineId) || cloudAndSipCarriers[0];
-    const cliNum = activeCarrier?.caller_id || '+1 (800) 555-0199';
+    const cliNum = activeCarrier?.caller_id || 'Carrier Default DID';
     return [
       { value: 'cli-carrier', label: `📞 ${cliNum} (Carrier Primary DID)`, description: `Default CLI for ${activeCarrier?.name || 'Carrier'}`, group: 'Country Dial Codes & Caller ID' },
-      { value: 'cli-1', label: '📞 +1 (800) 555-0199 (US Toll-Free)', description: 'United States & Canada Toll-Free CLI', group: 'Country Dial Codes & Caller ID' },
-      { value: 'cli-2', label: '📞 +91 11 4987 6543 (India Delhi CLI)', description: 'India National Fixed-Line CLI (+91)', group: 'Country Dial Codes & Caller ID' },
-      { value: 'cli-3', label: '📞 +44 20 7946 0912 (UK London CLI)', description: 'United Kingdom London CLI (+44)', group: 'Country Dial Codes & Caller ID' },
     ];
   }, [cloudAndSipCarriers, selectedLineId]);
 
@@ -1225,7 +1200,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       .catch(() => {});
   }, []);
 
-  const mobilePairingUrl = lanInfo?.mobile_gateway_url || `${window.location.protocol}//${window.location.hostname || '192.168.1.34'}:${window.location.port || '3000'}/#/mobile-gateway`;
+  const mobilePairingUrl = lanInfo?.mobile_gateway_url || `${window.location.protocol}//${window.location.hostname || '127.0.0.1'}:${window.location.port || '3000'}/#/mobile-gateway`;
 
   // Set initial selections when data loads or from localStorage agent selection
   useEffect(() => {
@@ -1338,7 +1313,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferMode, setTransferMode] = useState<'department' | 'direct_phone'>('department');
   const [transferTargetDept, setTransferTargetDept] = useState<string>('');
-  const [transferPhoneNumber, setTransferPhoneNumber] = useState<string>('+91 98765 43210');
+  const [transferPhoneNumber, setTransferPhoneNumber] = useState<string>('');
   const [transferCountryCode, setTransferCountryCode] = useState<string>('IN');
   const [isTransferCountryDropdownOpen, setIsTransferCountryDropdownOpen] = useState(false);
   const [transferType, setTransferType] = useState<'blind' | 'warm' | 'voicemail'>('blind');
@@ -1872,11 +1847,11 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       dialed = 'TEST-BROWSER-MIC-01';
       callContactName = 'Test Browser Mic 1';
     } else if (callMode === 'android_gsm') {
-      dialed = targetPhoneNumber || '+91 98765 43210';
+      dialed = targetPhoneNumber || '';
       callContactName = 'Direct GSM Caller';
     } else {
       const chosenCarrier = cloudAndSipCarriers.find((c: any) => c.id === selectedLineId) || cloudAndSipCarriers[0];
-      dialed = targetPhoneNumber || chosenCarrier?.caller_id || '+1 (800) 555-0199';
+      dialed = targetPhoneNumber || chosenCarrier?.caller_id || '';
       callContactName = 'Direct PSTN Callee';
     }
 
@@ -1913,9 +1888,9 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       fetchAPI('/api/android-gateway/devices/test-call', {
         method: 'POST',
         body: JSON.stringify({
-          device_id: selectedLineId || 'samsung-sm-a507fn-01',
+          device_id: selectedLineId || (realAndroidDevices[0]?.id || 'android-primary'),
           destination_phone: dialed,
-          agent_id: selectedAgentId || 'agent-mitra-01',
+          agent_id: selectedAgentId || (backendAgents[0]?.id || 'agent-primary'),
         }),
       })
         .then((data) => {
@@ -2253,12 +2228,12 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         method: 'POST',
         body: JSON.stringify({
           device_id: 'android-dev-primary',
-          name: 'Pixel 8 Pro (Primary GSM)',
-          sim_number: '+91 98765 43210',
-          carrier_name: 'Jio 5G / Airtel',
+          name: 'Android Gateway Device',
+          sim_number: '',
+          carrier_name: '',
         }),
       });
-      addToast('Phone Gateway connected & marked ONLINE 5G!', 'success');
+      addToast('Gateway connection initialized', 'success');
     } catch {
       addToast('Error connecting phone gateway.', 'error');
     }
@@ -2281,7 +2256,8 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     };
 
     try {
-      await fetchAPI(`/api/android-gateway/devices/${selectedDevice?.id || 'samsung-sm-a507fn-01'}/bind`, {
+      const devId = selectedDevice?.id || (realAndroidDevices[0]?.id || 'android-primary');
+      await fetchAPI(`/api/android-gateway/devices/${devId}/bind`, {
         method: 'POST',
         body: JSON.stringify({
           agent_id: selectedAgentId,
@@ -2405,10 +2381,10 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       setPostCallReport({
         call_id: sessionId || `trans_${Date.now().toString().slice(-6)}`,
         session_id: sessionId,
-        phone_number: dialedTargetNumber || targetPhoneNumber || '+91 96508 55975',
-        device_name: activeDevice?.name || 'Galaxy S24 Ultra',
+        phone_number: dialedTargetNumber || targetPhoneNumber || 'Direct Line',
+        device_name: activeDevice?.name || 'Android GSM Gateway',
         carrier_name: activeDevice?.carrier || 'Cellular SIM',
-        agent_name: activeAgent?.name || 'Nikita',
+        agent_name: activeAgent?.name || 'AI Voice Agent',
         duration_seconds: callDuration || 18,
         status: 'Transferred',
         call_outcome: 'Transferred',
@@ -2650,15 +2626,15 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         effCarrierId = chosenMicCarrier?.id;
         effCostPerMin = chosenMicCarrier?.cost_per_min;
       } else if (callMode === 'android_gsm') {
-        effPhone = dialedTargetNumber || targetPhoneNumber || activeDevice?.simNumber || '+91 98765 43210';
+        effPhone = dialedTargetNumber || targetPhoneNumber || activeDevice?.simNumber || 'Direct GSM Line';
         effContactName = 'Direct GSM Caller';
-        effDevice = activeDevice?.name || 'Galaxy S24 Ultra';
+        effDevice = activeDevice?.name || 'Android GSM Gateway';
         effCarrier = activeDevice?.carrier || 'Cellular SIM';
       } else {
-        effPhone = dialedTargetNumber || targetPhoneNumber || activeCarrier?.caller_id || '+1 (800) 555-0199';
+        effPhone = dialedTargetNumber || targetPhoneNumber || activeCarrier?.caller_id || 'PSTN Line';
         effContactName = 'Direct PSTN Callee';
         effDevice = 'Cloud PSTN Route';
-        effCarrier = activeCarrier?.name || 'Twilio Cloud Telephony';
+        effCarrier = activeCarrier?.name || 'Cloud Telephony';
         effCarrierId = activeCarrier?.id;
         effCostPerMin = activeCarrier?.cost_per_min;
       }
@@ -3547,14 +3523,14 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                         <div className="space-y-1">
                           <div className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 flex items-center justify-between gap-2">
                             <span className="truncate min-w-0">
-                              {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Samsung SM-A507FN'}
+                              {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Android GSM Device'}
                             </span>
                             <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold text-xs shrink-0">
-                              {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.simNumber || '+91 78275 45502'}
+                              {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.simNumber || 'Number Unavailable'}
                             </span>
                           </div>
                           <div className="text-[11px] text-zinc-500 dark:text-zinc-400 flex items-center justify-between gap-2">
-                            <span className="truncate">Carrier: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.carrier || 'Jio 4G | Jio'}</span>
+                            <span className="truncate">Carrier: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.carrier || 'Carrier Unavailable'}</span>
                             <span className="shrink-0">Auto-Answer: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.autoAnswerDelaySec || 3}s</span>
                           </div>
                         </div>
@@ -3631,7 +3607,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                               Cellular Softphone Keypad
                             </div>
                             <div className="text-[10px] text-zinc-400 font-mono truncate">
-                              Line: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Samsung SM-A507FN'} • {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.simNumber || '+91 78275 45502'}
+                              Line: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Android GSM Device'} • {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.simNumber || 'Number Unavailable'}
                             </div>
                           </div>
                         </div>
@@ -3651,7 +3627,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                                   setSelectedCountryCode(detected.code);
                                 }
                               }}
-                              placeholder={`${activeCountry?.dialCode || '+91'} 98765 43210`}
+                              placeholder="Enter target phone number..."
                               className="w-full bg-transparent font-mono text-base font-extrabold text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none tracking-wide text-left"
                             />
                           </div>
@@ -3803,7 +3779,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-base font-extrabold text-emerald-400 tracking-wider">
-                          {callMode === 'mic' ? 'TEST-BROWSER-MIC-01' : (dialedTargetNumber || targetPhoneNumber || '+91 96508 55921')}
+                          {callMode === 'mic' ? 'TEST-BROWSER-MIC-01' : (dialedTargetNumber || targetPhoneNumber || 'Direct Line')}
                         </span>
                         <Badge variant="emerald" size="sm" className="text-[9px] py-0 font-mono">
                           {callingState === 'dialing' ? 'Dialing SIM...' : callingState === 'ringing' ? 'Ringing Phone...' : (callMode === 'mic' ? 'Live WebRTC Mic' : 'Live Connected')}
@@ -3838,9 +3814,9 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                           </>
                         ) : (
                           <>
-                            <span>Line: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Galaxy S24 Ultra'}</span>
+                            <span>Line: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Android GSM Gateway'}</span>
                             <span>•</span>
-                            <span>SIM: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.simNumber || '+18005559999'}</span>
+                            <span>SIM: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.simNumber || 'Primary SIM'}</span>
                             <span>•</span>
                             <span>Carrier: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.carrier || 'Cellular SIM'}</span>
                           </>
@@ -4251,21 +4227,21 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-zinc-500 dark:text-zinc-400 shrink-0">Device:</span>
                     <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate text-right">
-                      {realAndroidDevices[0]?.name || 'Samsung SM-A507FN'}
+                      {realAndroidDevices[0]?.name || 'Android GSM Device'}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-zinc-500 dark:text-zinc-400 shrink-0">SIM Number:</span>
                     <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-right">
-                      {realAndroidDevices[0]?.simNumber || '+91 78275 45502'}
+                      {realAndroidDevices[0]?.simNumber || 'Number Unavailable'}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200/60 dark:border-zinc-700/50">
                     <span className="text-zinc-500 dark:text-zinc-400 shrink-0">Network & Auto-Answer:</span>
                     <span className="font-medium text-zinc-700 dark:text-zinc-300 text-right truncate">
-                      {realAndroidDevices[0]?.carrier || 'Jio 4G'} • {realAndroidDevices[0]?.autoAnswer ? `${realAndroidDevices[0]?.autoAnswerDelaySec || 3}s` : 'Off'}
+                      {realAndroidDevices[0]?.carrier || 'Carrier Unavailable'} • {realAndroidDevices[0]?.autoAnswer ? `${realAndroidDevices[0]?.autoAnswerDelaySec || 3}s` : 'Off'}
                     </span>
                   </div>
                 </div>
@@ -4424,7 +4400,15 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                               <Check className="h-4 w-4" /> Selected
                             </span>
                           ) : (
-                            <Button size="sm" variant="outline" className="text-xs font-semibold">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs font-semibold cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/60 hover:text-blue-600 dark:hover:text-blue-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTransferTargetDept(dept.id);
+                              }}
+                            >
                               Select
                             </Button>
                           )}
@@ -4506,7 +4490,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                               setTransferCountryCode(detected.code);
                             }
                           }}
-                          placeholder="+91 98765 43210"
+                          placeholder="Enter transfer destination number..."
                           className="w-full bg-transparent font-mono text-sm font-extrabold text-zinc-900 dark:text-zinc-100 focus:outline-none px-1"
                         />
                         {transferPhoneNumber && (
@@ -4529,10 +4513,10 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                     </span>
                     <div className="grid grid-cols-2 gap-1.5 text-xs">
                       {[
-                        { label: '📞 Escalation Desk', phone: '+91 98765 43210' },
-                        { label: '🏢 Manager Line', phone: '+91 78275 45502' },
+                        { label: '📞 Escalation Desk', phone: '+1 800 555 0100' },
+                        { label: '🏢 Manager Line', phone: '+1 800 555 0101' },
                         { label: '🎧 Support Hotline', phone: '+1 800 555 0199' },
-                        { label: '📱 Companion SIM', phone: '+91 96508 55975' }
+                        { label: '📱 Direct Extension', phone: '+1 800 555 0122' }
                       ].map(p => (
                         <button
                           key={p.phone}
@@ -4770,7 +4754,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-base font-extrabold text-emerald-400">
-                      {postCallReport.phone_number || dialedTargetNumber || '+91 96508 55975'}
+                      {postCallReport.phone_number || dialedTargetNumber || 'Number Unavailable'}
                     </span>
                     {postCallReport.status === 'Transferred' || postCallReport.call_outcome === 'Transferred' ? (
                       <Badge variant="blue" size="sm" className="text-[10px] py-0 font-mono flex items-center gap-1 bg-blue-500/20 text-blue-300 border-blue-500/30">
@@ -4783,11 +4767,11 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                     )}
                   </div>
                   <div className="text-[11px] text-zinc-300 mt-0.5 flex items-center gap-2">
-                    <span>Line: {postCallReport.device_name || 'Galaxy S24 Ultra'}</span>
+                    <span>Line: {postCallReport.device_name || 'Android Gateway'}</span>
                     <span>•</span>
-                    <span>Carrier: {postCallReport.carrier_name || 'Cellular SIM'}</span>
+                    <span>Carrier: {postCallReport.carrier_name || 'Carrier Unavailable'}</span>
                     <span>•</span>
-                    <span>Agent: {postCallReport.agent_name || 'Nikita'}</span>
+                    <span>Agent: {postCallReport.agent_name || 'AI Agent'}</span>
                   </div>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import re
 import time
 from typing import Any
 
@@ -9,9 +10,13 @@ from sqlalchemy.orm import Session
 from backend.auth.deps import get_current_user
 from backend.database.session import get_db
 from backend.engine.agent_engine import AgentToolExecutor, EnterpriseAgentEngine
-from backend.models.models import Agent as AgentModel, User
+from backend.models.models import Agent as AgentModel, ProviderCredential, User
 from backend.routers.knowledge_base import DynamicLLMInvoker
 from backend.routers.providers import resolve_provider_credential
+from backend.services.live_knowledge_service import LiveKnowledgeService
+from backend.services.session_memory_service import SessionMemoryManager
+from backend.services.telephony_engine import TelephonyCallingEngine
+from backend.skills.skill_registry import SkillRegistry
 
 router = APIRouter(prefix="/api/agent-engine", tags=["Enterprise AI Agent Engine"])
 
@@ -26,133 +31,6 @@ def get_or_create_engine(agent_id: str, system_prompt: str = "") -> EnterpriseAg
             system_prompt=system_prompt or "You are a professional AI Voice assistant.",
         )
     return _engine_cache[agent_id]
-
-
-def _detect_llm_provider(llm_model: str) -> str:
-    """Detect which provider to use based on the model name."""
-    m = llm_model.lower()
-    if "gemini" in m or "google" in m:
-        return "google"
-    if "gpt" in m or "o1" in m or "o3" in m or "openai" in m:
-        return "openai"
-    if "claude" in m or "anthropic" in m:
-        return "anthropic"
-    if "llama" in m or "groq" in m or "mixtral" in m:
-        return "groq"
-    if "deepseek" in m:
-        return "deepseek"
-    return "google"
-
-
-async def _call_real_llm(
-    provider: str,
-    api_key: str,
-    model_id: str,
-    system_prompt: str,
-    conversation_history: list[dict[str, str]],
-) -> str | None:
-    """Make a real LLM API call and return the AI response text."""
-    if not api_key:
-        return None
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        try:
-            if provider == "google":
-                # Gemini API
-                contents = []
-                # Add system instruction as first user turn context
-                for msg in conversation_history:
-                    role = "user" if msg["role"] == "user" else "model"
-                    contents.append({"role": role, "parts": [{"text": msg["text"]}]})
-
-                res = await client.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}",
-                    headers={"Content-Type": "application/json"},
-                    json={
-                        "systemInstruction": {"parts": [{"text": system_prompt}]},
-                        "contents": contents,
-                    },
-                )
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            return parts[0].get("text", "")
-
-            elif provider == "openai":
-                messages = [{"role": "system", "content": system_prompt}]
-                for msg in conversation_history:
-                    role = "user" if msg["role"] == "user" else "assistant"
-                    messages.append({"role": role, "content": msg["text"]})
-
-                res = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                    json={"model": model_id, "messages": messages, "max_tokens": 300},
-                )
-                if res.status_code == 200:
-                    choices = res.json().get("choices", [])
-                    if choices:
-                        return choices[0].get("message", {}).get("content", "")
-
-            elif provider == "anthropic":
-                messages = []
-                for msg in conversation_history:
-                    role = "user" if msg["role"] == "user" else "assistant"
-                    messages.append({"role": role, "content": msg["text"]})
-
-                res = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": api_key,
-                        "anthropic-version": "2023-06-01",
-                        "Content-Type": "application/json",
-                    },
-                    json={"model": model_id, "system": system_prompt, "messages": messages, "max_tokens": 300},
-                )
-                if res.status_code == 200:
-                    content = res.json().get("content", [])
-                    if content:
-                        return content[0].get("text", "")
-
-            elif provider == "groq":
-                messages = [{"role": "system", "content": system_prompt}]
-                for msg in conversation_history:
-                    role = "user" if msg["role"] == "user" else "assistant"
-                    messages.append({"role": role, "content": msg["text"]})
-
-                res = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                    json={"model": model_id, "messages": messages, "max_tokens": 300},
-                )
-                if res.status_code == 200:
-                    choices = res.json().get("choices", [])
-                    if choices:
-                        return choices[0].get("message", {}).get("content", "")
-
-            elif provider == "deepseek":
-                messages = [{"role": "system", "content": system_prompt}]
-                for msg in conversation_history:
-                    role = "user" if msg["role"] == "user" else "assistant"
-                    messages.append({"role": role, "content": msg["text"]})
-
-                res = await client.post(
-                    "https://api.deepseek.com/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                    json={"model": model_id, "messages": messages, "max_tokens": 300},
-                )
-                if res.status_code == 200:
-                    choices = res.json().get("choices", [])
-                    if choices:
-                        return choices[0].get("message", {}).get("content", "")
-
-        except Exception as e:
-            print(f"LLM API call error ({provider}/{model_id}): {e}")
-
-    return None
 
 
 class InteractRequest(BaseModel):
@@ -184,34 +62,77 @@ async def process_agent_turn(
     current_user: User = Depends(get_current_user),
 ):
     start_time = time.time()
-    input_text = req.user_message or req.user_input or ""
+    input_text = (req.user_message or req.user_input or "").strip()
     skill = req.selected_skill or req.active_skill
-    if skill == "none":
+    if skill in ["none", "default", "dynamic"]:
         skill = None
 
     # Look up agent from DB for dynamic name, system_prompt, llm_model
-    agent_row = db.query(AgentModel).filter(AgentModel.id == req.agent_id).first()
-    agent_name = str(agent_row.name) if agent_row and agent_row.name else "AI Assistant"
-    agent_system_prompt = (str(agent_row.system_prompt) if agent_row and agent_row.system_prompt
-                           else "You are an empathetic, professional AI voice assistant.")
-    active_llm_cfg = DynamicLLMInvoker.resolve_selected_llm_config(db=db)
-    agent_llm_model: str = (str(agent_row.llm_model) if agent_row and agent_row.llm_model
-                            else (str(active_llm_cfg.get("model")) if active_llm_cfg and active_llm_cfg.get("model") else "Gemini 1.5 Pro"))
+    agent_row = None
+    if req.agent_id:
+        agent_row = db.query(AgentModel).filter(AgentModel.id == req.agent_id).first()
+        if not agent_row:
+            agent_row = db.query(AgentModel).filter(AgentModel.name == req.agent_id).first()
 
-    # Build system prompt with agent identity
-    full_system_prompt = (
-        f"Your name is {agent_name}. {agent_system_prompt} "
-        f"Always respond as {agent_name}. Keep responses concise and helpful."
+    agent_name = str(agent_row.name) if agent_row and agent_row.name else "Nikita"
+    agent_lang = str(agent_row.language) if agent_row and agent_row.language else "Auto-Detect"
+    agent_system_prompt = (
+        str(agent_row.system_prompt)
+        if agent_row and agent_row.system_prompt
+        else "You are an empathetic, professional AI voice assistant."
     )
 
-    engine = get_or_create_engine(req.agent_id, full_system_prompt)
+    org_id_val = str(current_user.organization_id) if current_user.organization_id else ""
+    user_id_val = str(current_user.id) if current_user.id else ""
+
+    agent_llm_model = str(getattr(agent_row, "llm_model", None) or "").strip() if agent_row else None
+    agent_llm_provider = str(getattr(agent_row, "llm_provider", None) or "").strip() if agent_row else None
+
+    # Dynamically resolve active LLM credentials and config directly from API & Integrations SSOT
+    llm_cfg = DynamicLLMInvoker.resolve_selected_llm_config(
+        selected_provider=agent_llm_provider if agent_llm_provider else None,
+        selected_model=agent_llm_model if agent_llm_model else None,
+        db=db,
+        org_id=org_id_val,
+        user_id=user_id_val,
+    )
+    if not llm_cfg:
+        llm_cfg = DynamicLLMInvoker.resolve_selected_llm_config(db=db, org_id=org_id_val, user_id=user_id_val)
+
+    provider = (llm_cfg.get("provider") or "dynamic").lower() if llm_cfg else "dynamic"
+    effective_model = str(llm_cfg.get("model") or agent_llm_model or "").strip() if llm_cfg else (agent_llm_model or "")
+
+    # Build specialized skill directive if a skill preset flow is selected
+    skill_directive = ""
+    if skill:
+        sk_obj = SkillRegistry.get_skill(skill)
+        if sk_obj:
+            skill_directive = f"ACTIVE SPECIALIZED VOICE SKILL: {sk_obj.name}\nObjective: {sk_obj.description}\n{sk_obj.system_prompt_addon}\n{sk_obj.markdown_body}"
+
+    custom_instructions = f"{agent_system_prompt}\n\n{skill_directive}".strip() if skill_directive else agent_system_prompt
+
+    # Initialize active session memory engine
+    session_engine_id = req.agent_id or "default_playground"
+    engine = get_or_create_engine(session_engine_id, custom_instructions)
     engine.add_turn(speaker="user", text=input_text, tokens=len(input_text.split()))
 
-    # Determine LLM provider from model name and resolve API key
-    provider = _detect_llm_provider(agent_llm_model)
-    api_key = resolve_provider_credential(
-        db, str(current_user.organization_id), str(current_user.id), provider
+    memory_mgr = SessionMemoryManager(session_id=session_engine_id, phone_number="")
+    memory_mgr.extract_and_update(user_text=input_text, ai_text="")
+    session_memory_prompt = memory_mgr.get_memory_prompt_block()
+
+    full_system_prompt = TelephonyCallingEngine.build_telephony_system_prompt(
+        agent_name=agent_name,
+        business_type="Customer Support & Inbound Services",
+        configured_language=agent_lang,
+        custom_instructions=custom_instructions,
+        session_memory_context=session_memory_prompt,
+        active_model=effective_model,
     )
+
+    # Real-Time Live Knowledge Grounding (1,722+ Public APIs Dataset & Live Resolvers)
+    live_ground_truth = await LiveKnowledgeService.resolve_realtime_knowledge_query(input_text)
+    if live_ground_truth:
+        full_system_prompt += f"\n\nREAL-TIME GROUND TRUTH FOR CALLER'S LIVE QUESTION:\n{live_ground_truth}"
 
     # Build conversation history from engine turns
     conversation_history = [
@@ -219,39 +140,89 @@ async def process_agent_turn(
         for t in engine.turns
     ]
 
-    # Try real LLM API call
-    ai_text = await _call_real_llm(
-        provider=provider,
-        api_key=api_key,
-        model_id=agent_llm_model,
-        system_prompt=full_system_prompt,
-        conversation_history=conversation_history,
+    # Execute resilient multi-model LLM API call directly using DynamicLLMInvoker SSOT
+    raw_ai_text = None
+    if llm_cfg and (llm_cfg.get("api_key") or provider == "ollama"):
+        try:
+            call_res = await DynamicLLMInvoker.call_conversation_llm_async(
+                system_prompt=full_system_prompt,
+                conversation_history=conversation_history,
+                config=llm_cfg,
+            )
+            raw_ai_text = call_res.get("text")
+        except Exception as e:
+            print(f"[AgentEngineRouter] Primary LLM call error: {e}")
+
+    # If primary provider was unavailable/rate-limited, dynamically iterate all other connected LLM providers from database SSOT
+    if not raw_ai_text:
+        try:
+            all_llm_creds = db.query(ProviderCredential).filter(
+                ProviderCredential.category == "llm"
+            ).all()
+            for alt_cred in all_llm_creds:
+                alt_pname = str(alt_cred.provider_name or "").lower().strip()
+                if alt_pname == provider or alt_pname == "ollama":
+                    continue
+                alt_cfg = DynamicLLMInvoker.resolve_selected_llm_config(
+                    selected_provider=alt_pname,
+                    db=db,
+                    org_id=org_id_val,
+                    user_id=user_id_val,
+                )
+                if alt_cfg and alt_cfg.get("api_key"):
+                    call_res = await DynamicLLMInvoker.call_conversation_llm_async(
+                        system_prompt=full_system_prompt,
+                        conversation_history=conversation_history,
+                        config=alt_cfg,
+                    )
+                    if call_res.get("text"):
+                        raw_ai_text = call_res["text"]
+                        provider = alt_pname
+                        effective_model = alt_cfg.get("model") or effective_model
+                        break
+        except Exception as fb_err:
+            print(f"[AgentEngineRouter] Dynamic provider failover error: {fb_err}")
+
+    # Extract clean speech and LLM-native autonomous hangup signal
+    ai_text = None
+    if raw_ai_text:
+        ai_text, _ = TelephonyCallingEngine.extract_hangup_signal(raw_ai_text)
+
+    # Intelligent natural fallback if offline or LLM provider unavailable
+    if not ai_text or not ai_text.strip():
+        if skill:
+            ai_text = SkillRegistry.evaluate_skill(
+                skill_name=skill,
+                input_text=input_text,
+                agent_name=agent_name,
+                language=agent_lang,
+            )
+        if not ai_text or not ai_text.strip():
+            if live_ground_truth:
+                ai_text = f"Hello! {live_ground_truth}"
+            else:
+                ai_text = f"Hello! I am {agent_name}. I have noted: '{input_text}'. How may I assist you further?"
+
+    # Clean any leaked formatting, symbols, or identifiers
+    if ai_text:
+        ai_text = re.sub(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', '', ai_text)
+        ai_text = re.sub(r'[*#_`]', '', ai_text)
+        ai_text = " ".join(ai_text.split()).strip()
+
+    # Update session memory
+    memory_mgr.extract_and_update(user_text="", ai_text=ai_text)
+
+    # Record AI turn in engine memory
+    latency = round((time.time() - start_time) * 1000, 2)
+    turn_tokens = max(1, len(ai_text.split()))
+    engine.add_turn(
+        speaker="assistant",
+        text=ai_text,
+        tokens=turn_tokens,
+        latency_ms=latency,
+        provider=provider.capitalize(),
     )
 
-    # Fallback to engine skill-based response if LLM call failed
-    if not ai_text:
-        result = engine.process_turn(
-            user_input=input_text,
-            active_skill=skill,
-            tool_call=req.tool_call,
-            tool_args=req.tool_args,
-            agent_name=agent_name,
-        )
-        ai_text = result.get("ai_response", f"Hello, I'm {agent_name}. How can I help you?")
-        # Remove the duplicate user turn that process_turn added
-        if len(engine.turns) >= 2 and engine.turns[-2].speaker == "user":
-            engine.turns.pop(-2)
-    else:
-        # Record AI turn in engine memory
-        engine.add_turn(
-            speaker="assistant",
-            text=ai_text,
-            tokens=len(ai_text.split()),
-            latency_ms=round((time.time() - start_time) * 1000, 2),
-            provider=provider.capitalize(),
-        )
-
-    latency = round((time.time() - start_time) * 1000, 2)
     total_tokens = engine.get_token_count()
 
     return {
@@ -261,7 +232,7 @@ async def process_agent_turn(
         "latency_ms": latency,
         "tokens_used": total_tokens,
         "estimated_cost": round(total_tokens * 0.000003, 6),
-        "selected_provider": f"{provider.capitalize()} ({agent_llm_model})",
+        "selected_provider": f"{provider.capitalize()} ({effective_model})" if effective_model else provider.capitalize(),
     }
 
 

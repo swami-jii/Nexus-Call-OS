@@ -127,10 +127,8 @@ def execute_workflow_graph(
     raw_nodes = getattr(wf, "nodes_json", [])
     nodes: list[dict[str, Any]] = raw_nodes if isinstance(raw_nodes, list) else []
     variables = initial_variables or {
-        "name": "Sarah Connor",
-        "company": "Cyberdyne Systems",
-        "phone": "+18005550199",
-        "email": "sarah@cyberdyne.com",
+        "name": current_user.full_name or "Test User",
+        "email": current_user.email or "user@example.com",
     }
 
     execution_trace = []

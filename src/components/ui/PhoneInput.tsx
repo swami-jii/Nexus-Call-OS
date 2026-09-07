@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Search, Check, Phone } from 'lucide-react';
-import { ALL_COUNTRIES, Country, detectCountryFromPhone } from '../../data/countries';
+import { ALL_COUNTRIES, Country, detectCountryFromPhone } from '../../data/globalCountryCodesCatalog';
 
 export interface PhoneInputProps {
   value: string;

@@ -198,7 +198,7 @@ export const TypeSpecificValueInput: React.FC<{
           <span className="absolute left-2.5 top-2.5 text-zinc-400 font-mono text-xs">📞</span>
           <input
             type="tel"
-            placeholder={placeholder || 'e.g. +91 98765 43210'}
+            placeholder={placeholder || 'e.g. +1 555 0100'}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="w-full h-9 pl-8 pr-3 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-hidden focus:border-amber-500"
@@ -448,7 +448,7 @@ const getPresetsForDataType = (type: string = 'String'): { label: string; value:
     { label: 'Youtube Channel Link', value: 'https://www.youtube.com/@Careersupport1', desc: 'Video & Social Channel', badge: 'URL' },
     { label: 'Official Website Link', value: 'https://careersupport1.com/', desc: 'Main domain landing URL', badge: 'URL' },
     { label: 'Customer Support Email', value: 'official@careersupport1.com', desc: 'Customer support mailbox', badge: 'Email' },
-    { label: 'Helpdesk Phone Number', value: '+91 98765 43210', desc: 'Inbound hotline number', badge: 'Phone' },
+    { label: 'Helpdesk Phone Number', value: '+1 800 555 0199', desc: 'Inbound hotline number', badge: 'Phone' },
     { label: 'Lead Priority: High', value: 'High Priority', desc: 'Urgent lead routing tag', badge: 'Tier' },
     { label: 'Account Tier: Enterprise', value: 'Enterprise Tier', desc: 'Premium client status', badge: 'Tier' },
     { label: 'Appointment Status: Confirmed', value: 'Confirmed', desc: 'Booking confirmation flag', badge: 'Status' }
@@ -575,6 +575,17 @@ const VariableComboboxInput: React.FC<VariableComboboxInputProps> = ({
           {(isDateType || isDateTimeType) && (
             <button
               type="button"
+              onClick={(e) => {
+                const prevInput = e.currentTarget.parentElement?.querySelector('input[type="date"], input[type="datetime-local"]') as HTMLInputElement | null;
+                if (prevInput) {
+                  if (typeof prevInput.showPicker === 'function') {
+                    prevInput.showPicker();
+                  } else {
+                    prevInput.focus();
+                    prevInput.click();
+                  }
+                }
+              }}
               className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 p-1.5 transition-colors cursor-pointer"
               title="Open Calendar Date Picker"
             >
@@ -1337,48 +1348,6 @@ export const VISION_DOC_CATALOG: GenericAiProviderCatalogItem[] = [
   { provider: 'docling_local', name: 'DS-Docling Local Structural Parser', category: 'local', endpoint: 'http://localhost:8000/v1', getKeyUrl: '', defaultModel: 'docling-pdf-v1', description: 'IBM DS-Docling local PDF layout & table extraction engine' }
 ];
 
-export const MOCK_TARGET_AI_AGENTS = [
-  'Inbound Customer Care AI (Sarah)',
-  'Outbound Real Estate SDR (Alex)',
-  'Medical Appointment Scheduler (Dr. Maya)',
-  'Billing & Payment Collection Agent',
-  'Lead Qualification & Scoring Bot',
-  'VIP Concierge Support Agent'
-];
-
-export const MOCK_TARGET_DEPARTMENTS = [
-  'Inbound Sales & SDR',
-  'Customer Support & Helpdesk',
-  'Billing & Accounts Department',
-  'Technical Support & IT',
-  'Healthcare / Clinical Operations',
-  'Operations & Logistics'
-];
-
-export const MOCK_TARGET_CAMPAIGNS = [
-  'Q3 Real Estate Outbound Leads',
-  'Appointment Reminder & Confirmation Blast',
-  'Cold Call B2B Lead Generation',
-  'Inbound Toll-Free Support Line',
-  'Customer Satisfaction Survey Follow-up'
-];
-
-export const MOCK_TARGET_PHONE_NUMBERS = [
-  '+1 (555) 234-5678 (US Primary Toll-Free)',
-  '+91 98765 43210 (India PSTN Hotline)',
-  '+44 20 7946 0912 (UK London Trunk)',
-  '+971 4 321 5678 (Dubai Regional DID)',
-  '+61 2 9876 5432 (Sydney Direct SIP)'
-];
-
-export const MOCK_TARGET_ROLES = [
-  'Sales Representatives & SDRs',
-  'Tier-2 Support Supervisors',
-  'Billing & Finance Managers',
-  'Executive Admin & Directors',
-  'On-Call Operations Engineers'
-];
-
 export const SIDEBAR_PROJECT_MODULES = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', category: 'Operational Suite' },
   { id: 'demo-studio', name: 'Live Call Studio', icon: '🔴', category: 'Operational Suite' },
@@ -1397,6 +1366,14 @@ export const SIDEBAR_PROJECT_MODULES = [
   { id: 'logs', name: 'Realtime Terminal Logs', icon: '💻', category: 'Knowledge & Assets' },
   { id: 'billing', name: 'Billing & Usage', icon: '💳', category: 'Account & System' },
   { id: 'settings', name: 'OS Settings', icon: '⚙️', category: 'Account & System' }
+];
+
+export const DEFAULT_RBAC_ROLES = [
+  'Sales Representatives & SDRs',
+  'Tier-2 Support Supervisors',
+  'Billing & Finance Managers',
+  'Executive Admin & Directors',
+  'On-Call Operations Engineers'
 ];
 
 export const getDynamicWorkspaceTargets = (
@@ -1434,10 +1411,6 @@ export const getDynamicWorkspaceTargets = (
       });
     } catch (e) {}
 
-    MOCK_TARGET_AI_AGENTS.forEach(def => {
-      if (!list.includes(def)) list.push(def);
-    });
-
     return list.map(name => ({ value: name, label: `🤖 ${name}`, badge: 'AI Agent' }));
   }
 
@@ -1462,10 +1435,6 @@ export const getDynamicWorkspaceTargets = (
       });
     } catch (e) {}
 
-    MOCK_TARGET_CAMPAIGNS.forEach(def => {
-      if (!list.includes(def)) list.push(def);
-    });
-
     return list.map(name => ({ value: name, label: `📢 ${name}`, badge: 'Campaign' }));
   }
 
@@ -1484,10 +1453,6 @@ export const getDynamicWorkspaceTargets = (
         }
       });
     } catch (e) {}
-
-    MOCK_TARGET_PHONE_NUMBERS.forEach(def => {
-      if (!list.includes(def)) list.push(def);
-    });
 
     return list.map(num => ({ value: num, label: `📞 ${num}`, badge: 'Phone DID' }));
   }
@@ -1508,10 +1473,6 @@ export const getDynamicWorkspaceTargets = (
       });
     } catch (e) {}
 
-    ['Inbound Reception IVR Flow', 'Appointment Scheduling Logic', 'Payment Collection Sequence', 'Emergency Triage Escalation'].forEach(def => {
-      if (!list.includes(def)) list.push(def);
-    });
-
     return list.map(name => ({ value: name, label: `⚡ ${name}`, badge: 'Workflow' }));
   }
 
@@ -1523,15 +1484,14 @@ export const getDynamicWorkspaceTargets = (
       if (name && !list.includes(name)) list.push(name);
     });
 
-    MOCK_TARGET_DEPARTMENTS.forEach(def => {
-      if (!list.includes(def)) list.push(def);
-    });
-
     return list.map(name => ({ value: name, label: `🏢 ${name}`, badge: 'Department' }));
   }
 
   if (scope === 'Team / Role Specific') {
-    return MOCK_TARGET_ROLES.map(role => ({ value: role, label: `👥 ${role}`, badge: 'Role / Team' }));
+    const roles = (customItems['roles'] && customItems['roles'].length > 0)
+      ? customItems['roles'].map(r => r.display_name || r.name)
+      : DEFAULT_RBAC_ROLES;
+    return roles.map(role => ({ value: role, label: `👥 ${role}`, badge: 'Role / Team' }));
   }
 
   return [];
@@ -2388,7 +2348,7 @@ export const DEFAULT_BUSINESS_RULES_ITEMS: Record<string, any[]> = {
       protocol: 'WebRTC / HTTP Direct',
       sim_slots: '2 Slots',
       active_sims: '2 Active SIMs',
-      sim_labels: 'Slot 1: Jio 5G Unlimited (+91 98765 43210) • Slot 2: Airtel 5G Business (+91 91234 56789)',
+      sim_labels: 'Slot 1: Cellular SIM #1 • Slot 2: Cellular SIM #2',
       signal_strength: '98% (-65 dBm 5G NR)',
       battery_level: '100% (AC Powered)',
       pricing_mode: 'Free (Platform Zero-Charge)',
@@ -2430,7 +2390,7 @@ export const DEFAULT_BUSINESS_RULES_ITEMS: Record<string, any[]> = {
       protocol: 'AT Commands / chan_dongle',
       sim_slots: '1 Slot',
       active_sims: '1 Active SIM',
-      sim_labels: 'Slot 1: Airtel 4G LTE VoLTE Dedicated Line (+91 99887 76655)',
+      sim_labels: 'Slot 1: 4G LTE VoLTE Dedicated Line',
       signal_strength: '95% (-68 dBm 4G VoLTE)',
       battery_level: '100% (USB Host Powered)',
       pricing_mode: 'Free (Platform Zero-Charge)',
@@ -5986,7 +5946,7 @@ const getAuthToken = (): string => {
         auth_token_placeholder: '/dev/ttyUSB2 or COM4',
         auth_token_tip: 'Audio data stream device path',
         api_key: 'SIM IMSI / Phone Number',
-        api_key_placeholder: '+91 98765 43210',
+        api_key_placeholder: '+1 555 0100',
         api_key_tip: 'Installed SIM card phone number',
         api_secret: 'Modem Baud Rate',
         api_secret_placeholder: '115200',
@@ -6432,7 +6392,7 @@ const getAuthToken = (): string => {
   const [gsmForm, setGsmForm] = useState({
     name: '', device_type: 'Android GSM Gateway', description: '', location: 'Headquarters Rack #1', status: 'Active',
     ip_host: '192.168.1.140:8080', port: '8080', protocol: 'HTTP/REST', api_key: '',
-    sim_slots: '2', active_sims: '2', sim_labels: 'Jio 5G SIM #1 • Airtel 4G SIM #2', signal_strength: '95% (Strong 5G/4G)',
+    sim_slots: '2', active_sims: '2', sim_labels: 'Primary SIM Slot #1 • Secondary SIM Slot #2', signal_strength: '100%',
     pricing_mode: 'Free (Platform Zero-Charge)', capabilities: 'Voice, SMS, DTMF, Call Recording'
   });
 
@@ -7203,7 +7163,7 @@ const getAuthToken = (): string => {
       if (!keepExistingValues || !gsmForm.network_carrier) suggestedCarrier = 'Jio 5G & Airtel 5G Dual-SIM';
       if (!keepExistingValues || !gsmForm.location) suggestedLocation = 'Mumbai Server Room Rack 4U';
       suggestedSlots = '2 Slots';
-      if (!keepExistingValues || !gsmForm.sim_labels) suggestedLabels = 'Slot 1: Jio 5G Unlimited (+91 98765 43210) • Slot 2: Airtel 5G Business';
+      if (!keepExistingValues || !gsmForm.sim_labels) suggestedLabels = 'Slot 1: Cellular SIM #1 • Slot 2: Cellular SIM #2';
       suggestedPort = '8080';
     }
 

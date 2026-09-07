@@ -92,33 +92,33 @@ class GeminiProvider(LLMProviderInterface):
                 contents.append({"role": "user", "parts": [{"text": user_input}]})
 
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.post(url, json={"contents": contents})
-                    if resp.status_code == 200:
-                        res = resp.json()
-                        text = (
-                            res.get("candidates", [{}])[0]
-                            .get("content", {})
-                            .get("parts", [{}])[0]
-                            .get("text", "")
-                        )
-                        return {
-                            "text": text,
-                            "provider": self.get_provider_name(),
-                            "model": self.model,
-                            "mode": "live",
-                        }
+                    m_clean = (self.model or "").replace("models/", "").strip()
+                    if m_clean:
+                        m_url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_clean}:generateContent?key={self.api_key}"
+                        resp = await client.post(m_url, json={"contents": contents})
+                        if resp.status_code == 200:
+                            res = resp.json()
+                            text = (
+                                res.get("candidates", [{}])[0]
+                                .get("content", {})
+                                .get("parts", [{}])[0]
+                                .get("text", "")
+                            )
+                            if text:
+                                return {
+                                    "text": text.strip(),
+                                    "provider": self.get_provider_name(),
+                                    "model": m_clean,
+                                    "mode": "live",
+                                }
             except Exception as e:
-                print(f"[GeminiProvider] Live LLM fallback to sandbox: {e}")
+                print(f"[GeminiProvider] Live LLM error: {e}")
 
-        # Simulated Sandbox Conversational Response
-        response_text = (
-            f"Thank you for contacting Nexus AI Voice OS. Regarding '{user_input}', "
-            "our automated system is processing your request."
-        )
+        # Dynamic Sandbox Fallback
         return {
-            "text": response_text,
+            "text": f"I have received your inquiry: '{user_input}'. Connecting to active telephony session.",
             "provider": self.get_provider_name(),
-            "model": self.model,
+            "model": self.model or "",
             "mode": "sandbox",
         }
 
@@ -219,8 +219,7 @@ class OpenAIProvider(LLMProviderInterface):
 
         # Simulated Sandbox Conversational Response
         response_text = (
-            f"Hello! I am your AI agent powered by OpenAI. "
-            f"I've recorded your statement: '{user_input}'."
+            f"I have received your inquiry: '{user_input}'. Connecting to active session."
         )
         return {
             "text": response_text,

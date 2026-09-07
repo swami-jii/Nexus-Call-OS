@@ -70,6 +70,11 @@ import asyncio
 
 
 def test_android_provider_adapter():
+    from backend.routers.android_gateway_router import _device_registry
+    _device_registry.register_device(
+        device_id="android-test-99",
+        name="Android Companion Test",
+    )
     async def run():
         adapter = AndroidCompanionProviderAdapter(session_id="test_session_android_01")
         connected = await adapter.connect({"device_id": "android-test-99"})

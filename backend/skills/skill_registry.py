@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict, List, Optional
 from backend.skills.base_skill import BaseSkill
 
@@ -35,19 +36,28 @@ class SkillRegistry:
         input_text: str,
         agent_name: str = "AI Assistant",
         context: Optional[Dict[str, Any]] = None,
+        language: str = "Auto-Detect",
     ) -> str:
         if not cls._skills:
             from backend.skills.skill_loader import load_all_skills_from_disk
             load_all_skills_from_disk()
 
-        if skill_name and skill_name in cls._skills:
-            return cls._skills[skill_name].execute(input_text, agent_name=agent_name, context=context)
+        # If a specific skill is requested, execute it directly
+        if skill_name and skill_name != "none" and skill_name in cls._skills:
+            return cls._skills[skill_name].execute(input_text, agent_name=agent_name, context=context, language=language)
 
-        # Fallback keyword matching against trigger phrases
-        clean_lower = input_text.lower().strip()
+        clean_words = set(re.findall(r'\b[\w\u0900-\u097F]+\b', input_text.lower()))
+
+        # Match triggers strictly as whole words when skill is specified or strong intent match
+        # Match triggers from loaded skills
         for skill in cls._skills.values():
             for trigger in skill.triggers:
-                if trigger in clean_lower:
-                    return skill.execute(input_text, agent_name=agent_name, context=context)
+                t_words = trigger.lower().split()
+                if len(t_words) == 1 and t_words[0] in clean_words:
+                    if t_words[0] in ["hi", "hey", "hello"] and len(clean_words) > 3:
+                        continue
+                    return skill.execute(input_text, agent_name=agent_name, context=context, language=language)
+                elif len(t_words) > 1 and trigger.lower() in input_text.lower():
+                    return skill.execute(input_text, agent_name=agent_name, context=context, language=language)
 
-        return f"Hello, I am {agent_name}. Regarding '{input_text}', Nexus AI Voice OS is processing this request for you."
+        return ""

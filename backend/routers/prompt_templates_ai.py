@@ -175,7 +175,7 @@ def resolve_active_ai_service(
                 cand_target_model = model_pref if model_pref and model_pref.lower() not in ["dynamic", "default"] else str(c.primary_model or "").strip()
                 candidates.append({
                     "provider": p_name,
-                    "model": cand_target_model or "gemini-2.5-flash",
+                    "model": cand_target_model,
                     "api_key": raw_key,
                     "base_url": c.base_url
                 })
@@ -233,7 +233,7 @@ def resolve_active_ai_service(
             if val:
                 return {
                     "provider": prov_key,
-                    "model": model_pref or ("gemini-2.5-flash" if prov_key == "google" else "claude-3-5-sonnet-20241022" if prov_key == "anthropic" else "gpt-4o"),
+                    "model": model_pref or "",
                     "api_key": val,
                     "base_url": None
                 }
@@ -488,23 +488,9 @@ def call_ai_chat_completion(
     if clean_prov in ["google", "gemini", "google_ai_studio"]:
         clean_key = api_key.replace("Bearer ", "").strip()
         raw_m = (model or "").strip()
-        
-        # Sanitize Google model ID
-        if not raw_m or any(x in raw_m.lower() for x in ["studio", "google ai", "default", "dynamic", "google"]):
-            target_model = "gemini-2.5-flash"
-        elif "gemini" in raw_m.lower():
-            if "2.5" in raw_m or "2-5" in raw_m:
-                target_model = "gemini-2.5-flash"
-            elif "2.0" in raw_m or "2-0" in raw_m:
-                target_model = "gemini-2.0-flash"
-            elif "1.5" in raw_m or "1-5" in raw_m:
-                target_model = "gemini-1.5-flash"
-            elif raw_m.startswith("gemini-"):
-                target_model = raw_m
-            else:
-                target_model = "gemini-2.5-flash"
-        else:
-            target_model = raw_m.replace("models/", "")
+        target_model = raw_m.replace("models/", "").strip()
+        if not target_model:
+            return "No active model specified for Google Gemini."
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={clean_key}"
         
@@ -579,7 +565,7 @@ def call_ai_chat_completion(
         }
         formatted_msgs = [{"role": "system", "content": system_instruction}] + messages
         payload = {
-            "model": model or "gpt-4o",
+            "model": model,
             "messages": formatted_msgs,
             "temperature": 0.3,
             "response_format": {"type": "json_object"}
@@ -600,7 +586,7 @@ def fallback_template_generation(
 ) -> GeneratedTemplateResponse:
     """Smart fallback generator when external API is unavailable"""
     user_prompt = req.user_prompt.lower().strip()
-    selected_model = available_models[0]["model"] if available_models else "gemini-2.5-flash"
+    selected_model = available_models[0]["model"] if available_models else ""
 
     # Conversational greeting check
     greetings = ["hello", "hi", "hey", "hola", "namaste", "good morning", "good evening", "how are you", "who are you", "what can you do"]

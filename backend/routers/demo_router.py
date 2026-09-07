@@ -14,12 +14,12 @@ from pydantic import BaseModel
 
 from backend.auth.deps import get_current_user
 from backend.database.session import get_db
-from backend.models.models import Agent as AgentModel, CallLog, Contact, KnowledgeDocument, User
+from backend.models.models import Agent as AgentModel, CallLog, Contact, KnowledgeDocument, User, ProviderCredential
 from backend.services.config_manager import GlobalConfigManager
 from backend.runtime.core_orchestrator import CoreRuntimeOrchestrator
 from backend.behavior_engine.behavior_runtime import BehaviorEngineRuntime
+from backend.skills.skill_registry import SkillRegistry
 from backend.routers.knowledge_base import DynamicLLMInvoker
-from backend.routers.agent_engine_router import _call_real_llm, _detect_llm_provider
 from backend.routers.providers import resolve_provider_credential
 
 from backend.services.telephony_engine import TelephonyCallingEngine, RECORDINGS_DIR
@@ -60,7 +60,7 @@ async def synthesize_turn_audio(
         return None
 
     clean_text = text.strip()
-    clean_voice = voice_id.strip() if voice_id else "hpp4J3VqNfWAUOO0d1Us"
+    clean_voice = voice_id.strip() if voice_id else ""
 
     # Resolve ElevenLabs API key
     eleven_key = resolve_provider_credential(db, org_id or "", user_id or "", "elevenlabs")
@@ -170,10 +170,11 @@ async def start_demo_session(
     if req.agent_id:
         agent_row = db.query(AgentModel).filter(AgentModel.id == req.agent_id).first()
 
-    agent_name = str(agent_row.name) if agent_row and agent_row.name else "Nikita"
+    agent_name = str(agent_row.name) if agent_row and agent_row.name else "AI Voice Agent"
     agent_lang = str(agent_row.language) if agent_row and agent_row.language else "Auto-Detect"
-    agent_voice = str(agent_row.voice_id) if agent_row and agent_row.voice_id else (req.voice_engine or "hpp4J3VqNfWAUOO0d1Us")
-    agent_llm = str(agent_row.llm_model) if agent_row and agent_row.llm_model else (req.llm_provider or "gemini-2.5-flash-lite")
+    agent_voice = str(agent_row.voice_id) if agent_row and agent_row.voice_id else (req.voice_engine or "")
+    active_llm_cfg = DynamicLLMInvoker.resolve_selected_llm_config(db=db)
+    agent_llm = str(agent_row.llm_model) if agent_row and agent_row.llm_model else (str(active_llm_cfg.get("model")) if active_llm_cfg and active_llm_cfg.get("model") else (req.llm_provider or ""))
 
     # Sanitize business type so raw UUIDs are never exposed
     raw_bt = req.business_type or (agent_row.description if agent_row and agent_row.description else "Customer Support & Inbound Services")
@@ -252,10 +253,10 @@ async def process_demo_turn(
     if agent_id:
         agent_row = db.query(AgentModel).filter(AgentModel.id == agent_id).first()
 
-    agent_name = str(agent_row.name) if agent_row and agent_row.name else "Nikita"
+    agent_name = str(agent_row.name) if agent_row and agent_row.name else "AI Voice Agent"
     agent_lang = str(agent_row.language) if agent_row and agent_row.language else "Auto-Detect"
-    agent_voice = str(agent_row.voice_id) if agent_row and agent_row.voice_id else session_meta.get("voice_id", "hpp4J3VqNfWAUOO0d1Us")
-    agent_llm_model = str(agent_row.llm_model) if agent_row and agent_row.llm_model else session_meta.get("llm_model", "gemini-2.5-flash-lite")
+    agent_voice = str(agent_row.voice_id) if agent_row and agent_row.voice_id else session_meta.get("voice_id", "")
+    agent_llm_model = str(agent_row.llm_model) if agent_row and agent_row.llm_model else session_meta.get("llm_model", "")
     custom_instructions = str(agent_row.system_prompt) if agent_row and agent_row.system_prompt else ""
 
     # 1. Update Session Memory with Caller Speech
@@ -273,6 +274,7 @@ async def process_demo_turn(
         configured_language=agent_lang,
         custom_instructions=custom_instructions,
         session_memory_context=session_memory_prompt,
+        active_model=agent_llm_model,
     )
 
     # 2. Real-Time Live Knowledge Grounding (Weather, Clock, Search, Currency via Public APIs)
@@ -309,31 +311,35 @@ async def process_demo_turn(
     should_hangup: bool = False
     llm_latency = 185
 
-    prov_type = _detect_llm_provider(agent_llm_model)
-    api_key = resolve_provider_credential(db, org_id_val, str(current_user.id), prov_type)
-
-    if not api_key:
-        llm_cfg = DynamicLLMInvoker.resolve_selected_llm_config(
-            selected_provider=prov_type,
-            selected_model=agent_llm_model,
-            db=db,
-            org_id=org_id_val,
-            user_id=str(current_user.id),
-        )
-        if llm_cfg and llm_cfg.get("api_key"):
-            api_key = llm_cfg.get("api_key")
-            if llm_cfg.get("provider"):
-                prov_type = llm_cfg.get("provider")
+    base_url = None
+    prov_type = selected_llm_prov or None
+    mod_name = agent_llm_model if agent_llm_model not in ["dynamic", "default", "Auto-Optimized"] else ""
+    llm_cfg = DynamicLLMInvoker.resolve_selected_llm_config(
+        selected_provider=prov_type,
+        selected_model=agent_llm_model,
+        db=db,
+        org_id=org_id_val,
+        user_id=str(current_user.id),
+    )
+    if llm_cfg and llm_cfg.get("api_key"):
+        api_key = llm_cfg.get("api_key")
+        if llm_cfg.get("provider"):
+            prov_type = llm_cfg.get("provider")
+        if llm_cfg.get("model"):
+            mod_name = llm_cfg.get("model")
+        base_url = llm_cfg.get("base_url")
+    else:
+        api_key = resolve_provider_credential(db, org_id_val, str(current_user.id), prov_type)
 
     mod_name = agent_llm_model
     if not mod_name or mod_name in ["dynamic", "default", "Auto-Optimized"]:
         mod_name = ""
 
+    history_for_llm = [{"role": h.get("role", "user"), "text": h.get("text", "")} for h in conv_history]
+    history_for_llm.append({"role": "user", "text": req.user_speech_text})
+
     if api_key:
         try:
-            history_for_llm = [{"role": h.get("role", "user"), "text": h.get("text", "")} for h in conv_history]
-            history_for_llm.append({"role": "user", "text": req.user_speech_text})
-
             t0 = time.time()
             raw_ai_text = await TelephonyCallingEngine.call_active_llm(
                 provider=prov_type,
@@ -341,18 +347,51 @@ async def process_demo_turn(
                 model_id=mod_name,
                 system_prompt=system_prompt,
                 conversation_history=history_for_llm,
+                base_url=base_url,
             )
             llm_latency = max(45, int((time.time() - t0) * 1000))
         except Exception as e:
             print(f"[DemoRouter] Error during real LLM call: {e}")
 
+    # Failover across other connected LLM providers in DB if primary was rate-limited/unavailable
+    if not raw_ai_text:
+        try:
+            alt_creds = db.query(ProviderCredential).filter(
+                ProviderCredential.category == "llm",
+                ProviderCredential.provider_name != prov_type
+            ).all()
+            for alt_cred in alt_creds:
+                alt_pname = str(alt_cred.provider_name or "").lower().strip()
+                alt_key = alt_cred.plain_key or resolve_provider_credential(db, org_id_val, str(current_user.id), alt_pname)
+                if alt_key:
+                    alt_mod = str(alt_cred.primary_model or "").strip()
+                    if alt_mod.lower() in ["dynamic", "default", "auto-optimized"]:
+                        alt_mod = ""
+                    raw_ai_text = await TelephonyCallingEngine.call_active_llm(
+                        provider=alt_pname,
+                        api_key=alt_key,
+                        model_id=alt_mod,
+                        system_prompt=system_prompt,
+                        conversation_history=history_for_llm,
+                        base_url=alt_cred.base_url,
+                    )
+                    if raw_ai_text:
+                        break
+        except Exception as fb_err:
+            print(f"[DemoRouter] Dynamic failover error: {fb_err}")
+
     # Extract clean speech and LLM-native autonomous hangup signal
     if raw_ai_text:
         real_ai_text, should_hangup = TelephonyCallingEngine.extract_hangup_signal(raw_ai_text)
 
-    # Clean dynamic fallback only if active provider returned empty
+    # Clean dynamic conversational fallback only if active provider returned empty
     if not real_ai_text or not real_ai_text.strip():
-        real_ai_text = f"Hello, I am {agent_name}. How may I help you?"
+        real_ai_text = SkillRegistry.evaluate_skill(
+            skill_name=None,
+            input_text=req.user_speech_text,
+            agent_name=agent_name,
+            language=agent_lang,
+        )
 
     # Strip any leaked UUID / Hex IDs / markdown / symbols from LLM output so speech is 100% clean
     if real_ai_text:
@@ -456,8 +495,8 @@ async def end_demo_session(
     # Extract all turn messages from request or session history
     transcript_raw = (req.transcript if req and req.transcript else None) or session_meta.get("history", [])
     agent_id = (req.agent_id if req and req.agent_id else None) or session_meta.get("agent_id")
-    agent_name = (req.agent_name if req and req.agent_name else None) or "Nikita"
-    agent_voice = session_meta.get("voice_id", "hpp4J3VqNfWAUOO0d1Us")
+    agent_name = (req.agent_name if req and req.agent_name else None) or "AI Voice Agent"
+    agent_voice = session_meta.get("voice_id", "")
     duration_seconds = (req.duration_seconds if req and req.duration_seconds else 0) or 25
     call_mode = (req.call_mode if req and req.call_mode else None) or session_meta.get("mode") or "mic"
     
@@ -472,14 +511,14 @@ async def end_demo_session(
     )
 
     if is_browser_mic:
-        phone_number = "TEST-BROWSER-MIC-01" if (not raw_phone or "+91 98765" in raw_phone or "+91 96508" in raw_phone or "Local" in raw_phone) else raw_phone
+        phone_number = "TEST-BROWSER-MIC-01" if (not raw_phone or "Local" in raw_phone) else raw_phone
         contact_name = (req.contact_name if req and req.contact_name else None) or "Test Browser Mic 1"
         device_name = (req.device_name if req and req.device_name else None) or "WebRTC Studio Browser Mic"
         carrier_name = (req.carrier_name if req and req.carrier_name else None) or "WebRTC Real-Time Audio (Zero Carrier Cost)"
     else:
-        phone_number = raw_phone or "+91 98765 43210"
-        device_name = (req.device_name if req and req.device_name else None) or ("Galaxy S24 Ultra" if call_mode == "android_gsm" else "Cloud PSTN Carrier")
-        carrier_name = (req.carrier_name if req and req.carrier_name else None) or ("Cellular SIM" if call_mode == "android_gsm" else "Twilio Cloud Telephony")
+        phone_number = raw_phone or ""
+        device_name = (req.device_name if req and req.device_name else None) or ("Android GSM Gateway" if call_mode == "android_gsm" else "Cloud PSTN Carrier")
+        carrier_name = (req.carrier_name if req and req.carrier_name else None) or ("Cellular SIM" if call_mode == "android_gsm" else "Cloud Telephony")
         
         # Resolve Contact Name from request or DB
         contact_name = req.contact_name if req and req.contact_name else None
@@ -633,11 +672,11 @@ async def end_demo_session(
         "cost_breakdown": cost_breakdown,
         "duration_seconds": duration_seconds,
         "summary": summary_text,
-        "detected_language": req.language or detected_lang,
-        "department": req.department or "Inbound Support",
-        "compliance_policy": req.compliance_policy or "Strict Call Recording & Compliance",
-        "target_disposition": req.target_disposition or "Appointment Scheduled",
-        "webhook_id": req.webhook_id or "Global CRM Webhook",
+        "detected_language": (req.language if req and req.language else None) or detected_lang,
+        "department": (req.department if req and req.department else None) or "Inbound Support",
+        "compliance_policy": (req.compliance_policy if req and req.compliance_policy else None) or "Strict Call Recording & Compliance",
+        "target_disposition": (req.target_disposition if req and req.target_disposition else None) or "Appointment Scheduled",
+        "webhook_id": (req.webhook_id if req and req.webhook_id else None) or "Global CRM Webhook",
         "key_takeaways": key_takeaways,
         "lead_qualification": {
             "score": lead_score,

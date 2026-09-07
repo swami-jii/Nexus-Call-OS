@@ -18,7 +18,10 @@ export default defineConfig(() => {
       clearScreen: false,
       hmr: {
         overlay: false,
-        clientPort: 3000,
+      },
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Permissions-Policy': 'microphone=*, camera=*, geolocation=*',
       },
       watch: process.env.DISABLE_HMR === 'true' ? null : {
         ignored: [

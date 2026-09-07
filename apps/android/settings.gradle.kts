@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NexusCallOSCompanion"
+rootProject.name = "NexusCompanion"
 include(":app")

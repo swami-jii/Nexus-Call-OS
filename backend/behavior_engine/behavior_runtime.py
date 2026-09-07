@@ -42,6 +42,21 @@ class BehaviorEngineRuntime:
             "strategy": engine.current_strategy,
         }
 
+    def initialize_session(
+        self,
+        session_id: str,
+        agent_id: Optional[str] = None,
+        business_type: str = "general",
+        strategy_override: str = "",
+        primary_goal: str = "appointment_booking",
+    ) -> Dict[str, Any]:
+        return self.create_session(
+            session_id=session_id,
+            business_type=business_type,
+            strategy_override=strategy_override,
+            primary_goal=primary_goal,
+        )
+
     def evaluate_turn(self, session_id: str, user_input: str, ai_response: Optional[str] = None) -> Dict[str, Any]:
         engine = self._sessions.get(session_id)
         if not engine:

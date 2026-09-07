@@ -1,35 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand Emerald & Cyan -->
+    <!-- Brand Primary & Accents -->
     <color name="primary">#10B981</color>
     <color name="primary_dark">#059669</color>
-    <color name="primary_light">#D1FAE5</color>
-    <color name="accent">#06B6D4</color>
-    <color name="accent_purple">#8B5CF6</color>
+    <color name="primary_light">#064E3B</color>
+    <color name="accent_cyan">#06B6D4</color>
+    <color name="accent_purple">#6366F1</color>
+    <color name="accent_violet">#8B5CF6</color>
 
-    <!-- Dark Theme (Default Nexus Aesthetics) -->
-    <color name="background">#09090B</color>
-    <color name="surface">#18181B</color>
-    <color name="surface_card">#27272A</color>
-    <color name="surface_card_selected">#064E3B</color>
-    <color name="card_stroke">#3F3F46</color>
+    <!-- Deep Cybernetic / Fintech Surfaces -->
+    <color name="background">#090D16</color>
+    <color name="surface">#0D1322</color>
+    <color name="surface_card">#131B2E</color>
+    <color name="surface_card_secondary">#18223A</color>
+    <color name="surface_card_selected">#1C2A48</color>
+    
+    <!-- Borders & Strokes -->
+    <color name="card_stroke">#1E293B</color>
+    <color name="card_border">#1E293B</color>
+    <color name="card_stroke_subtle">#162032</color>
     <color name="card_stroke_active">#10B981</color>
-    <color name="text_primary">#FAFAFA</color>
-    <color name="text_secondary">#A1A1AA</color>
-    <color name="text_muted">#71717A</color>
+    <color name="card_stroke_ai">#6366F1</color>
 
-    <!-- Light Theme Elements -->
-    <color name="light_background">#F8FAFC</color>
-    <color name="light_surface">#FFFFFF</color>
-    <color name="light_surface_card">#F1F5F9</color>
-    <color name="light_surface_selected">#ECFDF5</color>
-    <color name="light_card_stroke">#E2E8F0</color>
-    <color name="light_text_primary">#0F172A</color>
-    <color name="light_text_secondary">#475569</color>
-    <color name="light_text_muted">#94A3B8</color>
+    <!-- Typography -->
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_muted">#64748B</color>
+    <color name="text_inverse">#090D16</color>
+
+    <!-- Header & Navigation -->
+    <color name="header_bg">#0C1220</color>
+    <color name="bottom_nav_bg">#0C1220</color>
+    <color name="bottom_nav_border">#1E293B</color>
+    <color name="bottom_nav_active">#10B981</color>
+    <color name="bottom_nav_inactive">#64748B</color>
 
     <!-- Status Badges -->
     <color name="status_online">#10B981</color>
     <color name="status_offline">#EF4444</color>
     <color name="status_warning">#F59E0B</color>
     <color name="status_info">#3B82F6</color>
+
+    <!-- Metric Tiles & Inputs -->
+    <color name="metric_tile_bg">#0F172A</color>
+    <color name="metric_tile_border">#1E293B</color>
+    <color name="input_bg">#0B1120</color>
+    <color name="input_border">#253350</color>
+    <color name="input_text">#F8FAFC</color>
 </resources>

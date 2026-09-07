@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, Set, List
 from fastapi import WebSocket, WebSocketDisconnect
 
 from backend.android_gateway.device_registry import DeviceRegistry
+from backend.android_gateway.android_voice_session import AndroidVoiceSessionManager
 
 logger = logging.getLogger("NexusWSBridge")
 
@@ -25,6 +26,7 @@ class AndroidWebSocketBridgeServer:
         self._active_connections: Dict[str, WebSocket] = {}
         self._audio_buffers: Dict[str, List[bytes]] = {}
         self._authenticated_devices: Set[str] = set()
+        self._voice_sessions = AndroidVoiceSessionManager()
 
     async def connect(
         self,
@@ -55,8 +57,8 @@ class AndroidWebSocketBridgeServer:
                     device_id=device_id,
                     name="Android Companion Phone",
                     sim_number="",
-                    carrier_name="Cellular SIM",
-                    os_version="Android 14",
+                    carrier_name="",
+                    os_version="",
                     device_token=device_token,
                 )
             self._active_connections[device_id] = websocket
@@ -84,6 +86,7 @@ class AndroidWebSocketBridgeServer:
         self._active_connections.pop(device_id, None)
         self._audio_buffers.pop(device_id, None)
         self._authenticated_devices.discard(device_id)
+        self._voice_sessions.end_session(device_id)
         self.device_registry.disconnect_device(device_id)
         logger.info(f"[AndroidWSBridge] Device {device_id} disconnected.")
 
@@ -99,6 +102,21 @@ class AndroidWebSocketBridgeServer:
             if device_id not in self._audio_buffers:
                 self._audio_buffers[device_id] = []
             self._audio_buffers[device_id].append(raw_data)
+
+            # Process audio chunk with live AI voice session
+            session = self._voice_sessions.get_session(device_id)
+            if session:
+                reply_pcm = await session.process_inbound_pcm_chunk(raw_data)
+                if reply_pcm and len(reply_pcm) > 0:
+                    ws = self._active_connections.get(device_id)
+                    if ws:
+                        try:
+                            chunk_size = 4096
+                            for i in range(0, len(reply_pcm), chunk_size):
+                                await ws.send_bytes(reply_pcm[i:i+chunk_size])
+                        except Exception as e:
+                            logger.warning(f"Error streaming AI voice reply: {e}")
+
             return {
                 "type": "audio_frame",
                 "device_id": device_id,
@@ -230,11 +248,65 @@ class AndroidWebSocketBridgeServer:
 
 
         if event_name == "INCOMING_CALL":
+            dev = self.device_registry.get_device(device_id)
+            if dev:
+                dev.call_state = "RINGING"
+            caller = event.get("caller_number", "Unknown")
+            logger.info(f"[AndroidWSBridge] INCOMING_CALL on device {device_id} from {caller}")
             return {
                 "type": "call_initiated",
+                "event": "INCOMING_CALL_ACK",
                 "device_id": device_id,
-                "sim_number": event.get("sim_number"),
-                "caller_number": event.get("caller_number"),
+                "caller_number": caller,
+                "timestamp": time.time(),
+            }
+
+        if event_name == "CALL_ACTIVE":
+            dev = self.device_registry.get_device(device_id)
+            if dev:
+                dev.call_state = "ACTIVE"
+            caller = event.get("caller_number", "Unknown")
+            logger.info(f"[AndroidWSBridge] CALL_ACTIVE on device {device_id} with {caller}. Starting AI Voice Session...")
+
+            # Initialize Voice Session and generate authentic greeting
+            agent_id = dev.assigned_agent_id if dev else None
+            session = await self._voice_sessions.start_session(device_id, caller, agent_id=agent_id)
+            greeting_pcm = await session.get_greeting_pcm()
+
+            # Stream opening greeting PCM chunks to companion AudioTrack
+            if greeting_pcm and len(greeting_pcm) > 0:
+                ws = self._active_connections.get(device_id)
+                if ws:
+                    try:
+                        chunk_size = 4096
+                        for i in range(0, len(greeting_pcm), chunk_size):
+                            await ws.send_bytes(greeting_pcm[i:i+chunk_size])
+                        logger.info(f"[AndroidWSBridge] Streamed {len(greeting_pcm)} bytes greeting audio to device {device_id}")
+                    except Exception as e:
+                        logger.warning(f"Error streaming greeting audio: {e}")
+
+            return {
+                "type": "call_active",
+                "event": "CALL_ACTIVE_ACK",
+                "device_id": device_id,
+                "caller_number": caller,
+                "greeting_text": session.greeting_text,
+                "timestamp": time.time(),
+            }
+
+        if event_name == "CALL_ENDED":
+            dev = self.device_registry.get_device(device_id)
+            if dev:
+                dev.call_state = "IDLE"
+            duration = event.get("duration_sec", 0)
+            self._voice_sessions.end_session(device_id)
+            logger.info(f"[AndroidWSBridge] CALL_ENDED on device {device_id} (Duration: {duration}s)")
+            return {
+                "type": "call_ended",
+                "event": "CALL_ENDED_ACK",
+                "device_id": device_id,
+                "duration_sec": duration,
+                "timestamp": time.time(),
             }
 
         if event_name == "BARGE_IN_INTERRUPT":

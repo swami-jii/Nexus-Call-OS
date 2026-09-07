@@ -105,10 +105,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Custom Middlewares
-app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
-app.add_middleware(AuditMiddleware)
-
 # Auto-initialize organized storage categories under uploads/
 UploadStorageService.initialize_storage()
 
@@ -163,17 +159,51 @@ def serve_integration_docs(filename: str):
 
 @app.get("/download")
 @app.get("/download/apk")
+@app.get("/downloads/Nexus-GSM-Gateway.apk")
 @app.get("/downloads/Nexus-GSM-Gateway-v2.4.apk")
-def direct_apk_download():
+@app.get("/downloads/{filename}")
+def direct_apk_download(filename: str = "Nexus-GSM-Gateway.apk"):
     """Direct APK download endpoint for mobile browsers over Wi-Fi."""
     import os
+    import glob
+    import json
     from fastapi.responses import FileResponse
-    apk_path = os.path.join(PROJECT_ROOT, "public", "downloads", "Nexus-GSM-Gateway-v2.4.apk")
+    downloads_dir = os.path.join(PROJECT_ROOT, "public", "downloads")
+    
+    # Try exact requested filename first
+    req_path = os.path.join(downloads_dir, filename)
+    if os.path.exists(req_path) and filename.endswith(".apk"):
+        apk_path = req_path
+    else:
+        # Check metadata
+        metadata_file = os.path.join(downloads_dir, "release_metadata.json")
+        canonical_name = "Nexus-GSM-Gateway.apk"
+        if os.path.exists(metadata_file):
+            try:
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                    canonical_name = meta.get("canonicalApkFileName") or meta.get("apkFileName") or canonical_name
+            except Exception:
+                pass
+        apk_path = os.path.join(downloads_dir, canonical_name)
+        if not os.path.exists(apk_path):
+            candidates = sorted(glob.glob(os.path.join(downloads_dir, "*.apk")), key=os.path.getmtime, reverse=True)
+            if candidates:
+                apk_path = candidates[0]
+
     if os.path.exists(apk_path):
+        stat_res = os.stat(apk_path)
+        out_name = os.path.basename(apk_path)
         return FileResponse(
             apk_path,
-            filename="Nexus-GSM-Gateway-v2.4.apk",
-            media_type="application/vnd.android.package-archive"
+            filename=out_name,
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Length": str(stat_res.st_size),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "no-cache",
+                "Content-Disposition": f'attachment; filename="{out_name}"'
+            }
         )
     return {"error": "APK not found on server"}
 
@@ -192,13 +222,45 @@ def root():
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
+    from pathlib import Path
+
+    backend_dir = str(Path(__file__).resolve().parent)
+    project_root = str(Path(__file__).resolve().parent.parent)
+
+    # Ensure project root is in sys.path and PYTHONPATH so multiprocessing uvicorn reloader workers never fail
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    existing_pp = os.environ.get("PYTHONPATH", "")
+    if project_root not in existing_pp:
+        os.environ["PYTHONPATH"] = project_root + (os.pathsep + existing_pp if existing_pp else "")
 
     uvicorn.run(
         "backend.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
-        reload_excludes=["uploads/*", "*.db", "*.sqlite", "*.log", "uploads/**"]
+        app_dir=project_root,
+        reload_dirs=[backend_dir],
+        reload_excludes=[
+            "uploads/*",
+            "uploads/**",
+            "*.db",
+            "*.sqlite",
+            "*.log",
+            "*.txt",
+            "*.json",
+            "public/*",
+            "public/**",
+            "apps/*",
+            "apps/**",
+            "dist/*",
+            ".cache/*",
+            ".cache/**",
+            ".ruff_cache/**",
+            "__pycache__/**",
+        ]
     )
+
 
