@@ -179,6 +179,7 @@ class MainActivity : AppCompatActivity() {
     private var isServiceBound = false
 
     // State Variables
+    private var toneGenerator: android.media.ToneGenerator? = null
     private var isMuted = false
     private var isSpeakerOn = false
     private var isAudioTesting = false
@@ -191,6 +192,33 @@ class MainActivity : AppCompatActivity() {
     private var dialedNumber = ""
     private var selectedSimTab = 0 // 0 = SIM Cards, 1 = eSIM Profiles, 2 = Preference
     private var selectedCallsTab = 0 // 0 = Keypad, 1 = Recents, 2 = Contacts, 3 = Gateway Settings
+
+    private fun initToneGenerator() {
+        try {
+            toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 70)
+        } catch (_: Exception) {}
+    }
+
+    private fun playToneFeedback(digit: Char) {
+        val toneType = when (digit) {
+            '1' -> android.media.ToneGenerator.TONE_DTMF_1
+            '2' -> android.media.ToneGenerator.TONE_DTMF_2
+            '3' -> android.media.ToneGenerator.TONE_DTMF_3
+            '4' -> android.media.ToneGenerator.TONE_DTMF_4
+            '5' -> android.media.ToneGenerator.TONE_DTMF_5
+            '6' -> android.media.ToneGenerator.TONE_DTMF_6
+            '7' -> android.media.ToneGenerator.TONE_DTMF_7
+            '8' -> android.media.ToneGenerator.TONE_DTMF_8
+            '9' -> android.media.ToneGenerator.TONE_DTMF_9
+            '0' -> android.media.ToneGenerator.TONE_DTMF_0
+            '*' -> android.media.ToneGenerator.TONE_DTMF_S
+            '#' -> android.media.ToneGenerator.TONE_DTMF_P
+            else -> android.media.ToneGenerator.TONE_PROP_BEEP
+        }
+        try {
+            toneGenerator?.startTone(toneType, 120)
+        } catch (_: Exception) {}
+    }
 
     // Gateway Session Tracking (Connected State Only)
     private var sessionStartTimeMs = 0L
@@ -502,6 +530,7 @@ class MainActivity : AppCompatActivity() {
         recycleBinManager = RecycleBinManager(this)
 
         loadPersistedSessionHistory()
+        initToneGenerator()
         initViews()
         setupBottomNav()
         setupScreenNavigation()
@@ -613,6 +642,10 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopTicker()
+        try {
+            toneGenerator?.release()
+            toneGenerator = null
+        } catch (_: Exception) {}
         CallBridgeForegroundService.onConnectionStateChanged = null
         CallBridgeForegroundService.onConfigUpdated = null
         if (isServiceBound) {
@@ -1289,6 +1322,7 @@ class MainActivity : AppCompatActivity() {
                 layoutSuggestionsWrapper.visibility = View.GONE
                 btnDialerCall.visibility = View.GONE
                 btnCallKeypad.setBackgroundResource(R.drawable.bg_btn_circle_active)
+                tvDialedNumber.text = if (dialedNumber.isNotEmpty()) "DTMF: $dialedNumber" else "Enter DTMF digits..."
             }
         }
 
@@ -1524,10 +1558,11 @@ class MainActivity : AppCompatActivity() {
     // =========================================================================
 
     private fun handleDialerDigit(digit: Char) {
+        playToneFeedback(digit)
         if (currentCallState == CallState.CONNECTED || currentCallState == CallState.DIALING) {
             CompanionInCallService.playDtmf(digit)
             dialedNumber += digit
-            tvDialedNumber.text = dialedNumber
+            tvDialedNumber.text = "DTMF: $dialedNumber"
             btnDialerBackspace.visibility = View.VISIBLE
         } else {
             dialedNumber += digit
@@ -4148,6 +4183,26 @@ class MainActivity : AppCompatActivity() {
         when (state) {
             CallBridgeForegroundService.ConnectionState.DISCONNECTED,
             CallBridgeForegroundService.ConnectionState.ERROR -> {
+                // Check essential telephony permissions
+                val ungranted = mutableListOf<String>()
+                if (!isPermGranted(Manifest.permission.READ_PHONE_STATE)) ungranted.add(Manifest.permission.READ_PHONE_STATE)
+                if (!isPermGranted(Manifest.permission.CALL_PHONE)) ungranted.add(Manifest.permission.CALL_PHONE)
+                if (!isPermGranted(Manifest.permission.READ_CALL_LOG)) ungranted.add(Manifest.permission.READ_CALL_LOG)
+                if (!isPermGranted(Manifest.permission.READ_CONTACTS)) ungranted.add(Manifest.permission.READ_CONTACTS)
+                if (!isPermGranted(Manifest.permission.RECORD_AUDIO)) ungranted.add(Manifest.permission.RECORD_AUDIO)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (!isPermGranted(Manifest.permission.READ_PHONE_NUMBERS)) ungranted.add(Manifest.permission.READ_PHONE_NUMBERS)
+                    if (!isPermGranted(Manifest.permission.ANSWER_PHONE_CALLS)) ungranted.add(Manifest.permission.ANSWER_PHONE_CALLS)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (!isPermGranted(Manifest.permission.POST_NOTIFICATIONS)) ungranted.add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+
+                if (ungranted.isNotEmpty()) {
+                    Toast.makeText(this, "Granting required telephony capabilities...", Toast.LENGTH_SHORT).show()
+                    permissionLauncher.launch(ungranted.toTypedArray())
+                }
+
                 val url = etServerUrl.text.toString().trim()
                 processPairingOrServerUrl(url)
             }
@@ -4161,7 +4216,9 @@ class MainActivity : AppCompatActivity() {
                 startService(stopIntent)
                 handleConnectionStateTransition(CallBridgeForegroundService.ConnectionState.DISCONNECTED, "User Stopped Service")
                 updateConnectionUi(CallBridgeForegroundService.ConnectionState.DISCONNECTED)
-                NexusApplication.log("INFO", "Gateway", "User initiated gateway disconnect.")
+                tvDashUptime.text = "00:00:00"
+                NexusApplication.log("INFO", "Gateway", "User initiated gateway disconnect. All services & active sockets closed.")
+                Toast.makeText(this, "Gateway Disconnected. Standalone GSM mode active.", Toast.LENGTH_SHORT).show()
             }
         }
     }

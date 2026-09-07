@@ -88,7 +88,7 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:orientation="vertical"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
@@ -666,7 +666,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
             <LinearLayout
                 android:id="@+id/screenCalls"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -977,7 +977,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                 <LinearLayout
                     android:id="@+id/containerCallsKeypadView"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="match_parent"
                     android:orientation="vertical"
                     android:visibility="visible">
 
@@ -985,7 +985,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                     <LinearLayout
                         android:id="@+id/cardDialedNumberDisplay"
                         android:layout_width="match_parent"
-                        android:layout_height="46dp"
+                        android:layout_height="48dp"
                         android:orientation="horizontal"
                         android:background="@drawable/bg_card_cyber"
                         android:gravity="center_vertical"
@@ -1018,11 +1018,13 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                             android:contentDescription="Backspace" />
                     </LinearLayout>
 
-                    <!-- Real-Time Suggestions Dedicated Anchored Viewport (Height is fixed so Keypad NEVER jumps) -->
+                    <!-- Real-Time Suggestions Dedicated Flexible Viewport (Expands naturally in upper region) -->
                     <FrameLayout
                         android:id="@+id/layoutSuggestionsWrapper"
                         android:layout_width="match_parent"
-                        android:layout_height="50dp"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:minHeight="60dp"
                         android:layout_marginBottom="4dp">
 
                         <ScrollView
@@ -1049,17 +1051,17 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                             android:visibility="visible" />
                     </FrameLayout>
 
-                    <!-- 12-Key Polished Native Dialpad Grid -->
+                    <!-- 12-Key Polished Native Dialpad Grid (Anchored at Bottom) -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:layout_marginBottom="6dp">
+                        android:layout_marginBottom="4dp">
 
                         <!-- Row 1: 1, 2, 3 -->
                         <LinearLayout
                             android:layout_width="match_parent"
-                            android:layout_height="48dp"
+                            android:layout_height="52dp"
                             android:orientation="horizontal"
                             android:layout_marginBottom="4dp">
 
@@ -1080,7 +1082,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="1"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1107,7 +1109,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="2"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1134,7 +1136,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="3"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1148,7 +1150,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                         <!-- Row 2: 4, 5, 6 -->
                         <LinearLayout
                             android:layout_width="match_parent"
-                            android:layout_height="48dp"
+                            android:layout_height="52dp"
                             android:orientation="horizontal"
                             android:layout_marginBottom="4dp">
 
@@ -1169,7 +1171,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="4"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1196,7 +1198,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="5"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1223,7 +1225,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="6"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1237,7 +1239,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                         <!-- Row 3: 7, 8, 9 -->
                         <LinearLayout
                             android:layout_width="match_parent"
-                            android:layout_height="48dp"
+                            android:layout_height="52dp"
                             android:orientation="horizontal"
                             android:layout_marginBottom="4dp">
 
@@ -1258,7 +1260,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="7"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1285,7 +1287,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="8"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1312,7 +1314,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="9"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1326,7 +1328,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                         <!-- Row 4: *, 0 (+ on long press), # -->
                         <LinearLayout
                             android:layout_width="match_parent"
-                            android:layout_height="48dp"
+                            android:layout_height="52dp"
                             android:orientation="horizontal">
 
                             <!-- Key * -->
@@ -1367,7 +1369,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="0"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1395,7 +1397,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                                     android:layout_height="wrap_content"
                                     android:text="#"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="18sp"
+                                    android:textSize="19sp"
                                     android:textStyle="bold" />
                             </LinearLayout>
                         </LinearLayout>
@@ -1405,7 +1407,7 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                     <Button
                         android:id="@+id/btnDialerCall"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
+                        android:layout_height="50dp"
                         android:text="Call via Cellular Line"
                         android:textColor="@color/text_inverse"
                         android:textStyle="bold"
@@ -1418,8 +1420,8 @@ Ensure SIM cards are inserted and READ_PHONE_STATE permission is granted."
                         app:backgroundTint="@null"
                         android:textAllCaps="false"
                         android:elevation="3dp"
-                        android:layout_marginTop="4dp"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginTop="6dp"
+                        android:layout_marginBottom="12dp" />
                 </LinearLayout>
 
                 <!-- ==================== SUB-VIEW 2: RECENTS / CALL LOGS ==================== -->

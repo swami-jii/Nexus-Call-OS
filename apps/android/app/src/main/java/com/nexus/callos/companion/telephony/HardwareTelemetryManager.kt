@@ -12,10 +12,14 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.telephony.CellInfo
 import android.telephony.CellInfoGsm
 import android.telephony.CellInfoLte
 import android.telephony.CellInfoNr
 import android.telephony.CellInfoWcdma
+import android.telephony.PhoneStateListener
+import android.telephony.SignalStrength
+import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
 import com.nexus.callos.companion.NexusApplication
@@ -36,6 +40,10 @@ class HardwareTelemetryManager(private val context: Context) {
     private val deviceStartTimeMs = System.currentTimeMillis()
     private val deviceId: String
 
+    private var batteryReceiver: BroadcastReceiver? = null
+    private var legacyPhoneStateListener: PhoneStateListener? = null
+    private var modernTelephonyCallback: Any? = null
+
     val batteryHistory = mutableListOf<Int>()
     val signalHistory = mutableListOf<Int>()
 
@@ -50,11 +58,12 @@ class HardwareTelemetryManager(private val context: Context) {
         }
         deviceId = savedId
         registerBatteryReceiver()
+        registerSignalStrengthListener()
     }
 
     private fun registerBatteryReceiver() {
         val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        val receiver = object : BroadcastReceiver() {
+        batteryReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 intent?.let {
                     val level = it.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -74,13 +83,59 @@ class HardwareTelemetryManager(private val context: Context) {
         try {
             ContextCompat.registerReceiver(
                 context,
-                receiver,
+                batteryReceiver as BroadcastReceiver,
                 filter,
                 ContextCompat.RECEIVER_NOT_EXPORTED
             )
         } catch (e: Exception) {
             NexusApplication.log("WARN", "Telemetry", "Battery receiver registration: ${e.message}")
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun registerSignalStrengthListener() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val executor = ContextCompat.getMainExecutor(context)
+                val callback = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
+                    override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
+                        parseSignalStrengthObject(signalStrength)
+                    }
+                }
+                modernTelephonyCallback = callback
+                telephonyManager?.registerTelephonyCallback(executor, callback)
+            } else {
+                val listener = object : PhoneStateListener() {
+                    override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
+                        super.onSignalStrengthsChanged(signalStrength)
+                        if (signalStrength != null) {
+                            parseSignalStrengthObject(signalStrength)
+                        }
+                    }
+                }
+                legacyPhoneStateListener = listener
+                telephonyManager?.listen(listener, PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
+            }
+        } catch (e: Exception) {
+            NexusApplication.log("WARN", "Telemetry", "Signal strength listener registration: ${e.message}")
+        }
+    }
+
+    private fun parseSignalStrengthObject(signalStrength: SignalStrength) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val cellSignalStrengths = signalStrength.cellSignalStrengths
+                for (css in cellSignalStrengths) {
+                    val dbm = css.dbm
+                    if (dbm != CellInfo.UNAVAILABLE && dbm < 0) {
+                        currentSignalDbm = dbm
+                        recordHistory(currentBatteryLevel, currentSignalDbm)
+                        notifyUpdate()
+                        return
+                    }
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun recordHistory(batt: Int, sig: Int) {
@@ -156,6 +211,21 @@ class HardwareTelemetryManager(private val context: Context) {
 
     private fun getLiveSignalDbm(): Int {
         try {
+            // Direct inspection via API 29+ SignalStrength
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val sig = telephonyManager?.signalStrength
+                if (sig != null) {
+                    for (css in sig.cellSignalStrengths) {
+                        val dbm = css.dbm
+                        if (dbm != CellInfo.UNAVAILABLE && dbm < 0) {
+                            currentSignalDbm = dbm
+                            return dbm
+                        }
+                    }
+                }
+            }
+
+            // CellInfo inspection
             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)
                 == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 val cellInfos = telephonyManager?.allCellInfo
@@ -163,12 +233,34 @@ class HardwareTelemetryManager(private val context: Context) {
                     for (info in cellInfos) {
                         if (info.isRegistered) {
                             when (info) {
-                                is CellInfoLte -> return info.cellSignalStrength.dbm
-                                is CellInfoGsm -> return info.cellSignalStrength.dbm
-                                is CellInfoWcdma -> return info.cellSignalStrength.dbm
+                                is CellInfoLte -> {
+                                    val dbm = info.cellSignalStrength.dbm
+                                    if (dbm != CellInfo.UNAVAILABLE && dbm < 0) {
+                                        currentSignalDbm = dbm
+                                        return dbm
+                                    }
+                                }
+                                is CellInfoGsm -> {
+                                    val dbm = info.cellSignalStrength.dbm
+                                    if (dbm != CellInfo.UNAVAILABLE && dbm < 0) {
+                                        currentSignalDbm = dbm
+                                        return dbm
+                                    }
+                                }
+                                is CellInfoWcdma -> {
+                                    val dbm = info.cellSignalStrength.dbm
+                                    if (dbm != CellInfo.UNAVAILABLE && dbm < 0) {
+                                        currentSignalDbm = dbm
+                                        return dbm
+                                    }
+                                }
                                 else -> {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info is CellInfoNr) {
-                                        return info.cellSignalStrength.dbm
+                                        val dbm = info.cellSignalStrength.dbm
+                                        if (dbm != CellInfo.UNAVAILABLE && dbm < 0) {
+                                            currentSignalDbm = dbm
+                                            return dbm
+                                        }
                                     }
                                 }
                             }
@@ -219,5 +311,24 @@ class HardwareTelemetryManager(private val context: Context) {
 
     private fun notifyUpdate() {
         onTelemetryChanged?.invoke(getSnapshot())
+    }
+
+    @Suppress("DEPRECATION")
+    fun release() {
+        try {
+            batteryReceiver?.let {
+                context.unregisterReceiver(it)
+                batteryReceiver = null
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && modernTelephonyCallback != null) {
+                (modernTelephonyCallback as? TelephonyCallback)?.let {
+                    telephonyManager?.unregisterTelephonyCallback(it)
+                }
+                modernTelephonyCallback = null
+            } else if (legacyPhoneStateListener != null) {
+                telephonyManager?.listen(legacyPhoneStateListener, PhoneStateListener.LISTEN_NONE)
+                legacyPhoneStateListener = null
+            }
+        } catch (_: Exception) {}
     }
 }
