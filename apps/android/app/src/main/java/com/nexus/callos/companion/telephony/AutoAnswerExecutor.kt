@@ -60,6 +60,7 @@ object AutoAnswerExecutor {
     }
 
     fun executeAnswer(context: Context) {
+        IncomingCallNotifier.stopRinging(context)
         NexusApplication.log("INFO", "AutoAnswer", "Executing programmatic call pick-up...")
 
         // Strategy 1: Active InCallService

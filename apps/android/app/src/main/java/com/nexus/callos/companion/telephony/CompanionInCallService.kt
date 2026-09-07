@@ -202,6 +202,7 @@ class CompanionInCallService : InCallService() {
                 Call.STATE_RINGING -> {
                     isCurrentCallIncoming = true
                     NexusApplication.log("INFO", "InCallService", "Call RINGING: $callerNumber")
+                    IncomingCallNotifier.startRinging(this@CompanionInCallService, callerNumber)
                     onCallSessionChanged?.invoke(
                         CallSession(
                             state = CallState.RINGING,
@@ -214,6 +215,7 @@ class CompanionInCallService : InCallService() {
                 }
                 Call.STATE_DIALING, Call.STATE_CONNECTING -> {
                     isCurrentCallIncoming = false
+                    IncomingCallNotifier.stopRinging(this@CompanionInCallService)
                     NexusApplication.log("INFO", "InCallService", "Call DIALING/CONNECTING: $callerNumber")
                     onCallSessionChanged?.invoke(
                         CallSession(
@@ -226,6 +228,7 @@ class CompanionInCallService : InCallService() {
                 }
                 Call.STATE_ACTIVE -> {
                     NexusApplication.log("INFO", "InCallService", "Call ACTIVE / CONNECTED: $callerNumber")
+                    IncomingCallNotifier.stopRinging(this@CompanionInCallService)
                     AutoAnswerExecutor.cancelPendingAnswer()
                     onCallSessionChanged?.invoke(
                         CallSession(
@@ -240,6 +243,7 @@ class CompanionInCallService : InCallService() {
                 }
                 Call.STATE_HOLDING -> {
                     NexusApplication.log("INFO", "InCallService", "Call HOLDING: $callerNumber")
+                    IncomingCallNotifier.stopRinging(this@CompanionInCallService)
                     onCallSessionChanged?.invoke(
                         CallSession(
                             state = CallState.HOLDING,
@@ -251,6 +255,7 @@ class CompanionInCallService : InCallService() {
                 }
                 Call.STATE_DISCONNECTED -> {
                     NexusApplication.log("INFO", "InCallService", "Call DISCONNECTED")
+                    IncomingCallNotifier.stopRinging(this@CompanionInCallService)
                     AutoAnswerExecutor.cancelPendingAnswer()
                     onCallSessionChanged?.invoke(
                         CallSession(state = CallState.IDLE)
@@ -269,6 +274,7 @@ class CompanionInCallService : InCallService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        IncomingCallNotifier.stopRinging(this)
         instance = null
         activeCall = null
     }
@@ -284,6 +290,7 @@ class CompanionInCallService : InCallService() {
         when (state) {
             Call.STATE_RINGING -> {
                 isCurrentCallIncoming = true
+                IncomingCallNotifier.startRinging(this, callerNumber)
                 onCallSessionChanged?.invoke(
                     CallSession(
                         state = CallState.RINGING,
@@ -296,6 +303,7 @@ class CompanionInCallService : InCallService() {
             }
             Call.STATE_DIALING, Call.STATE_CONNECTING -> {
                 isCurrentCallIncoming = false
+                IncomingCallNotifier.stopRinging(this)
                 onCallSessionChanged?.invoke(
                     CallSession(
                         state = CallState.DIALING,
@@ -306,6 +314,7 @@ class CompanionInCallService : InCallService() {
                 )
             }
             Call.STATE_ACTIVE -> {
+                IncomingCallNotifier.stopRinging(this)
                 onCallSessionChanged?.invoke(
                     CallSession(
                         state = CallState.CONNECTED,
@@ -334,6 +343,7 @@ class CompanionInCallService : InCallService() {
             activeCall = null
         }
         call.unregisterCallback(callCallback)
+        IncomingCallNotifier.stopRinging(this)
         AutoAnswerExecutor.cancelPendingAnswer()
         NexusApplication.log("INFO", "InCallService", "Call removed from Telecom stack.")
         onCallSessionChanged?.invoke(CallSession(state = CallState.IDLE))

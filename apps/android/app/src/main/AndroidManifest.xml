@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
@@ -104,6 +106,16 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Broadcast Receiver for Heads-Up Incoming Call Notification Actions -->
+        <receiver
+            android:name=".telephony.CallActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nexus.callos.companion.ACTION_ANSWER_CALL" />
+                <action android:name="com.nexus.callos.companion.ACTION_REJECT_CALL" />
             </intent-filter>
         </receiver>
 

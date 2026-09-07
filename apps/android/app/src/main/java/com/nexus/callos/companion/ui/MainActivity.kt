@@ -57,14 +57,18 @@ import com.nexus.callos.companion.model.GatewaySession
 import com.nexus.callos.companion.model.NumberSuggestion
 import com.nexus.callos.companion.model.RecycleBinItem
 import com.nexus.callos.companion.model.SimSubscriptionInfo
+import android.view.WindowManager
 import com.nexus.callos.companion.model.SuggestionSource
 import com.nexus.callos.companion.network.BackendApiClient
 import com.nexus.callos.companion.service.CallBridgeForegroundService
 import com.nexus.callos.companion.telephony.AutoAnswerExecutor
 import com.nexus.callos.companion.telephony.CallLogManager
+import com.nexus.callos.companion.telephony.CallScreeningServiceImpl
 import com.nexus.callos.companion.telephony.CompanionInCallService
 import com.nexus.callos.companion.telephony.ContactsManager
 import com.nexus.callos.companion.telephony.HardwareTelemetryManager
+import com.nexus.callos.companion.telephony.IncomingCallNotifier
+import com.nexus.callos.companion.telephony.IncomingCallReceiver
 import com.nexus.callos.companion.telephony.RecordingManager
 import com.nexus.callos.companion.telephony.RecycleBinManager
 import android.graphics.Bitmap
@@ -524,6 +528,19 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            )
+        }
+
         telemetryManager = HardwareTelemetryManager(this)
         simManager = SimSubscriptionManager(this)
         callLogManager = CallLogManager(this)
@@ -611,6 +628,7 @@ class MainActivity : AppCompatActivity() {
                             }
                             val isCloud = etServerUrl.text.toString().contains(".trycloudflare.com") || etServerUrl.text.toString().startsWith("wss://")
                             updatePresetButtonsHighlight(isCloud)
+                            loadBackendAgents()
                         }
                         break
                     }
@@ -3130,18 +3148,29 @@ class MainActivity : AppCompatActivity() {
     private fun loadBackendAgents() {
         val url = etServerUrl.text.toString().trim()
         lifecycleScope.launch {
-            val overview = backendApiClient.fetchMobileOverview(url)
+            val prefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
+            val cloudWs = prefs.getString("cloud_tunnel_ws_url", null)
+            val localWs = prefs.getString("local_lan_ws_url", null)
+
+            var overview = backendApiClient.fetchMobileOverview(url)
+            if (overview == null && !cloudWs.isNullOrBlank() && cloudWs != url) {
+                overview = backendApiClient.fetchMobileOverview(cloudWs)
+            }
+            if (overview == null && !localWs.isNullOrBlank() && localWs != url) {
+                overview = backendApiClient.fetchMobileOverview(localWs)
+            }
+
             currentOverview = overview
             if (overview != null && overview.activeAgents.isNotEmpty()) {
-                val prefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
                 val savedAgentId = prefs.getString("active_agent_id", null)
-                val targetAgent = overview.activeAgents.find { it.id == savedAgentId }
-                    ?: overview.activeAgents.find { it.status.equals("active", ignoreCase = true) }
+                val targetAgent = overview.activeAgents.find { it.status.equals("active", ignoreCase = true) }
+                    ?: overview.activeAgents.find { it.id == savedAgentId }
                     ?: overview.activeAgents.first()
                 selectedAgent = targetAgent
                 prefs.edit().putString("active_agent_id", targetAgent.id).apply()
                 renderSelectedAgent(targetAgent)
                 populateAgentsList(overview.activeAgents)
+                NexusApplication.log("INFO", "AI Agent", "Live AI Agent loaded from SSOT: ${targetAgent.name} (Active: ${targetAgent.status})")
             } else {
                 tvAgentName.text = "Nexus Voice Assistant"
                 tvAgentRole.text = "Online • Telephony Voice AI"
@@ -4263,29 +4292,55 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setTelephonyComponentsEnabled(enabled: Boolean) {
+        try {
+            val state = if (enabled) {
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            } else {
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            }
+            val flags = PackageManager.DONT_KILL_APP
+            packageManager.setComponentEnabledSetting(
+                ComponentName(this, CompanionInCallService::class.java),
+                state,
+                flags
+            )
+            packageManager.setComponentEnabledSetting(
+                ComponentName(this, CallScreeningServiceImpl::class.java),
+                state,
+                flags
+            )
+            packageManager.setComponentEnabledSetting(
+                ComponentName(this, IncomingCallReceiver::class.java),
+                state,
+                flags
+            )
+            NexusApplication.log("INFO", "Gateway", "Telephony components state updated: enabled=$enabled")
+        } catch (e: Exception) {
+            NexusApplication.log("WARN", "Gateway", "Failed to update component states: ${e.message}")
+        }
+    }
+
     private fun toggleGatewayConnection() {
         val state = CallBridgeForegroundService.connectionState
         when (state) {
             CallBridgeForegroundService.ConnectionState.DISCONNECTED,
             CallBridgeForegroundService.ConnectionState.ERROR -> {
-                // Check essential telephony permissions
-                val ungranted = mutableListOf<String>()
-                if (!isPermGranted(Manifest.permission.READ_PHONE_STATE)) ungranted.add(Manifest.permission.READ_PHONE_STATE)
-                if (!isPermGranted(Manifest.permission.CALL_PHONE)) ungranted.add(Manifest.permission.CALL_PHONE)
-                if (!isPermGranted(Manifest.permission.READ_CALL_LOG)) ungranted.add(Manifest.permission.READ_CALL_LOG)
-                if (!isPermGranted(Manifest.permission.READ_CONTACTS)) ungranted.add(Manifest.permission.READ_CONTACTS)
-                if (!isPermGranted(Manifest.permission.RECORD_AUDIO)) ungranted.add(Manifest.permission.RECORD_AUDIO)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    if (!isPermGranted(Manifest.permission.READ_PHONE_NUMBERS)) ungranted.add(Manifest.permission.READ_PHONE_NUMBERS)
-                    if (!isPermGranted(Manifest.permission.ANSWER_PHONE_CALLS)) ungranted.add(Manifest.permission.ANSWER_PHONE_CALLS)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    if (!isPermGranted(Manifest.permission.POST_NOTIFICATIONS)) ungranted.add(Manifest.permission.POST_NOTIFICATIONS)
-                }
+                // Re-enable telephony components so Nexus Call OS acts as cellular gateway
+                setTelephonyComponentsEnabled(true)
 
-                if (ungranted.isNotEmpty()) {
-                    Toast.makeText(this, "Granting required telephony capabilities...", Toast.LENGTH_SHORT).show()
-                    permissionLauncher.launch(ungranted.toTypedArray())
+                // Check all essential telephony capabilities
+                val isAllGranted = isPermGranted(Manifest.permission.READ_PHONE_STATE) &&
+                        isPermGranted(Manifest.permission.CALL_PHONE) &&
+                        isPermGranted(Manifest.permission.RECORD_AUDIO) &&
+                        isPermGranted(Manifest.permission.READ_CALL_LOG) &&
+                        isPermGranted(Manifest.permission.READ_CONTACTS) &&
+                        isDialerRoleGranted() &&
+                        isBatteryOptimizationExempt()
+
+                if (!isAllGranted) {
+                    Toast.makeText(this, "Granting all telephony capabilities for 1-tap setup...", Toast.LENGTH_SHORT).show()
+                    executeMasterGrantAllFlow()
                 }
 
                 val url = etServerUrl.text.toString().trim()
@@ -4299,11 +4354,16 @@ class MainActivity : AppCompatActivity() {
                     action = CallBridgeForegroundService.ACTION_STOP
                 }
                 startService(stopIntent)
+                IncomingCallNotifier.stopRinging(this)
                 handleConnectionStateTransition(CallBridgeForegroundService.ConnectionState.DISCONNECTED, "User Stopped Service")
                 updateConnectionUi(CallBridgeForegroundService.ConnectionState.DISCONNECTED)
                 tvDashUptime.text = "00:00:00"
-                NexusApplication.log("INFO", "Gateway", "User initiated gateway disconnect. All services & active sockets closed.")
-                Toast.makeText(this, "Gateway Disconnected. Standalone GSM mode active.", Toast.LENGTH_SHORT).show()
+
+                // Disable telephony components so Android routes all cellular calls to the native phone dialer
+                setTelephonyComponentsEnabled(false)
+
+                NexusApplication.log("INFO", "Gateway", "User initiated gateway disconnect. Telephony interception disabled & active sockets closed.")
+                Toast.makeText(this, "Gateway Disconnected. Telephony interception disabled. Native phone calling restored.", Toast.LENGTH_LONG).show()
             }
         }
     }
