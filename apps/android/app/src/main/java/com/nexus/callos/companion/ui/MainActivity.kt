@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS_DEVICE = "nexus_device_prefs"
         private const val PREFS_TELEPHONY = "nexus_telephony_prefs"
         private const val PREFS_SESSIONS = "nexus_session_history"
-        private const val DEFAULT_CLOUD_URL = "wss://possession-tagged-west-staff.trycloudflare.com/api/android-gateway/ws/bridge"
+        private const val DEFAULT_CLOUD_URL = "wss://symbols-craft-dsl-stuff.trycloudflare.com/api/android-gateway/ws/bridge"
         private const val DEFAULT_LOCAL_URL = "ws://192.168.1.33:8000/api/android-gateway/ws/bridge"
     }
 
@@ -4187,7 +4187,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         val pureBase = targetUrl.substringBefore("/api/").trimEnd('/')
-        val isSecure = pureBase.startsWith("https://") || pureBase.startsWith("wss://") || pureBase.contains(".trycloudflare.com")
+        val isSecure = pureBase.startsWith("https://") || pureBase.startsWith("wss://") ||
+                pureBase.contains(".trycloudflare.com") || pureBase.contains(".lhr.life") ||
+                pureBase.contains(".pinggy.link") || pureBase.contains(".ngrok") ||
+                (!pureBase.contains("192.168.") && !pureBase.contains("10.") && !pureBase.contains("127.0.0.1") && !pureBase.contains("localhost") && !pureBase.contains(":8000"))
 
         val baseHttpUrl = if (isSecure) {
             pureBase.replace("wss://", "https://").replace("ws://", "https://").replace("http://", "https://")
