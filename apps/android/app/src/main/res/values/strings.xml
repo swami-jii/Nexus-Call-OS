@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name">Nexus Call OS</string>
-    <string name="app_subtitle">Android GSM Gateway</string>
+    <string name="app_name">Create Call</string>
+    <string name="app_subtitle">Crafting Digital Telephony</string>
     <string name="gateway_online">ONLINE</string>
     <string name="gateway_offline">OFFLINE</string>
     <string name="gateway_connecting">CONNECTING...</string>
@@ -20,7 +20,7 @@
     <string name="connect_gateway">Connect Gateway</string>
     <string name="disconnect_gateway">Disconnect Gateway</string>
     <string name="title_dashboard">Dashboard</string>
-    <string name="header_subtitle">Nexus Call OS • GSM Gateway v2.4</string>
+    <string name="header_subtitle">Create Call • AI Cellular Gateway v2.8</string>
     <string name="title_call_control">Call Handling</string>
     <string name="sub_call_control">Auto-Answer &amp; Live Cellular Audio</string>
     <string name="title_sim_mgmt">SIM Management</string>

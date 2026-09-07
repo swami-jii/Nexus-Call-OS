@@ -1,13 +1,19 @@
 {
-  "versionName": "2.7.0",
-  "versionCode": 270,
-  "apkFileName": "Nexus-GSM-Gateway-v2.7.0.apk",
-  "canonicalApkFileName": "Nexus-GSM-Gateway.apk",
-  "legacyApkFileName": "Nexus-GSM-Gateway-v2.4.apk",
-  "apkSizeBytes": 7979316,
-  "apkSizeFormatted": "7.98 MB",
-  "sha256": "E3E340D369A881706FD066D3C4E9FD80C32A11402203783F7D1C1E97C1DE6A5D",
-  "buildTimestamp": "2026-09-07T20:33:10.000000+00:00",
-  "publishedAt": "2026-09-07T20:33:20.000000+00:00",
-  "isReady": true
+  "version": "2.8.0",
+  "build": 28,
+  "brand": "Create Call",
+  "tagline": "Crafting Digital Telephony",
+  "filename": "Nexus-GSM-Gateway.apk",
+  "size_bytes": 8103630,
+  "sha256": "b26ec280ae2127ce398ba31214a4e2033c5b899ca78dca419ed500294580f1e9",
+  "release_date": "2026-09-07T14:00:16Z",
+  "min_sdk": 26,
+  "target_sdk": 34,
+  "changes": [
+    "Rebranded entire app and branding system to 'Create Call' (Crafting Digital Telephony)",
+    "High-end full-screen lock-screen incoming call UI with glowing radial avatars and answer countdown",
+    "Custom incoming call ringtone picker with system default and device storage integration",
+    "Chained sequential master grant flow for runtime permissions, default phone role, and battery optimization",
+    "Enhanced clean telephony unregister and disconnect handover"
+  ]
 }

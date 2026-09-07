@@ -51,10 +51,17 @@ object IncomingCallNotifier {
             NexusApplication.log("WARN", "IncomingNotifier", "WakeLock acquisition error: ${e.message}")
         }
 
-        // 2. Play Default System Ringtone
+        // 2. Play User Selected or Default System Ringtone
         try {
-            val ringtoneUri: Uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val telPrefs = context.getSharedPreferences("nexus_telephony_prefs", Context.MODE_PRIVATE)
+            val savedRingtoneUriStr = telPrefs.getString("incoming_ringtone_uri", null)
+
+            val ringtoneUri: Uri = if (!savedRingtoneUriStr.isNullOrBlank()) {
+                Uri.parse(savedRingtoneUriStr)
+            } else {
+                RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            }
 
             val ringtone = RingtoneManager.getRingtone(context, ringtoneUri)
             if (ringtone != null) {
@@ -99,9 +106,9 @@ object IncomingCallNotifier {
             NexusApplication.log("WARN", "IncomingNotifier", "Vibration error: ${e.message}")
         }
 
-        // 4. Full-Screen Intent & Heads-Up Notification
+        // 4. Full-Screen Intent & Heads-Up Notification targeting IncomingCallActivity
         try {
-            val fullScreenIntent = Intent(context, MainActivity::class.java).apply {
+            val fullScreenIntent = Intent(context, com.nexus.callos.companion.ui.IncomingCallActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -138,8 +145,8 @@ object IncomingCallNotifier {
             )
 
             val notif = NotificationCompat.Builder(context, NexusApplication.CHANNEL_CALL_ALERTS)
-                .setSmallIcon(android.R.drawable.stat_sys_phone_call)
-                .setContentTitle("Incoming GSM Call")
+                .setSmallIcon(R.drawable.app_icon)
+                .setContentTitle("Create Call • Incoming Call")
                 .setContentText(displayNum)
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -155,7 +162,7 @@ object IncomingCallNotifier {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             nm?.notify(NOTIFICATION_ID_INCOMING_CALL, notif)
 
-            // Also try to launch Activity directly if possible
+            // Launch IncomingCallActivity directly
             context.startActivity(fullScreenIntent)
         } catch (e: Exception) {
             NexusApplication.log("WARN", "IncomingNotifier", "Notification/Activity launch error: ${e.message}")

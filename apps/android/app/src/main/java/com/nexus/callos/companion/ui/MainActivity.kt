@@ -2,6 +2,7 @@ package com.nexus.callos.companion.ui
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.content.ComponentName
@@ -14,6 +15,7 @@ import android.graphics.Typeface
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -371,6 +373,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvRecordingVal: TextView
     private lateinit var rowDtmf: LinearLayout
     private lateinit var tvDtmfVal: TextView
+    private lateinit var rowRingtoneSelect: LinearLayout
+    private lateinit var tvRingtoneVal: TextView
+    private var isMasterGrantAllRunning = false
 
     // UI - Screen 4: AI Agent
     private lateinit var tvAgentName: TextView
@@ -480,6 +485,15 @@ class MainActivity : AppCompatActivity() {
         renderCallLogs()
         renderRecents()
         renderContacts()
+        if (isMasterGrantAllRunning) {
+            if (!isDialerRoleGranted()) {
+                mainHandler.postDelayed({ promptDefaultDialerRole() }, 350L)
+            } else if (!isBatteryOptimizationExempt()) {
+                mainHandler.postDelayed({ requestIgnoreBatteryOptimization() }, 350L)
+            } else {
+                isMasterGrantAllRunning = false
+            }
+        }
     }
 
     private val singlePermissionLauncher = registerForActivityResult(
@@ -497,6 +511,12 @@ class MainActivity : AppCompatActivity() {
     ) {
         auditPermissions()
         refreshAllData()
+        if (isMasterGrantAllRunning) {
+            if (!isBatteryOptimizationExempt()) {
+                mainHandler.postDelayed({ requestIgnoreBatteryOptimization() }, 350L)
+            }
+            isMasterGrantAllRunning = false
+        }
     }
 
     private val screeningRoleLauncher = registerForActivityResult(
@@ -504,6 +524,29 @@ class MainActivity : AppCompatActivity() {
     ) {
         auditPermissions()
         refreshAllData()
+    }
+
+    private val ringtonePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            }
+            if (uri != null) {
+                val ringtone = RingtoneManager.getRingtone(this, uri)
+                val title = ringtone.getTitle(this) ?: "Custom Ringtone"
+                val prefs = getSharedPreferences(PREFS_TELEPHONY, Context.MODE_PRIVATE).edit()
+                prefs.putString("incoming_ringtone_uri", uri.toString())
+                prefs.putString("incoming_ringtone_name", title)
+                prefs.apply()
+                tvRingtoneVal.text = "$title ›"
+                Toast.makeText(this, "Incoming Ringtone set to: $title", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     // Service Connection
@@ -846,6 +889,8 @@ class MainActivity : AppCompatActivity() {
         tvRecordingVal = findViewById(R.id.tvRecordingVal)
         rowDtmf = findViewById(R.id.rowDtmf)
         tvDtmfVal = findViewById(R.id.tvDtmfVal)
+        rowRingtoneSelect = findViewById(R.id.rowRingtoneSelect)
+        tvRingtoneVal = findViewById(R.id.tvRingtoneVal)
 
         // Screen 4: AI Agent
         tvAgentName = findViewById(R.id.tvAgentName)
@@ -1328,6 +1373,9 @@ class MainActivity : AppCompatActivity() {
         rowDtmf.setOnClickListener {
             val cur = tvDtmfVal.text.toString()
             tvDtmfVal.text = if (cur.contains("On")) "Off ›" else "On ›"
+        }
+        rowRingtoneSelect.setOnClickListener {
+            showRingtoneSelectorDialog()
         }
 
         // ==================== AI Voice Agent Interactive SSOT Controls ====================
@@ -2457,21 +2505,83 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        isMasterGrantAllRunning = true
+
         if (ungrantedPerms.isNotEmpty()) {
             permissionLauncher.launch(ungrantedPerms.toTypedArray())
+        } else if (!isDialerRoleGranted()) {
+            promptDefaultDialerRole()
+        } else if (!isBatteryOptimizationExempt()) {
+            requestIgnoreBatteryOptimization()
+            isMasterGrantAllRunning = false
+        } else {
+            isMasterGrantAllRunning = false
+            Toast.makeText(this, "All permissions and phone roles already granted!", Toast.LENGTH_SHORT).show()
         }
+    }
 
-        mainHandler.postDelayed({
-            if (!isDialerRoleGranted()) {
-                promptDefaultDialerRole()
-            }
-        }, 1200L)
+    private fun showRingtoneSelectorDialog() {
+        val telPrefs = getSharedPreferences(PREFS_TELEPHONY, Context.MODE_PRIVATE)
+        val currentUriStr = telPrefs.getString("incoming_ringtone_uri", null)
+        val currentName = telPrefs.getString("incoming_ringtone_name", "System Default")
 
-        mainHandler.postDelayed({
-            if (!isBatteryOptimizationExempt()) {
-                requestIgnoreBatteryOptimization()
+        val options = arrayOf(
+            "System Default Ringtone",
+            "Choose Custom Ringtone from Device...",
+            "Test / Preview Selected Ringtone"
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("Incoming Call Ringtone")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> {
+                        telPrefs.edit()
+                            .remove("incoming_ringtone_uri")
+                            .putString("incoming_ringtone_name", "System Default")
+                            .apply()
+                        tvRingtoneVal.text = "System Default ›"
+                        Toast.makeText(this, "Set to System Default Ringtone", Toast.LENGTH_SHORT).show()
+                    }
+                    1 -> {
+                        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_RINGTONE)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select Incoming Call Ringtone")
+                            if (!currentUriStr.isNullOrBlank()) {
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(currentUriStr))
+                            }
+                        }
+                        try {
+                            ringtonePickerLauncher.launch(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(this, "Could not open ringtone picker: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    2 -> {
+                        val uri = if (!currentUriStr.isNullOrBlank()) {
+                            Uri.parse(currentUriStr)
+                        } else {
+                            RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE)
+                                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                        }
+                        try {
+                            val ringtone = RingtoneManager.getRingtone(this, uri)
+                            if (ringtone.isPlaying) {
+                                ringtone.stop()
+                            } else {
+                                ringtone.play()
+                                mainHandler.postDelayed({ ringtone.stop() }, 4000L)
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(this, "Preview error: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
             }
-        }, 2400L)
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showRevokeGuidanceDialog() {
@@ -2491,7 +2601,7 @@ class MainActivity : AppCompatActivity() {
                 "1. Tap 'Open App Info' below to enter Android System Settings.\n" +
                 "2. Tap 'Permissions' and set desired capabilities to 'Don't allow'.\n" +
                 "3. To change phone/dialer role, check 'Default apps' in system settings.\n\n" +
-                "When you return to Nexus Call OS, the Permission Center will refresh automatically."
+                "When you return to Create Call, the Permission Center will refresh automatically."
             )
             .setPositiveButton("Open App Info") { _, _ ->
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -2600,6 +2710,8 @@ class MainActivity : AppCompatActivity() {
         switchAutoAnswer.isChecked = telPrefs.getBoolean("auto_answer_enabled", true)
         switchAutoRejectUnknown.isChecked = telPrefs.getBoolean("auto_reject_unknown", false)
         tvRingTimeout.text = telPrefs.getString("ring_timeout", "30 seconds ▾") ?: "30 seconds ▾"
+        val savedRingtoneName = telPrefs.getString("incoming_ringtone_name", "System Default")
+        tvRingtoneVal.text = "$savedRingtoneName ›"
 
         val devPrefs = getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
         val savedUrl = devPrefs.getString("server_url", DEFAULT_CLOUD_URL) ?: DEFAULT_CLOUD_URL
@@ -3172,7 +3284,7 @@ class MainActivity : AppCompatActivity() {
                 populateAgentsList(overview.activeAgents)
                 NexusApplication.log("INFO", "AI Agent", "Live AI Agent loaded from SSOT: ${targetAgent.name} (Active: ${targetAgent.status})")
             } else {
-                tvAgentName.text = "Nexus Voice Assistant"
+                tvAgentName.text = "Create Call Voice Assistant"
                 tvAgentRole.text = "Online • Telephony Voice AI"
                 tvAgentProvider.text = "openai ▾"
                 tvAgentLlm.text = "gpt-4o ▾"
@@ -4326,7 +4438,7 @@ class MainActivity : AppCompatActivity() {
         when (state) {
             CallBridgeForegroundService.ConnectionState.DISCONNECTED,
             CallBridgeForegroundService.ConnectionState.ERROR -> {
-                // Re-enable telephony components so Nexus Call OS acts as cellular gateway
+                // Re-enable telephony components so Create Call acts as cellular gateway
                 setTelephonyComponentsEnabled(true)
 
                 // Check all essential telephony capabilities
@@ -4371,7 +4483,7 @@ class MainActivity : AppCompatActivity() {
     fun processPairingOrServerUrl(rawInput: String) {
         val cleanInput = rawInput.trim()
         if (cleanInput.isBlank()) {
-            Toast.makeText(this, "Please enter a valid Nexus Gateway URL or scan QR code", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Please enter a valid Create Call Gateway URL or scan QR code", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -4454,7 +4566,7 @@ class MainActivity : AppCompatActivity() {
         updatePresetButtonsHighlight(isSecure || fullWsUrl.contains(".trycloudflare.com"))
 
         updateConnectionUi(CallBridgeForegroundService.ConnectionState.CONNECTING)
-        NexusApplication.log("INFO", "Pairing", "Verifying active Nexus backend at: $baseHttpUrl")
+        NexusApplication.log("INFO", "Pairing", "Verifying active Create Call backend at: $baseHttpUrl")
 
         lifecycleScope.launch {
             if (!pairingToken.isNullOrBlank()) {
@@ -4499,7 +4611,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.apply()
 
                 NexusApplication.log("INFO", "Pairing", "✓ Backend verified! ${overview.activeAgents.size} Agents active.")
-                Toast.makeText(this@MainActivity, "Connected to Nexus Call OS! Starting Gateway Bridge...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Connected to Create Call! Starting Gateway Bridge...", Toast.LENGTH_SHORT).show()
             } else {
                 NexusApplication.log("WARN", "Pairing", "HTTP overview request timed out or unavailable. Proceeding with direct WebSocket bridge connection.")
             }

@@ -33,7 +33,7 @@
             android:id="@+id/imgAppLogo"
             android:layout_width="28dp"
             android:layout_height="28dp"
-            android:src="@drawable/ic_nexus_logo"
+            android:src="@drawable/create_call_logo"
             android:contentDescription="@string/app_name" />
 
         <LinearLayout
@@ -56,7 +56,7 @@
                 android:id="@+id/tvHeaderSubtitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Nexus Call OS • GSM Gateway v2.4"
+                android:text="Create Call • AI Cellular Gateway v2.8"
                 android:textColor="@color/primary"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -2562,7 +2562,7 @@ Grant READ_CALL_LOG permission or make cellular calls."
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="&quot;Hello, I am your AI calling agent from Nexus Call OS.&quot;"
+                        android:text="&quot;Hello, I am your AI calling agent from Create Call.&quot;"
                         android:textColor="@color/text_primary"
                         android:textSize="13sp"
                         android:background="@drawable/bg_metric_tile"
@@ -2779,7 +2779,7 @@ Grant READ_CALL_LOG permission or make cellular calls."
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="© 2024 Nexus Call OS. All rights reserved."
+                    android:text="© 2024 Create Call. All rights reserved."
                     android:textColor="@color/text_muted"
                     android:textSize="10sp"
                     android:gravity="center"
@@ -4245,6 +4245,42 @@ Grant READ_CALL_LOG permission or make cellular calls."
                                 android:text="On ›"
                                 android:textColor="@color/text_muted"
                                 android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- Row 6: Incoming Call Ringtone Selection -->
+                        <LinearLayout
+                            android:id="@+id/rowRingtoneSelect"
+                            android:layout_width="match_parent"
+                            android:layout_height="36dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="?attr/selectableItemBackground">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:src="@drawable/ic_volume"
+                                app:tint="@color/primary" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Incoming Ringtone"
+                                android:textColor="@color/text_primary"
+                                android:textSize="12sp"
+                                android:layout_marginStart="8dp" />
+
+                            <TextView
+                                android:id="@+id/tvRingtoneVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="System Default ›"
+                                android:textColor="@color/primary"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
                         </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>

@@ -67,6 +67,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Dedicated Full-Screen Incoming Call Activity -->
+        <activity
+            android:name=".ui.IncomingCallActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.NexusCompanion" />
+
         <!-- Persistent Telephony Foreground Gateway Service -->
         <service
             android:name=".service.CallBridgeForegroundService"
