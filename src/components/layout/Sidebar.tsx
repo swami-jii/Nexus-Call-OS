@@ -151,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {/* Brand Header */}
       <div className={`h-16 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center shrink-0 ${
-        isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'
+        isCollapsed ? 'justify-center px-1.5' : 'justify-between px-3'
       }`}>
         {!isCollapsed ? (
           <>
@@ -159,18 +159,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <img
                 src="/app-icon.png"
                 alt="Create Call Icon"
-                className="h-8 w-8 rounded-lg object-cover shadow-xs shrink-0"
+                className="h-9 w-9 rounded-xl object-cover shadow-xs shrink-0 ring-1 ring-zinc-200/80 dark:ring-zinc-800/80"
               />
-              <div className="flex flex-col justify-center min-w-0 flex-1">
+              <div className="flex items-center min-w-0 flex-1">
                 <img
                   src="/create-call-banner-dark.png"
                   alt="Create Call OS"
-                  className="h-7 w-auto max-w-[140px] object-contain hidden dark:block"
+                  className="h-9 w-auto max-w-[155px] object-contain hidden dark:block"
                 />
                 <img
                   src="/create-call-banner-light.png"
                   alt="Create Call OS"
-                  className="h-7 w-auto max-w-[140px] object-contain block dark:hidden"
+                  className="h-9 w-auto max-w-[155px] object-contain block dark:hidden"
                 />
               </div>
             </div>
@@ -178,7 +178,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="button"
               onClick={onToggleCollapse}
               title="Collapse Sidebar"
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 hidden lg:block"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 hidden lg:flex items-center justify-center"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -188,14 +188,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={onToggleCollapse}
             title="Expand Sidebar"
-            className="group relative flex items-center justify-center h-10 w-10 rounded-xl overflow-hidden shadow-md transition-all shrink-0 hover:ring-2 hover:ring-teal-500/50"
+            className="group relative flex items-center justify-center p-1 rounded-xl transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
           >
             <img
               src="/app-icon.png"
               alt="Create Call OS"
-              className="h-10 w-10 object-cover group-hover:opacity-40 transition-opacity duration-150"
+              className="h-10 w-10 rounded-xl object-cover shadow-xs ring-1 ring-zinc-200/80 dark:ring-zinc-800/80 group-hover:scale-105 transition-transform"
             />
-            <ChevronRight className="h-5 w-5 absolute text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 drop-shadow-md" />
+            <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-zinc-950 group-hover:bg-teal-500 transition-colors">
+              <ChevronRight className="h-3.5 w-3.5 stroke-[2.5]" />
+            </span>
           </button>
         )}
       </div>
