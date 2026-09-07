@@ -197,8 +197,8 @@ export const AuthView: React.FC<{ onNavigate: (screen: ScreenId) => void }> = ({
               className="h-10 w-auto object-contain block dark:hidden"
             />
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Crafting Digital Telephony &amp; Voice Intelligence
+          <p className="text-xs font-semibold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase">
+            Crafting Digital Possibilities
           </p>
         </div>
 

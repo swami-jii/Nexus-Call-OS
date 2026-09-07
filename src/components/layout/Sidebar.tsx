@@ -161,17 +161,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 alt="Create Call Icon"
                 className="h-10 w-10 rounded-xl object-cover shadow-xs shrink-0 ring-1 ring-zinc-200/80 dark:ring-zinc-800/80"
               />
-              <div className="flex items-center min-w-0 flex-1">
+              <div className="flex flex-col justify-center min-w-0 flex-1">
                 <img
                   src="/create-call-banner-dark.png"
                   alt="Create Call OS"
-                  className="h-12 w-auto max-w-[172px] object-contain hidden dark:block"
+                  className="h-[30px] w-auto max-w-[155px] object-contain hidden dark:block"
                 />
                 <img
                   src="/create-call-banner-light.png"
                   alt="Create Call OS"
-                  className="h-12 w-auto max-w-[172px] object-contain block dark:hidden"
+                  className="h-[30px] w-auto max-w-[155px] object-contain block dark:hidden"
                 />
+                <div className="flex items-center gap-1 mt-0.5 select-none overflow-hidden">
+                  <span className="h-[1px] w-2 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
+                  <span className="text-[8px] font-semibold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase truncate">
+                    Crafting Digital Possibilities
+                  </span>
+                  <span className="h-[1px] w-2 bg-teal-600/50 dark:bg-teal-400/50 shrink-0"></span>
+                </div>
               </div>
             </div>
             <button
