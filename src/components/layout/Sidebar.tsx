@@ -150,22 +150,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }`}
     >
       {/* Brand Header */}
-      <div className={`h-14 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center shrink-0 ${
-        isCollapsed ? 'justify-center px-2' : 'justify-between px-4'
+      <div className={`h-16 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center shrink-0 ${
+        isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'
       }`}>
         {!isCollapsed ? (
           <>
-            <div className="flex items-center gap-2.5 min-w-0 shrink-0">
-              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs shrink-0">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="truncate">
-                <h1 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-none truncate">
-                  NEXUS CALL OS
-                </h1>
-                <p className="text-[10px] font-medium text-blue-600 dark:text-blue-400 uppercase tracking-widest mt-0.5 truncate">
-                  v2.4 Enterprise
-                </p>
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
+              <img
+                src="/app-icon.png"
+                alt="Create Call Icon"
+                className="h-8 w-8 rounded-lg object-cover shadow-xs shrink-0"
+              />
+              <div className="flex flex-col justify-center min-w-0 flex-1">
+                <img
+                  src="/create-call-banner-dark.png"
+                  alt="Create Call OS"
+                  className="h-7 w-auto max-w-[140px] object-contain hidden dark:block"
+                />
+                <img
+                  src="/create-call-banner-light.png"
+                  alt="Create Call OS"
+                  className="h-7 w-auto max-w-[140px] object-contain block dark:hidden"
+                />
               </div>
             </div>
             <button
@@ -182,10 +188,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={onToggleCollapse}
             title="Expand Sidebar"
-            className="group relative flex items-center justify-center h-10 w-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all shrink-0"
+            className="group relative flex items-center justify-center h-10 w-10 rounded-xl overflow-hidden shadow-md transition-all shrink-0 hover:ring-2 hover:ring-teal-500/50"
           >
-            <Sparkles className="h-5 w-5 group-hover:opacity-0 transition-opacity duration-150" />
-            <ChevronRight className="h-5 w-5 absolute opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+            <img
+              src="/app-icon.png"
+              alt="Create Call OS"
+              className="h-10 w-10 object-cover group-hover:opacity-40 transition-opacity duration-150"
+            />
+            <ChevronRight className="h-5 w-5 absolute text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 drop-shadow-md" />
           </button>
         )}
       </div>

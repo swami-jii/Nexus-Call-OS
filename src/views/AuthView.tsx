@@ -179,15 +179,26 @@ export const AuthView: React.FC<{ onNavigate: (screen: ScreenId) => void }> = ({
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="mx-auto h-12 w-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg">
-            <Sparkles className="h-6 w-6" />
+        <div className="text-center space-y-3">
+          <img
+            src="/app-icon.png"
+            alt="Create Call Favicon"
+            className="mx-auto h-14 w-14 rounded-2xl object-cover shadow-lg"
+          />
+          <div className="flex justify-center items-center">
+            <img
+              src="/create-call-banner-dark.png"
+              alt="Create Call OS"
+              className="h-10 w-auto object-contain hidden dark:block"
+            />
+            <img
+              src="/create-call-banner-light.png"
+              alt="Create Call OS"
+              className="h-10 w-auto object-contain block dark:hidden"
+            />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            NEXUS CALL OS
-          </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Enterprise AI Voice Telephony Platform
+            Crafting Digital Telephony &amp; Voice Intelligence
           </p>
         </div>
 

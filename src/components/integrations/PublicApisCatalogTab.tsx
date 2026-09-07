@@ -1911,7 +1911,7 @@ export const PublicApisCatalogTab: React.FC<PublicApisCatalogTabProps> = ({ onAd
           <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900/50 space-y-1">
             <h5 className="font-bold text-blue-900 dark:text-blue-300">⚡ Overview &amp; Voice Calling Architecture</h5>
             <p>
-              Nexus Call OS embeds the complete permanent dataset of <strong>1,722+ Curated Public APIs</strong> across 50 categories. This system ensures sub-100ms real-time intelligence for all telephone calls without exposing technical API names or URLs to the caller.
+              Create Call OS embeds the complete permanent dataset of <strong>1,722+ Curated Public APIs</strong> across 50 categories. This system ensures sub-100ms real-time intelligence for all telephone calls without exposing technical API names or URLs to the caller.
             </p>
           </div>
 
@@ -1957,7 +1957,7 @@ export const PublicApisCatalogTab: React.FC<PublicApisCatalogTabProps> = ({ onAd
         onClose={() => setIsMatrixModalOpen(false)}
         size="2xl"
         title="⚡ Public APIs Catalog & Live Intelligence - Workspace Integration Matrix"
-        description="Realtime operational binding map of Public APIs across Nexus Call OS subsystem engines and workspace modules."
+        description="Realtime operational binding map of Public APIs across Create Call OS subsystem engines and workspace modules."
         footer={
           <div className="flex items-center justify-between w-full">
             <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">

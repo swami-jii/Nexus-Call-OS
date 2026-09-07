@@ -717,7 +717,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
     setTimeout(() => {
       setCallStatusText('Connected • HD VoLTE Audio Active');
       setAgentSpeaking(true);
-      const greeting = `Namaste! I am ${targetAgent.name} from Nexus Call OS. How may I assist you with your customer support or sales inquiry today?`;
+      const greeting = `Namaste! I am ${targetAgent.name} from Create Call OS. How may I assist you with your customer support or sales inquiry today?`;
       setAgentTranscript(greeting);
 
       if ('speechSynthesis' in window) {
@@ -776,14 +776,14 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
             )}
             <img
               src="/app-icon.png"
-              alt="Nexus App Logo"
+              alt="Create Call App Logo"
               className="w-10 h-10 rounded-xl shadow-md border border-emerald-500/40 object-cover shrink-0"
             />
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className={`text-sm font-bold tracking-tight ${cTheme.textPrimary}`}>Nexus Call OS</h1>
+                <h1 className={`text-sm font-bold tracking-tight ${cTheme.textPrimary}`}>Create Call OS</h1>
                 <Badge variant="emerald" className="text-[9px] px-1.5 py-0 font-mono">
-                  {lanInfo?.version_name ? `v${lanInfo.version_name}` : 'v2.4'}
+                  {lanInfo?.version_name ? `v${lanInfo.version_name}` : 'v2.8'}
                 </Badge>
               </div>
               <p className={`text-[11px] font-medium ${cTheme.textSecondary}`}>
@@ -1088,7 +1088,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
                 </Badge>
               </div>
               <p className={`text-xs max-w-sm mx-auto ${cTheme.textSecondary}`}>
-                No APK or file downloads needed! This browser tab runs as an ultra-low latency WebRTC telephony node for Nexus Call OS.
+                No APK or file downloads needed! This browser tab runs as an ultra-low latency WebRTC telephony node for Create Call OS.
               </p>
             </div>
 

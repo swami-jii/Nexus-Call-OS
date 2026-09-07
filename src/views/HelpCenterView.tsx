@@ -16,9 +16,9 @@ export const HelpCenterView: React.FC = () => {
   const faqs = [
     {
       id: 'faq1',
-      title: 'How does Nexus Call OS achieve sub-350ms voice latency?',
+      title: 'How does Create Call OS achieve sub-350ms voice latency?',
       content:
-        'Nexus utilizes an optimized WebRTC pipeline running on high-bandwidth edge containers. Speech-to-Text decoding is streamed concurrently to Gemini 1.5 Flash, which yields its first token in 82ms, driving instant neural voice synthesis.',
+        'Create Call OS utilizes an optimized WebRTC pipeline running on high-bandwidth edge containers. Speech-to-Text decoding is streamed concurrently to Gemini 1.5 Flash, which yields its first token in 82ms, driving instant neural voice synthesis.',
     },
     {
       id: 'faq2',

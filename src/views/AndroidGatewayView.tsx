@@ -687,8 +687,8 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Aggressive Background Sleep',
       ratingColor: 'rose',
       steps: [
-        'Open Settings > Apps > Nexus Call OS Companion > Battery > Select "Unrestricted".',
-        'Open Settings > Battery > Background usage limits > Add Nexus Companion to "Never sleeping apps".',
+        'Open Settings > Apps > Create Call OS Companion > Battery > Select "Unrestricted".',
+        'Open Settings > Battery > Background usage limits > Add Create Companion to "Never sleeping apps".',
         'In App Info, enable "Allow background activity" and "Appear on top".',
         'Lock App in Recent Apps view (tap App icon in App Switcher > Lock this app).'
       ],
@@ -1014,7 +1014,7 @@ export const AndroidGatewayView: React.FC = () => {
                   </span>
                 </div>
                 <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Scan the QR code with your device or download the native app to pair with Nexus Call OS.
+                  Scan the QR code with your device or download the native app to pair with Create Call OS.
                 </CardDescription>
               </div>
             </div>
@@ -1279,7 +1279,7 @@ export const AndroidGatewayView: React.FC = () => {
                   </li>
                   <li className="flex items-start space-x-1.5">
                     <span className="text-emerald-500 font-bold">✓</span>
-                    <span>Keep Nexus Call OS running on the laptop</span>
+                    <span>Keep Create Call OS running on the laptop</span>
                   </li>
                   <li className="flex items-start space-x-1.5">
                     <span className="text-emerald-500 font-bold">✓</span>

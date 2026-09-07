@@ -566,7 +566,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
   const [testStability, setTestStability] = useState(0.75);
   const [testSimilarity, setTestSimilarity] = useState(0.75);
   const [testEmotion, setTestEmotion] = useState('Neutral');
-  const [testText, setTestText] = useState('Hello, this is Nexus Call OS Voice Testing.');
+  const [testText, setTestText] = useState('Hello, this is Create Call OS Voice Testing.');
   const [isTestGenerating, setIsTestGenerating] = useState(false);
   const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
   const testAudioRef = useRef<HTMLAudioElement>(null);
