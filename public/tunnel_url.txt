@@ -1,1 +1,1 @@
-https://symbols-craft-dsl-stuff.trycloudflare.com
+https://api.trycloudflare.com
