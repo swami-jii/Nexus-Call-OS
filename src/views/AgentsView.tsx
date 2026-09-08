@@ -3703,67 +3703,6 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
           </div>
         </Card>
       )}
-      {activeTab === 'prompts' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-4 space-y-4">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <FileCode className="h-4 w-4 text-purple-500" />
-              Prompt Template Compiler
-            </CardTitle>
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-zinc-500 font-medium">Template String with Handlebars</label>
-                <Textarea
-                  rows={6}
-                  value={promptTemplate}
-                  onChange={(e) => setPromptTemplate(e.target.value)}
-                  className="font-mono text-xs mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-zinc-500 font-medium">Variable: {"{{name}}"}</label>
-                  <Input
-                    value={promptVars.name}
-                    onChange={(e) => setPromptVars({ ...promptVars, name: e.target.value })}
-                    className="text-xs mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-zinc-500 font-medium">Variable: {"{{company}}"}</label>
-                  <Input
-                    value={promptVars.company}
-                    onChange={(e) => setPromptVars({ ...promptVars, company: e.target.value })}
-                    className="text-xs mt-1"
-                  />
-                </div>
-              </div>
-
-              <Button size="sm" variant="primary" onClick={handleCompilePrompt} leftIcon={<Sparkles className="h-4 w-4" />}>
-                Compile & Evaluate Tokens
-              </Button>
-            </div>
-          </Card>
-
-          <Card className="p-4 space-y-3">
-            <CardTitle className="text-sm font-bold">Compiled Prompt Output</CardTitle>
-            {compiledPromptResult ? (
-              <div className="space-y-3 text-xs">
-                <div className="p-3 bg-zinc-950 text-emerald-400 font-mono rounded-lg border border-zinc-800">
-                  {compiledPromptResult.compiled_prompt}
-                </div>
-                <div className="flex gap-4 text-zinc-500 font-mono">
-                  <span>Estimated Tokens: {compiledPromptResult.estimated_token_count}</span>
-                  <span>Variable Count: {compiledPromptResult.variable_count}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-zinc-400 italic text-xs">Click Compile to render handlebars payload.</p>
-            )}
-          </Card>
-        </div>
-      )}
 
       {/* CREATE AGENT MODAL */}
       <Modal
