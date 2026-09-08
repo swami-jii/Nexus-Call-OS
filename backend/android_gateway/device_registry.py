@@ -179,6 +179,13 @@ class DeviceRegistry:
         try:
             with SessionLocal() as db:
                 records = db.query(CompanionDevice).all()
+                db_device_ids = {rec.device_id for rec in records}
+
+                # Prune any in-memory devices that are no longer present in the database
+                for dev_id in list(self._devices.keys()):
+                    if dev_id not in db_device_ids:
+                        self._devices.pop(dev_id, None)
+
                 for rec in records:
                     if rec.device_id in self._devices:
                         existing = self._devices[rec.device_id]
@@ -428,10 +435,9 @@ class DeviceRegistry:
         self._devices.pop(device_id, None)
         try:
             with SessionLocal() as db:
-                db_dev = db.query(CompanionDevice).filter(CompanionDevice.device_id == device_id).first()
-                if db_dev:
-                    db.delete(db_dev)
-                    db.commit()
+                db.query(CompanionDevice).filter(CompanionDevice.device_id == device_id).delete()
+                db.commit()
+                logger.info(f"Permanently removed companion device {device_id} from database.")
         except Exception as e:
             logger.error(f"Failed to delete device {device_id} from DB: {e}")
         return True

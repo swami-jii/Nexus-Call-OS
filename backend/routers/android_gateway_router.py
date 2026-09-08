@@ -412,6 +412,7 @@ async def rename_device(
 
 
 @router.delete("/devices/{device_id}")
+@router.post("/devices/{device_id}/delete")
 async def delete_device(
     device_id: str,
     current_user: User = Depends(get_current_user),
@@ -420,6 +421,7 @@ async def delete_device(
     _device_registry.delete_device(device_id)
     _ws_bridge_server.disconnect(device_id)
     return {"status": "success", "message": f"Device {device_id} removed", "device_id": device_id}
+
 
 
 @router.post("/devices/flush-all")
