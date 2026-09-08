@@ -1948,76 +1948,78 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       </div>
 
       {/* TOOLBAR 1: TABS ONLY */}
-      <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-1 bg-zinc-100 dark:bg-zinc-900 flex items-center justify-start gap-1 overflow-x-auto shrink-0 whitespace-nowrap shadow-xs">
-        <button
-          onClick={() => setActiveTab('roster')}
-          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
-            activeTab === 'roster'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <Bot className="h-4 w-4 text-blue-500 shrink-0" />
-          <span>Agent Roster</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('playground')}
-          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
-            activeTab === 'playground'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <Mic className="h-4 w-4 text-emerald-500 shrink-0" />
-          <span>Playground</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('prompts')}
-          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
-            activeTab === 'prompts'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <Sparkles className="h-4 w-4 text-purple-500 shrink-0" />
-          <span>Prompt Studio</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('tools')}
-          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
-            activeTab === 'tools'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <Wrench className="h-4 w-4 text-amber-500 shrink-0" />
-          <span>Tools & Functions</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('voice_studio')}
-          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
-            activeTab === 'voice_studio'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <Volume2 className="h-4 w-4 text-cyan-500 shrink-0" />
-          <span>Voice Lab & Profiles</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab('memory');
-            handleFetchMemory();
-          }}
-          className={`h-9 px-3.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
-            activeTab === 'memory'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <BrainCircuit className="h-4 w-4 text-indigo-500 shrink-0" />
-          <span>Memory Viewer</span>
-        </button>
+      <div className="flex items-center">
+        <div className="inline-flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700/60 shadow-xs max-w-full overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('roster')}
+            className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+              activeTab === 'roster'
+                ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 font-bold shadow-xs border border-zinc-200/60 dark:border-zinc-700/60'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/40'
+            }`}
+          >
+            <Bot className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <span>Agent Roster</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('playground')}
+            className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+              activeTab === 'playground'
+                ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs border border-zinc-200/60 dark:border-zinc-700/60'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/40'
+            }`}
+          >
+            <Mic className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <span>Playground</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('prompts')}
+            className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+              activeTab === 'prompts'
+                ? 'bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 font-bold shadow-xs border border-zinc-200/60 dark:border-zinc-700/60'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/40'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+            <span>Prompt Studio</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('tools')}
+            className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+              activeTab === 'tools'
+                ? 'bg-white dark:bg-zinc-900 text-amber-600 dark:text-amber-400 font-bold shadow-xs border border-zinc-200/60 dark:border-zinc-700/60'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/40'
+            }`}
+          >
+            <Wrench className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span>Tools & Functions</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('voice_studio')}
+            className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+              activeTab === 'voice_studio'
+                ? 'bg-white dark:bg-zinc-900 text-cyan-600 dark:text-cyan-400 font-bold shadow-xs border border-zinc-200/60 dark:border-zinc-700/60'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/40'
+            }`}
+          >
+            <Volume2 className="h-3.5 w-3.5 text-cyan-500 shrink-0" />
+            <span>Voice Lab & Profiles</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('memory');
+              handleFetchMemory();
+            }}
+            className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center shrink-0 gap-1.5 cursor-pointer ${
+              activeTab === 'memory'
+                ? 'bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 font-bold shadow-xs border border-zinc-200/60 dark:border-zinc-700/60'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/40'
+            }`}
+          >
+            <BrainCircuit className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+            <span>Memory Viewer</span>
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: ROSTER VIEW (GRID / TABLE) */}
