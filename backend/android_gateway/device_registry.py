@@ -180,6 +180,20 @@ class DeviceRegistry:
             with SessionLocal() as db:
                 records = db.query(CompanionDevice).all()
                 for rec in records:
+                    if rec.device_id in self._devices:
+                        existing = self._devices[rec.device_id]
+                        existing.name = rec.name
+                        existing.sim_number = rec.sim_number or ""
+                        existing.carrier_name = rec.carrier_name or ""
+                        existing.os_version = rec.os_version or ""
+                        existing.device_type = rec.device_type or "android"
+                        existing.organization_id = rec.organization_id
+                        existing.workspace_id = rec.workspace_id
+                        existing.priority = rec.priority or 1
+                        if rec.auto_answer is not None:
+                            existing.auto_answer = rec.auto_answer
+                        continue
+
                     dev = AndroidDevice(
                         device_id=rec.device_id,
                         name=rec.name,
@@ -198,11 +212,10 @@ class DeviceRegistry:
                     dev.signal_dbm = rec.signal_dbm if rec.signal_dbm is not None else 0
                     dev.network_type = rec.network_type or ""
                     dev.latency_ms = rec.latency_ms if rec.latency_ms is not None else 0
-                    dev.is_online = False
+                    dev.is_online = rec.is_online if rec.is_online is not None else False
                     self._devices[rec.device_id] = dev
-                logger.info(f"Loaded {len(records)} companion devices from database.")
         except Exception as e:
-            logger.warning(f"Could not load companion devices from DB during startup: {e}")
+            logger.warning(f"Could not load companion devices from DB: {e}")
 
     def register_device(
         self,
@@ -361,6 +374,7 @@ class DeviceRegistry:
         return self._devices.get(device_id)
 
     def list_devices(self, organization_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        self._load_from_db()
         devices = sorted(self._devices.values(), key=lambda d: d.priority)
         if organization_id:
             devices = [d for d in devices if d.organization_id == organization_id or d.organization_id is None]
