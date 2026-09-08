@@ -32,7 +32,7 @@ export const Tabs: React.FC<TabsProps> = ({
               key={tab.id}
               type="button"
               onClick={() => onChange(tab.id)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+              className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
                 isActive
                   ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs border border-zinc-200 dark:border-zinc-700'
                   : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50'
@@ -44,7 +44,7 @@ export const Tabs: React.FC<TabsProps> = ({
                 <span
                   className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
                     isActive
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                      ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
                       : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
                   }`}
                 >
@@ -68,9 +68,9 @@ export const Tabs: React.FC<TabsProps> = ({
               key={tab.id}
               type="button"
               onClick={() => onChange(tab.id)}
-              className={`inline-flex items-center gap-2 py-3 px-1 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              className={`inline-flex items-center gap-2 py-3 px-1 text-sm font-medium border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
                 isActive
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-semibold'
+                  ? 'border-teal-600 text-teal-600 dark:border-teal-400 dark:text-teal-400 font-semibold'
                   : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700'
               }`}
             >
@@ -80,7 +80,7 @@ export const Tabs: React.FC<TabsProps> = ({
                 <span
                   className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                     isActive
-                      ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                      ? 'bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300'
                       : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
                   }`}
                 >

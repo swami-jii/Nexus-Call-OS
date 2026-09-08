@@ -18,6 +18,7 @@ from backend.routers.agent_engine_router import router as agent_engine_router
 from backend.routers.agents import router as agents_router
 from backend.routers.api_keys import router as api_key_router
 from backend.routers.audit_logs import router as audit_router
+from backend.routers.analytics import router as analytics_router
 from backend.routers.auth import router as auth_router
 from backend.routers.billing import router as billing_router
 from backend.routers.calls import router as call_router
@@ -90,7 +91,7 @@ with engine.connect() as conn:
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Production-ready FastAPI backend architecture for Nexus AI Voice OS.",
+    description="Production-ready FastAPI backend architecture for Create Call OS.",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -123,6 +124,7 @@ app.include_router(api_key_router)
 app.include_router(credentials_router)
 app.include_router(billing_router)
 app.include_router(notification_router)
+app.include_router(analytics_router)
 app.include_router(audit_router)
 app.include_router(settings_router)
 app.include_router(workflow_router)

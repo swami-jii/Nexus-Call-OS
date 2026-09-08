@@ -178,7 +178,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
   const [isInCall, setIsInCall] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<any | null>(null);
   const [callDuration, setCallDuration] = useState(0);
-  const [callStatusText, setCallStatusText] = useState('Connecting to Nexus Voice Engine...');
+  const [callStatusText, setCallStatusText] = useState('Connecting to Create Call Voice Engine...');
   const [agentSpeaking, setAgentSpeaking] = useState(false);
   const [userTranscript, setUserTranscript] = useState('');
   const [agentTranscript, setAgentTranscript] = useState('');
@@ -1522,10 +1522,21 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
                 </div>
 
                 <div className="space-y-2.5">
+                  {/* 1-Tap Deep Link Pairing for Installed App */}
+                  {lanInfo?.deep_link && (
+                    <a
+                      href={lanInfo.deep_link}
+                      className={`w-full font-bold text-xs py-2.5 px-4 rounded-xl border flex items-center justify-center gap-1.5 transition-all text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30`}
+                    >
+                      <Zap className="h-3.5 w-3.5 text-emerald-500" />
+                      <span>Already Installed? Tap to Connect & Pair App</span>
+                    </a>
+                  )}
+
                   {/* Direct APK Download Button */}
                   <a
                     href="/download"
-                    download={lanInfo?.apk_filename || "Nexus-GSM-Gateway.apk"}
+                    download={lanInfo?.apk_filename || "CreateCall-GSM-Gateway.apk"}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-3.5 px-5 rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all"
                   >
                     <Download className="h-5 w-5" />
@@ -1591,7 +1602,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
 
                 <a
                   href="/api/android-gateway/download/mac"
-                  download="Nexus-macOS-Companion.zip"
+                  download="CreateCall-macOS-Companion.zip"
                   className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm py-4 px-6 rounded-2xl shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2.5 transition-all"
                 >
                   <Download className="h-5 w-5" />
@@ -1613,7 +1624,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
 
                 <a
                   href="/api/android-gateway/download/win"
-                  download="Nexus-Windows-Companion.zip"
+                  download="CreateCall-Windows-Companion.zip"
                   className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm py-4 px-6 rounded-2xl shadow-lg shadow-amber-600/30 flex items-center justify-center gap-2.5 transition-all"
                 >
                   <Download className="h-5 w-5" />

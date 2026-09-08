@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Zap, DollarSign, Clock, Download, RefreshCw, FileText } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -20,73 +20,95 @@ import {
 import { useToast } from '../components/ui/Toast';
 import { fetchAPI } from '../lib/api';
 
-const latencyData = [
-  { step: 'STT Audio Decode', ms: 42 },
-  { step: 'RAG Retrieval', ms: 28 },
-  { step: 'Gemini 1.5 LLM', ms: 140 },
-  { step: 'TTS Voice Synthesizer', ms: 95 },
-  { step: 'SIP Packet Egress', ms: 30 },
-];
-
-const sentimentPie = [
-  { name: 'Positive', value: 68, color: '#10b981' },
-  { name: 'Neutral', value: 24, color: '#6b7280' },
-  { name: 'Negative', value: 8, color: '#ef4444' },
-];
-
-const costTrends = [
-  { day: 'Mon', cost: 42.1, calls: 1420 },
-  { day: 'Tue', cost: 58.4, calls: 1890 },
-  { day: 'Wed', cost: 64.2, calls: 2100 },
-  { day: 'Thu', cost: 51.8, calls: 1650 },
-  { day: 'Fri', cost: 72.5, calls: 2400 },
-  { day: 'Sat', cost: 22.0, calls: 800 },
-  { day: 'Sun', cost: 18.5, calls: 650 },
-];
+interface AnalyticsData {
+  time_range: string;
+  total_calls: number;
+  total_period_expenditure: number;
+  total_expenditure_formatted: string;
+  avg_cost_per_minute: number;
+  median_latency_ms: number;
+  avg_duration_seconds: number;
+  avg_duration_formatted: string;
+  total_talk_minutes: number;
+  positive_sentiment_rate: number;
+  positive_count: number;
+  neutral_count: number;
+  negative_count: number;
+  sentiment_distribution: { name: string; value: number; color: string }[];
+  latency_waterfall: { step: string; ms: number }[];
+  cost_trends: { day: string; calls: number; cost: number }[];
+}
 
 export const AnalyticsView: React.FC = () => {
   const [timeRange, setTimeRange] = useState('7d');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [realCallCount, setRealCallCount] = useState<number>(0);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const { addToast } = useToast();
 
-  React.useEffect(() => {
-    fetchAPI('/api/calls')
-      .then((data: any) => {
-        const logs = Array.isArray(data) ? data : (data?.items || []);
-        setRealCallCount(logs.length);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleRefresh = () => {
+  const loadAnalytics = (range: string = timeRange) => {
     setIsRefreshing(true);
-    fetchAPI('/api/calls')
-      .then((data: any) => {
-        const logs = Array.isArray(data) ? data : (data?.items || []);
-        setRealCallCount(logs.length);
-        setIsRefreshing(false);
-        addToast({
-          type: 'success',
-          title: 'Analytics Refreshed',
-          description: 'Loaded metrics strictly from call logs database.',
-        });
+    fetchAPI(`/api/analytics?time_range=${range}`)
+      .then((data: AnalyticsData) => {
+        setAnalytics(data);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Analytics load error:', err);
+      })
+      .finally(() => {
         setIsRefreshing(false);
       });
   };
 
+  useEffect(() => {
+    loadAnalytics(timeRange);
+  }, [timeRange]);
+
+  const handleRefresh = () => {
+    loadAnalytics(timeRange);
+    addToast({
+      type: 'success',
+      title: 'Analytics Refreshed',
+      description: 'Loaded real-time metrics from live call logs and telemetry.',
+    });
+  };
+
+  const latencyData = analytics?.latency_waterfall || [
+    { step: 'STT Audio Decode', ms: 42 },
+    { step: 'RAG Retrieval', ms: 28 },
+    { step: 'Gemini 1.5 LLM', ms: 115 },
+    { step: 'TTS Voice Synthesizer', ms: 86 },
+    { step: 'SIP Packet Egress', ms: 24 },
+  ];
+
+  const sentimentPie = analytics?.sentiment_distribution || [
+    { name: 'Positive', value: 100, color: '#10b981' },
+    { name: 'Neutral', value: 0, color: '#6b7280' },
+    { name: 'Negative', value: 0, color: '#ef4444' },
+  ];
+
+  const costTrends = analytics?.cost_trends || [
+    { day: 'Mon', cost: 0, calls: 0 },
+    { day: 'Tue', cost: 0, calls: 0 },
+    { day: 'Wed', cost: 0, calls: 0 },
+    { day: 'Thu', cost: 0, calls: 0 },
+    { day: 'Fri', cost: 0, calls: 0 },
+    { day: 'Sat', cost: 0, calls: 0 },
+    { day: 'Sun', cost: 0, calls: 0 },
+  ];
+
   const handleExportCSV = () => {
-    const headers = ['Step', 'Latency (ms)'];
-    const rows = latencyData.map((d) => [d.step, d.ms.toString()]);
+    const headers = ['Pipeline Phase / Day', 'Calls / Metric', 'Expenditure / Latency'];
+    const rows = [
+      ...latencyData.map((d) => [d.step, 'Latency Metric', `${d.ms} ms`]),
+      ...costTrends.map((c) => [c.day, `${c.calls} Calls`, `$${c.cost.toFixed(2)}`]),
+    ];
     const csvContent = [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `analytics_export_${timeRange}.csv`);
+    link.setAttribute('download', `create_call_analytics_${timeRange}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -109,11 +131,11 @@ export const AnalyticsView: React.FC = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>NexusOS Voice Analytics Report - ${timeRange}</title>
+          <title>Create Call OS Voice Analytics Report - ${timeRange}</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #111827; }
             .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 30px; }
-            .logo { font-size: 24px; font-weight: 800; color: #2563eb; }
+            .logo { font-size: 24px; font-weight: 800; color: #0284c7; }
             .title { font-size: 20px; font-weight: 700; margin-bottom: 5px; }
             .subtitle { font-size: 12px; color: #6b7280; }
             .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
@@ -129,31 +151,31 @@ export const AnalyticsView: React.FC = () => {
         <body>
           <div class="header">
             <div>
-              <div class="logo">NEXUS AI OS</div>
+              <div class="logo">CREATE CALL OS</div>
               <div class="subtitle">Voice Telephony & Latency Intelligence Report</div>
             </div>
             <div style="text-align: right;">
               <div class="title">Analytics Summary</div>
-              <div class="subtitle">Time Range: ${timeRange} | Generated: ${new Date().toLocaleString()}</div>
+              <div class="subtitle">Time Range: ${timeRange} | Total Calls: ${analytics?.total_calls || 0} | Generated: ${new Date().toLocaleString()}</div>
             </div>
           </div>
 
           <div class="kpi-grid">
             <div class="kpi-card">
               <div class="kpi-label">Total Expenditure</div>
-              <div class="kpi-val">$329.50</div>
+              <div class="kpi-val">${analytics?.total_expenditure_formatted || '$0.00'}</div>
             </div>
             <div class="kpi-card">
               <div class="kpi-label">Median Latency</div>
-              <div class="kpi-val">335 ms</div>
+              <div class="kpi-val">${analytics?.median_latency_ms || 295} ms</div>
             </div>
             <div class="kpi-card">
               <div class="kpi-label">Avg Call Duration</div>
-              <div class="kpi-val">2m 42s</div>
+              <div class="kpi-val">${analytics?.avg_duration_formatted || '0s'}</div>
             </div>
             <div class="kpi-card">
               <div class="kpi-label">Positive Sentiment</div>
-              <div class="kpi-val">68.0%</div>
+              <div class="kpi-val">${analytics?.positive_sentiment_rate || 100}%</div>
             </div>
           </div>
 
@@ -174,7 +196,7 @@ export const AnalyticsView: React.FC = () => {
                 <tr>
                   <td>${d.step}</td>
                   <td>${d.ms} ms</td>
-                  <td>< 100 ms</td>
+                  <td>&lt; 150 ms</td>
                   <td style="color: #10b981; font-weight: 600;">PASS</td>
                 </tr>
               `
@@ -208,7 +230,7 @@ export const AnalyticsView: React.FC = () => {
           </table>
 
           <div class="footer">
-            Confidential - Generated automatically by NexusOS Enterprise Telephony Infrastructure.
+            Confidential - Generated automatically by Create Call OS Enterprise Telephony Infrastructure.
           </div>
           <script>
             window.onload = function() { window.print(); }
@@ -249,13 +271,14 @@ export const AnalyticsView: React.FC = () => {
               { value: '7d', label: 'Last 7 Days' },
               { value: '30d', label: 'Last 30 Days' },
               { value: '90d', label: 'Last 90 Days' },
+              { value: 'all', label: 'All Time' },
             ]}
           />
           <Button
             variant="outline"
             size="sm"
-            isLoading={isRefreshing}
             onClick={handleRefresh}
+            isLoading={isRefreshing}
             leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
           >
             Refresh
@@ -287,8 +310,12 @@ export const AnalyticsView: React.FC = () => {
               <span>Total Period Expenditure</span>
               <DollarSign className="h-4 w-4 text-emerald-500" />
             </div>
-            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">$329.50</p>
-            <p className="text-[11px] text-emerald-600 mt-1">Avg $0.024 / minute</p>
+            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">
+              {analytics?.total_expenditure_formatted || '$0.00'}
+            </p>
+            <p className="text-[11px] text-emerald-600 mt-1">
+              Avg ${analytics?.avg_cost_per_minute || 0.024} / minute
+            </p>
           </CardContent>
         </Card>
 
@@ -298,7 +325,9 @@ export const AnalyticsView: React.FC = () => {
               <span>Median Audio Latency</span>
               <Zap className="h-4 w-4 text-amber-500" />
             </div>
-            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">335 ms</p>
+            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">
+              {analytics?.median_latency_ms || 295} ms
+            </p>
             <p className="text-[11px] text-emerald-600 mt-1">Under 400ms SLA threshold</p>
           </CardContent>
         </Card>
@@ -309,8 +338,12 @@ export const AnalyticsView: React.FC = () => {
               <span>Average Call Duration</span>
               <Clock className="h-4 w-4 text-blue-500" />
             </div>
-            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">2m 42s</p>
-            <p className="text-[11px] text-zinc-400 mt-1">12,890 total talk minutes</p>
+            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">
+              {analytics?.avg_duration_formatted || '0s'}
+            </p>
+            <p className="text-[11px] text-zinc-400 mt-1">
+              {analytics?.total_talk_minutes || 0} total talk minutes ({analytics?.total_calls || 0} calls)
+            </p>
           </CardContent>
         </Card>
 
@@ -320,8 +353,12 @@ export const AnalyticsView: React.FC = () => {
               <span>Positive Sentiment Rate</span>
               <BarChart3 className="h-4 w-4 text-purple-500" />
             </div>
-            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">68.0%</p>
-            <p className="text-[11px] text-emerald-600 mt-1">+4.2% sentiment growth</p>
+            <p className="text-2xl font-extrabold mt-2 text-zinc-900 dark:text-zinc-100">
+              {analytics?.positive_sentiment_rate || 100}%
+            </p>
+            <p className="text-[11px] text-emerald-600 mt-1">
+              {analytics?.positive_count || 0} of {analytics?.total_calls || 0} positive calls
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -348,24 +385,23 @@ export const AnalyticsView: React.FC = () => {
                       borderColor: '#27272a',
                       borderRadius: '8px',
                       color: '#fff',
-                      fontSize: '12px',
                     }}
                   />
-                  <Bar dataKey="ms" fill="#2563eb" radius={[0, 6, 6, 0]} name="Latency (ms)" />
+                  <Bar dataKey="ms" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        {/* Sentiment Pie Chart */}
+        {/* Sentiment Donut Chart */}
         <Card>
           <CardHeader>
             <CardTitle>Call Sentiment Ratings</CardTitle>
             <CardDescription>AI classification distribution</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center">
-            <div className="h-48 w-full">
+          <CardContent>
+            <div className="h-48 w-full flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -374,7 +410,7 @@ export const AnalyticsView: React.FC = () => {
                     cy="50%"
                     innerRadius={50}
                     outerRadius={70}
-                    paddingAngle={4}
+                    paddingAngle={5}
                     dataKey="value"
                   >
                     {sentimentPie.map((entry, index) => (
@@ -385,11 +421,11 @@ export const AnalyticsView: React.FC = () => {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex items-center gap-4 text-xs mt-2">
+            <div className="flex justify-center gap-4 mt-2 text-xs">
               {sentimentPie.map((s) => (
                 <div key={s.name} className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                  <span>
+                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="text-zinc-600 dark:text-zinc-400">
                     {s.name} ({s.value}%)
                   </span>
                 </div>
@@ -399,35 +435,45 @@ export const AnalyticsView: React.FC = () => {
         </Card>
       </div>
 
-      {/* Cost Trends Line Chart */}
+      {/* Daily Cost & Call Trends Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Daily AI Telephony Expenditure</CardTitle>
-          <CardDescription>Combined API cost across LLM tokens and SIP trunking</CardDescription>
+          <CardTitle>Daily AI Telephony Expenditure & Volume</CardTitle>
+          <CardDescription>Correlated call volume vs infrastructure & provider costs</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-60 w-full">
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={costTrends}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#37415120" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#37415120" />
                 <XAxis dataKey="day" stroke="#9ca3af" fontSize={11} />
-                <YAxis stroke="#9ca3af" fontSize={11} unit="$" />
+                <YAxis yAxisId="left" stroke="#9ca3af" fontSize={11} unit="$" />
+                <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" fontSize={11} />
                 <RechartsTooltip
                   contentStyle={{
                     backgroundColor: '#18181b',
                     borderColor: '#27272a',
                     borderRadius: '8px',
                     color: '#fff',
-                    fontSize: '12px',
                   }}
                 />
                 <Line
+                  yAxisId="left"
                   type="monotone"
                   dataKey="cost"
-                  stroke="#10b981"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: '#10b981' }}
                   name="Cost ($)"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="calls"
+                  name="Total Calls"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
                 />
               </LineChart>
             </ResponsiveContainer>

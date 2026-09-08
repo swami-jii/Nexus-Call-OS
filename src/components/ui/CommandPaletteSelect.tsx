@@ -108,14 +108,16 @@ export const CommandPaletteSelect: React.FC<CommandPaletteSelectProps> = ({
       } else if (direction === 'down') {
         setOpenUpward(false);
       } else {
-        // Auto: open upward only if space below is too small (< 260px) and space above is larger
-        setOpenUpward(spaceBelow < 260 && spaceAbove > spaceBelow);
+        // Auto: open upward if space below is tight (< 340px) or space above is greater
+        setOpenUpward(spaceBelow < 320 && spaceAbove > spaceBelow);
       }
 
-      if (align === 'auto') {
-        setAlignRight(rect.right > window.innerWidth - 180);
+      if (align === 'right') {
+        setAlignRight(true);
+      } else if (align === 'left') {
+        setAlignRight(false);
       } else {
-        setAlignRight(align === 'right');
+        setAlignRight(rect.right > window.innerWidth - 220);
       }
     }
 
@@ -229,7 +231,9 @@ export const CommandPaletteSelect: React.FC<CommandPaletteSelectProps> = ({
       {/* Dropdown Panel - Floating popover with search */}
       {isOpen && (
         <div
-          className={`absolute z-[120] ${openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${alignRight ? 'right-0' : 'left-0'} min-w-[300px] sm:min-w-[360px] max-w-[480px] w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200/90 dark:border-zinc-700/90 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150 ring-1 ring-black/10 dark:ring-white/10`}
+          className={`absolute z-[120] ${openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${
+            alignRight ? 'right-0' : 'left-0'
+          } w-full min-w-[260px] sm:min-w-[290px] max-w-[calc(100vw-32px)] sm:max-w-[400px] bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200/90 dark:border-zinc-700/90 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150 ring-1 ring-black/10 dark:ring-white/10`}
         >
           {/* Search Header */}
           <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80">
@@ -248,7 +252,7 @@ export const CommandPaletteSelect: React.FC<CommandPaletteSelectProps> = ({
           </div>
 
           {/* Options List */}
-          <div className="max-h-64 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+          <div className="max-h-52 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
             {allowCustom && query.trim() && !safeOptions.some(o => (o.value || '').toLowerCase() === query.trim().toLowerCase() || (o.label || '').toLowerCase() === query.trim().toLowerCase()) && (
               <button
                 type="button"

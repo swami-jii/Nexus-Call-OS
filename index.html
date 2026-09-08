@@ -14,10 +14,64 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      // Automatic Tunnel Bypass Setup for Ngrok / Public Gateway
+      (function() {
+        try {
+          if (window.location.hostname.includes('ngrok')) {
+            document.cookie = "ngrok-skip-browser-warning=true; path=/; max-age=31536000; SameSite=None; Secure";
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #09090b;
+        color: #f4f4f5;
+        font-family: 'Inter', -apple-system, sans-serif;
+        z-index: 9999;
+        transition: opacity 0.3s ease;
+      }
+      .loader-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(16, 185, 129, 0.15);
+        border-top-color: #10b981;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </head>
-  <body>
+  <body class="bg-zinc-950 text-zinc-100 antialiased">
+    <div id="initial-loader">
+      <div class="loader-spinner"></div>
+      <p style="margin-top: 14px; font-size: 13px; font-weight: 600; color: #a1a1aa; letter-spacing: -0.01em;">Connecting to Create Call OS...</p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Remove initial loader once React mounts
+      const observer = new MutationObserver(function() {
+        const root = document.getElementById('root');
+        if (root && root.children.length > 0) {
+          const loader = document.getElementById('initial-loader');
+          if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(function() { if (loader && loader.parentNode) loader.parentNode.removeChild(loader); }, 300);
+          }
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.getElementById('root'), { childList: true });
+    </script>
   </body>
 </html>
-

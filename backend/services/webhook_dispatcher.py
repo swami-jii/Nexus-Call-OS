@@ -236,7 +236,7 @@ async def deliver_webhook_http(
         # Build request headers
         headers: Dict[str, str] = {
             "Content-Type": "application/json",
-            "User-Agent": "NexusCallOS-WebhookDispatcher/2.0",
+            "User-Agent": "CreateCallOS-WebhookDispatcher/2.0",
             "X-Nexus-Event-Id": event_id,
             "X-Nexus-Delivery-Id": delivery_id,
             "X-Nexus-Event-Type": event_type,
@@ -523,7 +523,7 @@ def build_dynamic_project_event_data(
                     transcript_list = json.loads(raw_t)
                 except Exception:
                     transcript_list = [
-                        {"speaker": "agent", "text": "Hello, this is Nexus Call OS assistant."},
+                        {"speaker": "agent", "text": "Hello, this is Create Call OS assistant."},
                         {"speaker": "customer", "text": raw_t}
                     ]
             elif isinstance(raw_t, list):

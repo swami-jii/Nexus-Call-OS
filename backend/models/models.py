@@ -558,6 +558,7 @@ class CompanionDevice(Base):
     auto_answer = Column(Boolean, default=True)
     priority = Column(Integer, default=1)
     is_online = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
     battery_level = Column(Integer, default=100)
     is_charging = Column(Boolean, default=False)
     signal_dbm = Column(Integer, default=-75)
@@ -566,3 +567,21 @@ class CompanionDevice(Base):
     last_heartbeat = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=get_utc_now)
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class GatewayTunnelConfig(Base):
+    """Permanent Database Persistence for Gateway Public HTTPS Tunnels, Ngrok Tokens, and Domains."""
+    __tablename__ = "gateway_tunnel_configs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    config_key = Column(String(50), default="default", unique=True, index=True)
+    ngrok_url = Column(String(255), nullable=True, default="")
+    ngrok_authtoken = Column(String(255), nullable=True, default="")
+    custom_url = Column(String(255), nullable=True, default="")
+    cloudflare_url = Column(String(255), nullable=True, default="")
+    named_token = Column(Text, nullable=True, default="")
+    active_route = Column(String(50), default="auto")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+

@@ -1501,7 +1501,7 @@ export const WORKSPACE_SCOPE_OPTIONS: SelectOption[] = [
   {
     value: 'Global Workspace',
     label: '🌐 Global Workspace (All Project Modules, Agents & Calls)',
-    description: 'Applies workspace-wide across all Nexus Call OS screens, AI agents & trunks',
+    description: 'Applies workspace-wide across all Create Call OS screens, AI agents & trunks',
     group: 'WORKSPACE LEVEL'
   },
   {
@@ -3508,7 +3508,7 @@ const getAuthToken = (): string => {
   const [voiceSpeechSpeed, setVoiceSpeechSpeed] = useState<number>(1.0); // 1.0 = Optimal Telephony Call Speed
   const [voicePitchTone, setVoicePitchTone] = useState<number>(1.0); // 1.0 = Natural Crisp Voice Pitch
   const [voiceTestSampleText, setVoiceTestSampleText] = useState(
-    'नमस्ते! यह Nexus Call OS का वॉइस टेस्टिंग ऑडियो सैंपल है। क्या आपको मेरी आवाज़ साफ़ सुनाई दे रही है?'
+    'नमस्ते! यह Create Call OS का वॉइस टेस्टिंग ऑडियो सैंपल है। क्या आपको मेरी आवाज़ साफ़ सुनाई दे रही है?'
   );
 
   const [detailsVoiceCred, setDetailsVoiceCred] = useState<any | null>(null);
@@ -3801,7 +3801,7 @@ const getAuthToken = (): string => {
     );
 
     if (isDevanagariHindi && isEnglishOnlyVoice) {
-      promptToSend = 'Namaste! Welcome to Nexus Call OS. Main aapki AI calling assistant hoon. Main aapki kya madad kar sakti hoon?';
+      promptToSend = 'Namaste! Welcome to Create Call OS. Main aapki AI calling assistant hoon. Main aapki kya madad kar sakti hoon?';
     }
 
     const token = getAuthToken() || localStorage.getItem('nexus_access_token') || sessionStorage.getItem('nexus_access_token');
@@ -5725,7 +5725,7 @@ const getAuthToken = (): string => {
         api_secret_placeholder: 'Nexus_Calling_CSS',
         api_secret_tip: 'Calling Search Space assigned in CUCM'
       },
-      guideTip: 'Cisco CUCM: Create a SIP Trunk pointing to Nexus Call OS IP and associate a Route Pattern.'
+      guideTip: 'Cisco CUCM: Create a SIP Trunk pointing to Create Call OS IP and associate a Route Pattern.'
     },
     threecx: {
       id: 'threecx',
@@ -5915,7 +5915,7 @@ const getAuthToken = (): string => {
         api_secret_placeholder: '16 Channels (SIM1 - SIM16)',
         api_secret_tip: 'Number of active SIM slots inserted in gateway'
       },
-      guideTip: 'Dinstar Setup: In Dinstar Web Console, create a SIP Server pointing to Nexus Call OS IP with Port 5060.'
+      guideTip: 'Dinstar Setup: In Dinstar Web Console, create a SIP Server pointing to Create Call OS IP with Port 5060.'
     },
     usb_modem: {
       id: 'usb_modem',
@@ -18288,7 +18288,7 @@ const getAuthToken = (): string => {
                       align="right"
                     />
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-                      {bScope === 'Global Workspace' && 'Applies globally everywhere across all Nexus Call OS modules, AI agents, and trunks.'}
+                      {bScope === 'Global Workspace' && 'Applies globally everywhere across all Create Call OS modules, AI agents, and trunks.'}
                       {bScope === 'Sidebar Modules' && 'Target specific project screens/sidebar sections (Live Call Studio, Campaigns, Phone Numbers, Workflows, etc.).'}
                       {bScope === 'Agent Specific' && 'Target one or more specific AI voice agents in your workspace (auto-synced with newly created agents).'}
                       {bScope === 'Campaign Specific' && 'Assign rule exclusively to outbound calling campaigns (auto-synced with campaign manager).'}
@@ -21479,7 +21479,7 @@ const getAuthToken = (): string => {
                 <div>
                   <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">🎯 Project Role &amp; Purpose:</p>
                   <p className="text-[11px] leading-relaxed mt-0.5">
-                    SIP Trunks establish direct IP-to-IP signaling and media pipelines between existing PBX servers (FreePBX, Asterisk, Cisco CUCM, Avaya) or wholesale SIP providers and Nexus Call OS.
+                    SIP Trunks establish direct IP-to-IP signaling and media pipelines between existing PBX servers (FreePBX, Asterisk, Cisco CUCM, Avaya) or wholesale SIP providers and Create Call OS.
                   </p>
                 </div>
 
@@ -22284,7 +22284,7 @@ const getAuthToken = (): string => {
               <div className="space-y-2.5 text-zinc-700 dark:text-zinc-300">
                 <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">🎯 Role &amp; Operational Purpose:</p>
                 <p className="text-[11px] leading-relaxed">
-                  SIP Trunks establish direct IP-to-IP signaling and media pipelines between existing PBX servers (FreePBX, Asterisk, Cisco CUCM, Avaya) or wholesale SIP providers and Nexus Call OS.
+                  SIP Trunks establish direct IP-to-IP signaling and media pipelines between existing PBX servers (FreePBX, Asterisk, Cisco CUCM, Avaya) or wholesale SIP providers and Create Call OS.
                 </p>
 
                 <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs pt-1">🛠️ Step-by-Step Setup Instructions:</p>
@@ -23262,7 +23262,7 @@ const getAuthToken = (): string => {
                       <Badge variant="success" size="sm">100% Free Pass-Through</Badge>
                     </div>
                     <p className="text-[11px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                      Nexus Call OS applies zero markups on calls routed through this carrier. Ideal for <strong>Android Gateway mobile SIMs (Jio/Airtel unlimited packs)</strong> or private enterprise Asterisk/FreePBX servers.
+                      Create Call OS applies zero markups on calls routed through this carrier. Ideal for <strong>Android Gateway mobile SIMs (Jio/Airtel unlimited packs)</strong> or private enterprise Asterisk/FreePBX servers.
                     </p>
                   </div>
                 )}

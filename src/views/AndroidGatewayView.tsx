@@ -33,12 +33,21 @@ import {
   Gauge,
   Info,
   Eye,
+  EyeOff,
   Clock,
   Loader2,
   Bot,
   Search,
   ChevronDown,
   Volume2,
+  Settings,
+  Key,
+  Lock,
+  Server,
+  Link,
+  BookOpen,
+  HelpCircle,
+  ArrowRight,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -233,7 +242,13 @@ export const AndroidGatewayView: React.FC = () => {
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [platformTab, setPlatformTab] = useState<'android' | 'ios' | 'mac' | 'windows' | 'web'>('android');
-  const [urlMode, setUrlMode] = useState<'lan' | 'tunnel'>('lan');
+  const [urlMode, setUrlMode] = useState<'lan' | 'tunnel'>(() => {
+    try {
+      const saved = localStorage.getItem('nexus_gateway_url_mode');
+      if (saved === 'lan' || saved === 'tunnel') return saved;
+    } catch {}
+    return 'lan';
+  });
   const [customUrlInput, setCustomUrlInput] = useState('');
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState('');
@@ -245,6 +260,34 @@ export const AndroidGatewayView: React.FC = () => {
   const [probeResult, setProbeResult] = useState<any | null>(null);
   const [isStartingTunnel, setIsStartingTunnel] = useState(false);
   const [backendAgents, setBackendAgents] = useState<any[]>([]);
+  
+  // Multi-Endpoint & Gateway Route Switching State
+  const [activeRouteKey, setActiveRouteKey] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('nexus_gateway_active_route');
+      if (saved) return saved;
+    } catch {}
+    return 'lan';
+  });
+  const [isRouteDropdownOpen, setIsRouteDropdownOpen] = useState(false);
+  const [isTunnelConfigModalOpen, setIsTunnelConfigModalOpen] = useState(false);
+  const [tunnelModalTab, setTunnelModalTab] = useState<'config' | 'guide'>('config');
+  const [guideProvider, setGuideProvider] = useState<'ngrok' | 'cloudflare'>('ngrok');
+  const [ngrokDomainInput, setNgrokDomainInput] = useState('https://upstream-evolution-gulp.ngrok-free.dev');
+  const [ngrokAuthtokenInput, setNgrokAuthtokenInput] = useState(() => {
+    try {
+      return localStorage.getItem('nexus_ngrok_authtoken') || '';
+    } catch {}
+    return '';
+  });
+  const [showNgrokToken, setShowNgrokToken] = useState(false);
+  const [cloudflareUrlInput, setCloudflareUrlInput] = useState('');
+  const [permanentDomainInput, setPermanentDomainInput] = useState('');
+  const [namedTokenInput, setNamedTokenInput] = useState('');
+  const [defaultRouteChoice, setDefaultRouteChoice] = useState<string>('ngrok');
+  const [isSavingTunnelConfig, setIsSavingTunnelConfig] = useState(false);
+  const [isGeneratingCloudflare, setIsGeneratingCloudflare] = useState(false);
+  const [tunnelConfig, setTunnelConfig] = useState<any | null>(null);
 
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -296,25 +339,226 @@ export const AndroidGatewayView: React.FC = () => {
     }
   };
 
-  // Fetch LAN IP & Live Public Tunnel info dynamically from backend
+  // Fetch LAN IP & Live Public Tunnel info dynamically from backend (Preserves user mode choice)
   const fetchLanInfo = () => {
     fetchAPI('/api/android-gateway/lan-info')
       .then((data) => {
         if (data && data.status === 'success') {
           setLanInfo(data);
-          if (data.public_https_url) {
-            setUrlMode('tunnel');
+          if (data.public_https_url && data.public_https_url.includes('trycloudflare.com') && !cloudflareUrlInput) {
+            setCloudflareUrlInput(data.public_https_url);
           }
         }
       })
       .catch(() => {});
   };
 
+  // Fetch saved permanent tunnel configuration
+  const fetchTunnelConfig = () => {
+    fetchAPI('/api/android-gateway/tunnel/config')
+      .then((data) => {
+        if (data && data.status === 'success') {
+          setTunnelConfig(data);
+          if (data.ngrok_url) setNgrokDomainInput(data.ngrok_url);
+          if (data.ngrok_authtoken) {
+            setNgrokAuthtokenInput(data.ngrok_authtoken);
+            try { localStorage.setItem('nexus_ngrok_authtoken', data.ngrok_authtoken); } catch {}
+          }
+          if (data.custom_url) setPermanentDomainInput(data.custom_url);
+          if (data.cloudflare_url) setCloudflareUrlInput(data.cloudflare_url);
+          if (data.named_token) setNamedTokenInput(data.named_token);
+          if (data.active_route && data.active_route !== 'auto') {
+            setDefaultRouteChoice(data.active_route);
+          }
+        }
+      })
+      .catch(() => {});
+  };
+
+  // Save permanent custom domain, Ngrok URL, Cloudflare Named Tunnel token
+  const handleSaveTunnelConfig = async () => {
+    setIsSavingTunnelConfig(true);
+    try {
+      const res = await fetchAPI('/api/android-gateway/tunnel/config', {
+        method: 'POST',
+        body: JSON.stringify({
+          ngrok_url: ngrokDomainInput.trim(),
+          ngrok_authtoken: ngrokAuthtokenInput.trim(),
+          custom_url: permanentDomainInput.trim(),
+          cloudflare_url: cloudflareUrlInput.trim(),
+          named_token: namedTokenInput.trim(),
+          active_route: defaultRouteChoice,
+        }),
+      });
+      if (res && res.status === 'success') {
+        addToast({
+          type: 'success',
+          title: 'All Endpoints Saved',
+          description: res.message || 'All gateway endpoints saved successfully!',
+        });
+        fetchLanInfo();
+        fetchTunnelConfig();
+        setActiveRouteKey(defaultRouteChoice);
+        try {
+          localStorage.setItem('nexus_gateway_active_route', defaultRouteChoice);
+        } catch {}
+        setIsTunnelConfigModalOpen(false);
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Save Failed',
+          description: res?.message || 'Could not save tunnel settings.',
+        });
+      }
+    } catch {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        description: 'Failed to communicate with backend.',
+      });
+    } finally {
+      setIsSavingTunnelConfig(false);
+    }
+  };
+
+  // Clear permanent custom tunnel configuration
+  const handleClearTunnelConfig = async () => {
+    setIsSavingTunnelConfig(true);
+    try {
+      const res = await fetchAPI('/api/android-gateway/tunnel/config', {
+        method: 'DELETE',
+      });
+      if (res && res.status === 'success') {
+        setNgrokDomainInput('');
+        setNgrokAuthtokenInput('');
+        setPermanentDomainInput('');
+        setCloudflareUrlInput('');
+        setNamedTokenInput('');
+        setActiveRouteKey('lan');
+        try {
+          localStorage.setItem('nexus_gateway_active_route', 'lan');
+        } catch {}
+        addToast({
+          type: 'info',
+          title: 'Reset to Default Mode',
+          description: 'Custom tunnel config cleared. Active route reset to Local Wi-Fi.',
+        });
+        fetchLanInfo();
+        fetchTunnelConfig();
+        setIsTunnelConfigModalOpen(false);
+      }
+    } catch {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        description: 'Failed to clear custom config.',
+      });
+    } finally {
+      setIsSavingTunnelConfig(false);
+    }
+  };
+
+  // Generate or refresh dynamic Cloudflare Quick Tunnel on demand (100% Free / No Account Needed)
+  const handleGenerateCloudflare = async (autoSwitchRoute = true) => {
+    setIsGeneratingCloudflare(true);
+    addToast({
+      type: 'info',
+      title: 'Generating Cloudflare Tunnel...',
+      description: 'Requesting a fresh TryCloudflare HTTPS URL...',
+    });
+    try {
+      const res = await fetchAPI('/api/android-gateway/tunnel/quick-start', {
+        method: 'POST',
+      });
+      if (res && res.status === 'success' && res.public_https_url) {
+        setCloudflareUrlInput(res.public_https_url);
+        addToast({
+          type: 'success',
+          title: 'Cloudflare Tunnel Ready ⚡',
+          description: res.public_https_url,
+        });
+        fetchLanInfo();
+        fetchTunnelConfig();
+        if (autoSwitchRoute) {
+          setActiveRouteKey('cloudflare');
+          setUrlMode('tunnel');
+          try {
+            localStorage.setItem('nexus_gateway_active_route', 'cloudflare');
+            localStorage.setItem('nexus_gateway_url_mode', 'tunnel');
+          } catch {}
+        }
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Cloudflare Generation Failed',
+          description: res?.message || 'Could not spawn cloudflared tunnel. Please retry.',
+        });
+      }
+    } catch {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        description: 'Failed to connect to backend.',
+      });
+    } finally {
+      setIsGeneratingCloudflare(false);
+    }
+  };
+
+  // Select active gateway route directly from dropdown
+  const handleSelectRoute = (routeKey: string) => {
+    setActiveRouteKey(routeKey);
+    setIsRouteDropdownOpen(false);
+    setCustomUrlInput('');
+    if (routeKey === 'lan') {
+      setUrlMode('lan');
+      try {
+        localStorage.setItem('nexus_gateway_url_mode', 'lan');
+      } catch {}
+    } else {
+      setUrlMode('tunnel');
+      try {
+        localStorage.setItem('nexus_gateway_url_mode', 'tunnel');
+      } catch {}
+    }
+    try {
+      localStorage.setItem('nexus_gateway_active_route', routeKey);
+    } catch {}
+    if (routeKey === 'cloudflare' && (!lanInfo?.public_https_url?.includes('trycloudflare.com'))) {
+      handleGenerateCloudflare(true);
+    } else {
+      addToast({
+        type: 'info',
+        title: 'Active Gateway Route Changed',
+        description: `Active endpoint switched to: ${routeKey.toUpperCase()}`,
+      });
+    }
+  };
+
   // Dynamically activate or toggle Public Cloud Tunnel
   const handleToggleTunnelMode = async (mode: 'lan' | 'tunnel') => {
     setUrlMode(mode);
     setCustomUrlInput('');
-    if (mode === 'tunnel' && !lanInfo?.public_https_url && !isStartingTunnel) {
+    try {
+      localStorage.setItem('nexus_gateway_url_mode', mode);
+    } catch {}
+
+    if (mode === 'lan') {
+      setActiveRouteKey('lan');
+      try {
+        localStorage.setItem('nexus_gateway_active_route', 'lan');
+      } catch {}
+    } else {
+      if (activeRouteKey === 'lan') {
+        const publicRoute = routeOptions.find((r) => r.key !== 'lan')?.key || 'ngrok';
+        setActiveRouteKey(publicRoute);
+        try {
+          localStorage.setItem('nexus_gateway_active_route', publicRoute);
+        } catch {}
+      }
+    }
+
+    if (mode === 'tunnel' && !lanInfo?.public_https_url && !ngrokHost && !isStartingTunnel) {
       setIsStartingTunnel(true);
       addToast({
         type: 'info',
@@ -374,6 +618,7 @@ export const AndroidGatewayView: React.FC = () => {
 
   useEffect(() => {
     fetchLanInfo();
+    fetchTunnelConfig();
     fetchDevices();
     fetchAPI('/api/agents?page_size=50')
       .then((data) => {
@@ -401,15 +646,56 @@ export const AndroidGatewayView: React.FC = () => {
         : '127.0.0.1');
 
   const lanBaseHost = `http://${resolvedLanIp}:3000`;
-  const tunnelBaseHost = lanInfo?.public_https_url || lanBaseHost;
-  const activeBaseHost = urlMode === 'tunnel' && lanInfo?.public_https_url ? tunnelBaseHost : lanBaseHost;
+  const ngrokHost = tunnelConfig?.ngrok_url || (lanInfo?.configured_routes?.ngrok?.url) || (ngrokDomainInput.trim() ? (ngrokDomainInput.startsWith('http') ? ngrokDomainInput.trim() : `https://${ngrokDomainInput.trim()}`) : null);
+  const cloudflareHost = tunnelConfig?.cloudflare_url || (cloudflareUrlInput.trim() ? (cloudflareUrlInput.startsWith('http') ? cloudflareUrlInput.trim() : `https://${cloudflareUrlInput.trim()}`) : null) || (lanInfo?.public_https_url && lanInfo.public_https_url.includes('trycloudflare.com') ? lanInfo.public_https_url : null) || (lanInfo?.configured_routes?.cloudflare?.url);
 
-  const lanApkUrl = `http://${resolvedLanIp}:3000/download`;
-  const tunnelApkUrl = lanInfo?.public_https_url 
-    ? `${lanInfo.public_https_url}/download` 
-    : lanApkUrl;
+  const routeOptions: Array<{
+    key: string;
+    label: string;
+    subLabel: string;
+    url: string;
+    icon: React.ReactNode;
+    badge: string;
+    badgeVariant: 'emerald' | 'blue' | 'purple' | 'amber' | 'neutral';
+    isConfigured: boolean;
+  }> = [
+    {
+      key: 'lan',
+      label: `Local Wi-Fi (${lanInfo?.wifi_ssid || 'Mukta-5G'})`,
+      subLabel: `${lanBaseHost} • Zero internet required`,
+      url: lanBaseHost,
+      icon: <Wifi className="h-3.5 w-3.5 text-emerald-500" />,
+      badge: 'Local LAN',
+      badgeVariant: 'emerald',
+      isConfigured: true,
+    },
+    ...(ngrokHost ? [{
+      key: 'ngrok',
+      label: 'Ngrok Free Static Domain',
+      subLabel: `${ngrokHost} • 100% Free Lifetime`,
+      url: ngrokHost,
+      icon: <Link className="h-3.5 w-3.5 text-blue-500" />,
+      badge: 'Ngrok Static',
+      badgeVariant: 'blue' as const,
+      isConfigured: true,
+    }] : []),
+    {
+      key: 'cloudflare',
+      label: 'Cloudflare Quick Tunnel',
+      subLabel: cloudflareHost ? `${cloudflareHost} • 100% Free Dynamic` : '100% Free Dynamic • 1-Click Generate',
+      url: cloudflareHost || 'https://auto.trycloudflare.com',
+      icon: <Globe className="h-3.5 w-3.5 text-purple-500" />,
+      badge: cloudflareHost ? 'Cloudflare' : 'Dynamic ⚡',
+      badgeVariant: 'purple' as const,
+      isConfigured: !!cloudflareHost,
+    },
+  ];
 
-  const activeApkUrl = urlMode === 'tunnel' && lanInfo?.public_https_url ? tunnelApkUrl : lanApkUrl;
+  const publicRouteOptions = routeOptions.filter((r) => r.key !== 'lan');
+  const activePublicRoute = (activeRouteKey !== 'lan' ? publicRouteOptions.find((r) => r.key === activeRouteKey) : null) || publicRouteOptions[0] || routeOptions[0];
+  const currentRoute = urlMode === 'lan' ? (routeOptions.find((r) => r.key === 'lan') || routeOptions[0]) : activePublicRoute;
+  const activeBaseHost = currentRoute?.url || lanBaseHost;
+  const activeApkUrl = `${activeBaseHost}/download`;
 
   const getPlatformUrl = (key: 'android' | 'ios' | 'mac' | 'windows' | 'web') => {
     switch (key) {
@@ -468,8 +754,8 @@ export const AndroidGatewayView: React.FC = () => {
       downloadButtonLabel: lanInfo?.apk_size_formatted
         ? `Download APK (v${lanInfo.version_name || '2.6.0'} • ${lanInfo.apk_size_formatted})`
         : 'Download APK (v2.6.0 • 7.72 MB)',
-      troubleshootTip: urlMode === 'tunnel' && lanInfo?.public_https_url
-        ? 'Worldwide Cloud Tunnel Active (Mobile Data 4G/5G & Wi-Fi Ready)'
+      troubleshootTip: activeRouteKey !== 'lan'
+        ? 'Worldwide Cloud Route Active (Mobile Data 4G/5G & Wi-Fi Ready)'
         : 'Phone and laptop must use the same Wi-Fi',
     },
     ios: {
@@ -997,7 +1283,7 @@ export const AndroidGatewayView: React.FC = () => {
       </div>
 
       {/* 1.5. Desktop Primary "Connect Device / Gateway" Card with Middle Platform Tabs & 2 URL Mode Tabs */}
-      <Card className="shadow-md border-emerald-500/30 bg-linear-to-b from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 overflow-hidden">
+      <Card className="shadow-md border-emerald-500/30 bg-linear-to-b from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950">
         <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
@@ -1053,85 +1339,177 @@ export const AndroidGatewayView: React.FC = () => {
                 <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block font-medium">
                   {customUrlInput.trim()
                     ? 'Custom Dynamic URL'
-                    : urlMode === 'tunnel' && lanInfo?.public_https_url
-                    ? 'Public Cloud Tunnel'
-                    : `Local Wi-Fi (${lanInfo?.wifi_ssid || 'Mukta-5G'})`}
+                    : currentRoute.label}
                 </span>
               </div>
             </div>
 
             {/* Middle (6-8 cols): Expanded width so all 5 platform buttons and details fit nicely without truncation */}
             <div className="lg:col-span-8 xl:col-span-6 flex flex-col justify-between space-y-3.5 h-full">
-              {/* Dynamically Generated URL Header + 2 URL Mode Tabs (Compact & Strictly Side-by-Side) */}
+              {/* Dynamically Generated URL Header with Mode Tabs (Local Wi-Fi vs Public URL) + Settings */}
               <div className="space-y-2 mb-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider truncate">
-                    Dynamic {currentPlatform.label} URL
+                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider truncate shrink min-w-[20px]">
+                    Dynamic {currentPlatform.label} Pairing Route
                   </span>
-                  {/* Compact Tabs: Local LAN URL first (left) vs Public Cloud Tunnel (right) */}
-                  <div className="flex items-center gap-1 p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 shrink-0">
+
+                  {/* Mode Tabs + Settings Container Box with cleaner low-radius design */}
+                  <div className="flex items-center bg-zinc-100 dark:bg-zinc-800/90 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 shrink-0 space-x-1">
+                    {/* Tab 1: Local Wi-Fi */}
                     <button
                       type="button"
                       onClick={() => handleToggleTunnelMode('lan')}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
-                        urlMode === 'lan' && !customUrlInput.trim()
-                          ? 'bg-emerald-600 text-white shadow-2xs'
-                          : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold flex items-center space-x-1 transition-all cursor-pointer ${
+                        urlMode === 'lan'
+                          ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-2xs border border-zinc-200/50 dark:border-zinc-700/50'
+                          : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                       }`}
                     >
                       <Wifi className="h-3 w-3" />
-                      <span>Local Wi-Fi{lanInfo?.wifi_ssid ? ` (${lanInfo.wifi_ssid})` : ''}</span>
+                      <span>Local Wi-Fi ({lanInfo?.wifi_ssid || 'Mukta-5G'})</span>
                     </button>
+
+                    {/* Tab 2: Public URL */}
                     <button
                       type="button"
                       onClick={() => handleToggleTunnelMode('tunnel')}
-                      disabled={isStartingTunnel}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        urlMode === 'tunnel' && !customUrlInput.trim()
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold flex items-center space-x-1 transition-all cursor-pointer ${
+                        urlMode === 'tunnel'
                           ? 'bg-emerald-600 text-white shadow-2xs'
-                          : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                          : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                       }`}
                     >
-                      {isStartingTunnel ? (
-                        <Loader2 className="h-3 w-3 animate-spin text-white" />
-                      ) : (
-                        <Globe className="h-3 w-3" />
-                      )}
-                      <span>
-                        {isStartingTunnel
-                          ? 'Connecting...'
-                          : lanInfo?.public_https_url
-                          ? `Public URL (${lanInfo.tunnel_provider || 'Cloud HTTPS'})`
-                          : 'Start Cloud Tunnel'}
-                      </span>
-                      {lanInfo?.public_https_url && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
-                      )}
+                      <Globe className="h-3 w-3" />
+                      <span>Public URL (Permanent Custom Domain)</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                    </button>
+
+                    {/* Settings Button with distinct Light Green Box & Border */}
+                    <button
+                      type="button"
+                      onClick={() => setIsTunnelConfigModalOpen(true)}
+                      className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-300/80 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer shadow-2xs"
+                      title="Permanent Public URL & Tunnel Settings"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
 
-                {/* Live Editable URL Input with Auto-Syncing Dynamic QR Code */}
+                {/* Live Editable URL Input with Integrated Endpoint Dropdown on Public Mode */}
                 <div className="flex items-center space-x-2">
-                  <div className="relative flex-1 flex items-center">
+                  <div className="relative flex-1 flex items-center bg-zinc-100 dark:bg-zinc-800/90 rounded-xl border border-zinc-200 dark:border-zinc-700 focus-within:ring-1 focus-within:ring-emerald-500 focus-within:border-emerald-500 transition-all">
                     <input
                       type="text"
                       value={customUrlInput !== '' ? customUrlInput : currentPlatform.url}
                       onChange={(e) => setCustomUrlInput(e.target.value)}
                       placeholder="Enter or paste any custom URL (ngrok, tunnel, IP)..."
-                      className="w-full font-mono text-[11px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-zinc-100 dark:bg-zinc-800/90 pl-3 pr-8 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 outline-hidden focus:ring-1 focus:ring-emerald-500 transition-all truncate"
+                      className={`w-full font-mono text-[11px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-transparent pl-3 py-2 outline-hidden truncate ${
+                        urlMode === 'tunnel' ? 'pr-34' : (customUrlInput !== '' ? 'pr-8' : 'pr-3')
+                      }`}
                       title="Edit URL manually to generate dynamic QR code in real-time"
                     />
-                    {customUrlInput !== '' && (
-                      <button
-                        type="button"
-                        onClick={() => setCustomUrlInput('')}
-                        className="absolute right-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5 rounded cursor-pointer"
-                        title="Reset to default URL"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+
+                    {/* Inside Corner Controls (Reset + Route Dropdown only on Public URL mode) */}
+                    <div className="absolute right-1.5 flex items-center gap-1">
+                      {customUrlInput !== '' && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomUrlInput('')}
+                          className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded cursor-pointer"
+                          title="Reset to default URL"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {/* Dropdown Menu Trigger embedded in URL Corner - Only displayed when on Public URL mode */}
+                      {urlMode === 'tunnel' && (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsRouteDropdownOpen((prev) => !prev)}
+                            className="h-6.5 px-2 py-0.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-emerald-500 text-[10px] font-bold text-zinc-700 dark:text-zinc-200 shadow-2xs flex items-center gap-1 transition-all cursor-pointer"
+                            title="Click to select public tunnel route (Ngrok, Cloudflare, Cloud Host, etc.)"
+                          >
+                            <span className="flex items-center gap-1 truncate max-w-[95px]">
+                              {currentRoute.icon}
+                              <span className="truncate">{currentRoute.badge}</span>
+                            </span>
+                            <ChevronDown className={`h-3 w-3 text-zinc-400 transition-transform ${isRouteDropdownOpen ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {/* Dropdown Popover */}
+                          {isRouteDropdownOpen && (
+                            <>
+                              <div 
+                                className="fixed inset-0" 
+                                onClick={() => setIsRouteDropdownOpen(false)} 
+                              />
+                              <div className="absolute right-0 top-full mt-1.5 w-76 sm:w-84 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
+                                <div className="px-3.5 py-2 text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/80 dark:bg-zinc-900/80 shrink-0">
+                                  <span>Active Public Endpoint</span>
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{publicRouteOptions.length} Configured</span>
+                                </div>
+
+                                {/* Scrollable Public Endpoints List */}
+                                <div className="p-1.5 max-h-64 overflow-y-auto space-y-1 overscroll-contain">
+                                  {publicRouteOptions.map((opt) => {
+                                    const isSelected = urlMode === 'tunnel' && opt.key === currentRoute.key;
+                                    return (
+                                      <button
+                                        key={opt.key}
+                                        type="button"
+                                        onClick={() => handleSelectRoute(opt.key)}
+                                        className={`w-full text-left p-2 rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                                          isSelected
+                                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 border border-emerald-500/30'
+                                            : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200'
+                                        }`}
+                                      >
+                                        <div className="flex items-start gap-2 min-w-0 pr-2">
+                                          <div className="mt-0.5 shrink-0">{opt.icon}</div>
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-bold truncate">{opt.label}</p>
+                                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono truncate">{opt.url}</p>
+                                          </div>
+                                        </div>
+                                        <div className="shrink-0 flex items-center gap-1.5">
+                                          <Badge variant={opt.badgeVariant} className="text-[9px] py-0 px-1.5">
+                                            {opt.badge}
+                                          </Badge>
+                                          {isSelected && <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+
+                                  {publicRouteOptions.length === 0 && (
+                                    <div className="p-3 text-center text-xs text-zinc-400">
+                                      No public routes configured.
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="p-1.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/80 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsRouteDropdownOpen(false);
+                                      setIsTunnelConfigModalOpen(true);
+                                    }}
+                                    className="w-full text-left p-2 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-2 cursor-pointer transition-colors"
+                                  >
+                                    <Settings className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    <span>Add / Configure All Endpoints...</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <Button
                     onClick={() => copyToClipboard(customUrlInput.trim() || currentPlatform.url)}
@@ -2398,6 +2776,460 @@ export const AndroidGatewayView: React.FC = () => {
               >
                 Close
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 5. Permanent Public Domain & Cloudflare Named Tunnel Configuration Modal */}
+      {isTunnelConfigModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh] my-auto animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3.5 shrink-0">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
+                  <Globe className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                    Permanent Public URL & Tunnel Settings
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Configure a fixed permanent domain or read step-by-step setup guides.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTunnelConfigModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1.5 rounded-lg transition-colors cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Sub-Tabs: Configuration vs Step-by-Step Guides */}
+            <div className="flex items-center gap-1.5 pt-3 border-b border-zinc-100 dark:border-zinc-800 pb-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setTunnelModalTab('config')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  tunnelModalTab === 'config'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                <Sliders className="h-3.5 w-3.5" />
+                <span>Configuration</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTunnelModalTab('guide')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  tunnelModalTab === 'guide'
+                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                <span>Step-by-Step Setup Guides</span>
+                <Badge variant="blue" className="text-[9px] py-0 px-1">
+                  Help
+                </Badge>
+              </button>
+            </div>
+
+            {/* Tab 1: Configuration */}
+            {tunnelModalTab === 'config' && (
+              <div className="space-y-3.5 py-3 text-xs overflow-y-auto pr-1 flex-1">
+                {/* Option 1: Ngrok Free Static Domain */}
+                <div className="p-4 bg-blue-500/5 dark:bg-blue-950/20 rounded-xl border border-blue-500/30 space-y-3">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 text-xs truncate min-w-0">
+                      <Link className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                      <span className="truncate">1. Ngrok Free Static Domain</span>
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGuideProvider('ngrok');
+                          setTunnelModalTab('guide');
+                        }}
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 font-medium cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <span>View Guide</span>
+                        <ArrowRight className="h-3 w-3 shrink-0" />
+                      </button>
+                      <Badge variant="blue" className="text-[10px] whitespace-nowrap shrink-0">
+                        100% Native & Safe
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  {/* Domain input */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                      Ngrok Static Domain:
+                    </label>
+                    <input
+                      type="text"
+                      value={ngrokDomainInput}
+                      onChange={(e) => setNgrokDomainInput(e.target.value)}
+                      placeholder="https://upstream-evolution-gulp.ngrok-free.dev"
+                      className="w-full font-mono text-xs text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 outline-hidden focus:ring-1 focus:ring-blue-500 transition-all font-semibold"
+                    />
+                  </div>
+
+                  {/* Authtoken input */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
+                        <Key className="h-3 w-3 text-blue-500" />
+                        <span>Ngrok Free Authtoken:</span>
+                      </label>
+                      <a
+                        href="https://dashboard.ngrok.com/get-started/your-authtoken"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-0.5"
+                      >
+                        <span>Get Free Token ↗</span>
+                      </a>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showNgrokToken ? "text" : "password"}
+                        value={ngrokAuthtokenInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNgrokAuthtokenInput(val);
+                          try { localStorage.setItem('nexus_ngrok_authtoken', val); } catch {}
+                        }}
+                        placeholder="Paste your authtoken (e.g. 2tXXXXXXXXXXXXXXXXXXXXXXXX)"
+                        className="w-full font-mono text-xs text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900 px-3 py-2 pr-9 rounded-lg border border-zinc-200 dark:border-zinc-700 outline-hidden focus:ring-1 focus:ring-blue-500 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNgrokToken(!showNgrokToken)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                        title={showNgrokToken ? "Hide token" : "Show token"}
+                      >
+                        {showNgrokToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-0.5">
+                    <a
+                      href="https://dashboard.ngrok.com/cloud-edge/domains"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      <span>Open Ngrok Domains Dashboard (dashboard.ngrok.com)</span>
+                    </a>
+                  </div>
+                </div>
+
+                {/* Option 2: Instant Cloudflare Quick Tunnel (Free & Dynamic) */}
+                <div className="p-4 bg-purple-500/5 dark:bg-purple-950/20 rounded-xl border border-purple-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 text-xs truncate min-w-0">
+                      <Globe className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                      <span className="truncate">2. Cloudflare Quick Tunnel</span>
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGuideProvider('cloudflare');
+                          setTunnelModalTab('guide');
+                        }}
+                        className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 font-medium cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <span>View Guide</span>
+                        <ArrowRight className="h-3 w-3 shrink-0" />
+                      </button>
+                      <Badge variant="purple" className="text-[10px] whitespace-nowrap shrink-0">
+                        100% Free • Dynamic
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Bina kisi credit card ya account ke 1-click me instant 100% Free TryCloudflare HTTPS URL generate karein.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-0.5">
+                    <input
+                      type="text"
+                      value={cloudflareUrlInput}
+                      onChange={(e) => setCloudflareUrlInput(e.target.value)}
+                      placeholder="https://rings-webster-region-juice.trycloudflare.com"
+                      className="flex-1 font-mono text-xs text-purple-600 dark:text-purple-400 bg-white dark:bg-zinc-900 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 outline-hidden focus:ring-1 focus:ring-purple-500 font-semibold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateCloudflare(true)}
+                      disabled={isGeneratingCloudflare}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold text-xs shadow-xs transition-colors shrink-0 whitespace-nowrap cursor-pointer"
+                    >
+                      {isGeneratingCloudflare ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      <span>{cloudflareUrlInput ? 'Refresh New ⚡' : 'Generate Tunnel ⚡'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary Default Active Route Preference */}
+                <div className="p-3.5 bg-zinc-100/80 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-2">
+                  <span className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 text-xs">
+                    <Sliders className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Primary Default Active Route</span>
+                  </span>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Save hone ke baad kaun sa route default active rahega? (Aap main screen dropdown se kabhi bhi switch kar sakte hain).
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {[
+                      { key: 'ngrok', label: 'Ngrok Static', badge: '100% Free Lifetime' },
+                      { key: 'cloudflare', label: 'Cloudflare Quick', badge: '100% Free ⚡' },
+                      { key: 'lan', label: 'Local Wi-Fi', badge: 'LAN Offline' },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setDefaultRouteChoice(item.key)}
+                        className={`p-2 rounded-lg border text-left font-semibold text-xs transition-all cursor-pointer ${
+                          defaultRouteChoice === item.key
+                            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        <p className="truncate">{item.label}</p>
+                        <span className="text-[9px] text-zinc-400">{item.badge}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 2: Step-by-Step Setup Guides */}
+            {tunnelModalTab === 'guide' && (
+              <div className="space-y-4 py-3 text-xs overflow-y-auto pr-1 flex-1">
+                {/* Provider Selector Buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGuideProvider('ngrok')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      guideProvider === 'ngrok'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300 shadow-xs'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <Link className="h-3.5 w-3.5 text-blue-500" />
+                      <span>Ngrok Static (Recommended)</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">100% Free Lifetime • Zero Drop</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setGuideProvider('cloudflare')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      guideProvider === 'cloudflare'
+                        ? 'border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 shadow-xs'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <Globe className="h-3.5 w-3.5 text-purple-500" />
+                      <span>Cloudflare Quick Tunnel</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">100% Free • 1-Click Generate</p>
+                  </button>
+                </div>
+
+                {/* Guide 1: Ngrok Free Static Domain */}
+                {guideProvider === 'ngrok' && (
+                  <div className="space-y-3 p-4 bg-blue-500/5 dark:bg-blue-950/20 rounded-2xl border border-blue-500/20">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                        <Link className="h-4 w-4" />
+                        <span>Ngrok Free Static Domain Setup (100% Free Lifetime)</span>
+                      </h4>
+                      <Badge variant="blue" className="text-[10px]">
+                        Recommended #1
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                      Ngrok aapko <strong>1 Free Static Domain</strong> deta hai jo 24/7 permanent rehta hai, kabhi change nahi hota aur ₹0 cost hai.
+                    </p>
+
+                    <div className="space-y-2.5 pt-1">
+                      <div className="flex items-start gap-2.5 p-2.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500 text-white font-bold text-[10px] shrink-0">1</span>
+                        <div className="space-y-1 flex-1">
+                          <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">Ngrok Portal par Free Account Banayein & Static Domain Claim Karein</p>
+                          <p className="text-[11px] text-zinc-500">Ngrok Domains page par jakar apna 1 free permanent domain (e.g. <code>my-call-gateway.ngrok-free.app</code>) claim karein.</p>
+                          <div className="pt-1">
+                            <a
+                              href="https://dashboard.ngrok.com/cloud-edge/domains"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              <span>Open Ngrok Domains Dashboard ↗</span>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5 p-2.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500 text-white font-bold text-[10px] shrink-0">2</span>
+                        <div className="space-y-1 flex-1">
+                          <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">Apna Free Ngrok Authtoken Copy Karein</p>
+                          <p className="text-[11px] text-zinc-500">Ngrok dashboard se apna 100% free authtoken copy karein:</p>
+                          <div className="pt-0.5">
+                            <a
+                              href="https://dashboard.ngrok.com/get-started/your-authtoken"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 text-xs font-semibold shadow-xs"
+                            >
+                              <Key className="h-3.5 w-3.5" />
+                              <span>Copy Free Authtoken ↗ (dashboard.ngrok.com)</span>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5 p-2.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500 text-white font-bold text-[10px] shrink-0">3</span>
+                        <div className="space-y-0.5 flex-1">
+                          <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">Configuration Tab Me Paste Karein & Save Dabayein</p>
+                          <p className="text-[11px] text-zinc-500">Configuration tab me apna Static Domain & Authtoken paste karke <strong>"Save & Apply URL"</strong> dabayein. Backend automatically in-process native mode me bina kisi popup ke 100% smooth connect ho jayega!</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Guide 2: Cloudflare (Quick Tunnel) */}
+                {guideProvider === 'cloudflare' && (
+                  <div className="space-y-3 p-4 bg-purple-500/5 dark:bg-purple-950/20 rounded-2xl border border-purple-500/20">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                        <Globe className="h-4 w-4 text-purple-500" />
+                        <span>Cloudflare Quick Tunnel (100% Free • No Account/Card)</span>
+                      </h4>
+                      <Badge variant="purple" className="text-[10px]">
+                        Zero Setup • Instant
+                      </Badge>
+                    </div>
+
+                    <div className="p-3 bg-purple-500/10 dark:bg-purple-900/30 rounded-xl border border-purple-500/30 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                          <Zap className="h-3.5 w-3.5 text-purple-500" />
+                          <span>Instant 1-Click TryCloudflare Tunnel</span>
+                        </span>
+                        <Badge variant="purple" className="text-[9px]">100% Free</Badge>
+                      </div>
+                      <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                        Aapko koi account ya credit card lagane ki zarurat nahi hai. Configuration tab me jakar bas <strong>"Generate Tunnel ⚡"</strong> par click karein. Backend turant fresh <code>https://xxxx.trycloudflare.com</code> URL create kar dega!
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          setTunnelModalTab('config');
+                          handleGenerateCloudflare(true);
+                        }}
+                        disabled={isGeneratingCloudflare}
+                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-3 py-1 h-7 cursor-pointer"
+                      >
+                        {isGeneratingCloudflare ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        <span>Generate / Refresh Cloudflare Tunnel ⚡</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-3.5 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
+              {tunnelModalTab === 'config' ? (
+                <>
+                  {tunnelConfig?.has_custom_config ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearTunnelConfig}
+                      disabled={isSavingTunnelConfig}
+                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/20"
+                    >
+                      Reset to Dynamic
+                    </Button>
+                  ) : (
+                    <div />
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsTunnelConfigModalOpen(false)}
+                      disabled={isSavingTunnelConfig}
+                      className="text-xs"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveTunnelConfig}
+                      disabled={isSavingTunnelConfig || (!ngrokDomainInput.trim() && !cloudflareUrlInput.trim())}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 flex items-center gap-1.5 shadow-xs"
+                    >
+                      {isSavingTunnelConfig && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      <span>Save & Apply URL</span>
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTunnelModalTab('config')}
+                    className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-1.5"
+                  >
+                    <Sliders className="h-3.5 w-3.5" />
+                    <span>Back to Configuration</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsTunnelConfigModalOpen(false)}
+                    className="text-xs"
+                  >
+                    Close
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>

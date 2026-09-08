@@ -75,7 +75,7 @@ class VoicePipelineEngine:
         # 1. LLM Generation
         llm_provider = provider_manager.get_llm_provider()
         system_prompt = (
-            "You are a professional AI voice assistant operating on Nexus Call OS. "
+            "You are a professional AI voice assistant operating on Create Call OS. "
             "Keep responses concise, conversational, and direct for voice phone calls.\n"
             + calling_optimizer.get_hindi_system_prompt_directive()
         )

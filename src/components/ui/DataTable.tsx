@@ -256,11 +256,13 @@ export function DataTable<T extends { id: string }>({
                   setActiveFilters({ ...activeFilters, [String(fKey.key)]: e.target.value });
                   setCurrentPage(1);
                 }}
-                className="h-9 px-3 pr-7 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
+                className="h-9 px-3 pr-7 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer"
               >
-                <option value="ALL">All {fKey.label.toLowerCase().endsWith('s') ? `${fKey.label}es` : `${fKey.label}s`}</option>
+                <option className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" value="ALL">
+                  All {fKey.label.toLowerCase().endsWith('s') ? `${fKey.label}es` : `${fKey.label}s`}
+                </option>
                 {fKey.options.map((opt) => (
-                  <option key={opt} value={opt}>
+                  <option className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
@@ -312,7 +314,7 @@ export function DataTable<T extends { id: string }>({
 
       {/* Bulk actions banner if rows selected */}
       {selectedIds.length > 0 && (
-        <div className="px-4 py-2.5 bg-blue-50/90 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs text-blue-900 dark:text-blue-200 shadow-xs">
+        <div className="px-4 py-2.5 bg-teal-50/90 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-900 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs text-teal-900 dark:text-teal-200 shadow-xs">
           <span className="font-semibold">
             {selectedIds.length} item{selectedIds.length > 1 ? 's' : ''} selected
           </span>
@@ -326,14 +328,14 @@ export function DataTable<T extends { id: string }>({
                   }
                 }}
                 defaultValue=""
-                className="h-8 px-2 text-xs font-medium rounded-md border border-blue-300 dark:border-blue-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+                className="h-8 px-2 text-xs font-medium rounded-md border border-teal-300 dark:border-teal-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 cursor-pointer"
               >
-                <option value="" disabled>
-                  Change Status...
+                <option className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" value="" disabled>
+                  Update Status...
                 </option>
                 {bulkStatusOptions.map((st) => (
-                  <option key={st} value={st}>
-                    Mark as {st}
+                  <option className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100" key={st} value={st}>
+                    Mark {st}
                   </option>
                 ))}
               </select>

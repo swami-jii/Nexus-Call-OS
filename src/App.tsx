@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { AppLayout } from './components/layout/AppLayout';
 import { ScreenId } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { BusinessRulesProvider } from './context/BusinessRulesContext';
 import { fetchAPI } from './lib/api';
 import { DEFAULT_BUSINESS_RULES_ITEMS } from './views/IntegrationsView';
@@ -148,7 +149,7 @@ function AppContent() {
       <div className="flex h-screen w-full items-center justify-center bg-zinc-950 text-zinc-200">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-          <span className="text-xs font-semibold text-zinc-400">Loading Nexus Voice OS...</span>
+          <span className="text-xs font-semibold text-zinc-400">Loading Create Call OS...</span>
         </div>
       </div>
     );
@@ -248,16 +249,19 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ErrorBoundary fallbackTitle="Nexus Application Shield" fallbackDescription="An unexpected error occurred in the application shell. You can reload or return to dashboard.">
+    <ErrorBoundary fallbackTitle="Create Call Application Shield" fallbackDescription="An unexpected error occurred in the application shell. You can reload or return to dashboard.">
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <BusinessRulesProvider>
-              <AppContent />
-            </BusinessRulesProvider>
+            <NotificationProvider>
+              <BusinessRulesProvider>
+                <AppContent />
+              </BusinessRulesProvider>
+            </NotificationProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
 }
+

@@ -89,7 +89,7 @@ export const HelpCenterView: React.FC = () => {
           </CardHeader>
           <CardContent className="text-xs space-y-2">
             <div className="p-3 bg-zinc-900 text-zinc-100 rounded-lg font-mono text-[11px]">
-              import &#123; CallClient &#125; from '@nexus/sdk';
+              import &#123; CallClient &#125; from '@createcall/sdk';
             </div>
             <p className="text-zinc-500">Initialize browser microphone and speaker session.</p>
           </CardContent>
@@ -140,7 +140,7 @@ export const HelpCenterView: React.FC = () => {
         }
       >
         <div className="space-y-4">
-          <Input label="Your Contact Email" defaultValue="alex.vance@nexus.ai" />
+          <Input label="Your Contact Email" defaultValue="alex.vance@createcall.ai" />
           <Textarea
             label="Describe Technical Inquiry or SIP Issue"
             placeholder="Include error codes, call IDs, or trunk IP addresses..."

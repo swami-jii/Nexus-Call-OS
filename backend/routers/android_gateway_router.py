@@ -31,8 +31,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.auth.deps import get_current_user
-from backend.database.session import get_db
-from backend.models.models import Agent, ProviderCredential, User
+from backend.database.session import get_db, SessionLocal
+from backend.models.models import Agent, ProviderCredential, User, CompanionDevice
 from backend.integrations.registry_service import DynamicRegistryService
 from backend.android_gateway.pairing_manager import PairingManager
 from backend.android_gateway.device_registry import DeviceRegistry, hash_device_token
@@ -167,8 +167,6 @@ async def exchange_pairing_token(
     )
 
     try:
-        from backend.database.session import SessionLocal
-        from backend.models.models import CompanionDevice
         with SessionLocal() as db:
             existing = db.query(CompanionDevice).filter(CompanionDevice.device_id == req.device_id).first()
             if not existing:
@@ -642,6 +640,14 @@ async def start_cloud_tunnel():
     return res
 
 
+@router.post("/tunnel/quick-start")
+async def start_quick_tunnel():
+    """Forces generation of a fresh Cloudflare Quick Tunnel (TryCloudflare)."""
+    mgr = get_tunnel_manager()
+    res = mgr.start_quick_tunnel(target_port=3000, timeout_sec=14.0)
+    return res
+
+
 @router.post("/tunnel/stop")
 async def stop_cloud_tunnel():
     """Stops the active Cloudflare tunnel."""
@@ -654,6 +660,43 @@ async def get_cloud_tunnel_status():
     """Queries live Cloudflare tunnel status."""
     mgr = get_tunnel_manager()
     return mgr.get_status()
+
+
+class TunnelConfigRequest(BaseModel):
+    ngrok_url: Optional[str] = None
+    ngrok_authtoken: Optional[str] = None
+    custom_url: Optional[str] = None
+    named_token: Optional[str] = None
+    cloudflare_url: Optional[str] = None
+    active_route: Optional[str] = None
+
+
+@router.get("/tunnel/config")
+async def get_tunnel_config():
+    """Returns the persistent custom tunnel configuration."""
+    mgr = get_tunnel_manager()
+    return mgr.get_config()
+
+
+@router.post("/tunnel/config")
+async def save_tunnel_config(req: TunnelConfigRequest):
+    """Saves permanent Ngrok URL, Cloudflare URL, Custom Domain, and Named Tunnel token simultaneously."""
+    mgr = get_tunnel_manager()
+    return mgr.save_config(
+        ngrok_url=req.ngrok_url,
+        ngrok_authtoken=req.ngrok_authtoken,
+        custom_url=req.custom_url,
+        named_token=req.named_token,
+        cloudflare_url=req.cloudflare_url,
+        active_route=req.active_route,
+    )
+
+
+@router.delete("/tunnel/config")
+async def clear_tunnel_config():
+    """Clears custom tunnel config and resets to dynamic mode."""
+    mgr = get_tunnel_manager()
+    return mgr.clear_config()
 
 
 def _get_active_wifi_ssid() -> Optional[str]:
@@ -800,12 +843,55 @@ async def get_lan_info():
     effective_android_url = f"{public_https_base}/#/android-companion" if public_https_base else f"http://{lan_ip}:3000/#/android-companion"
     effective_apk_url = f"{public_https_base}/download" if public_https_base else f"http://{lan_ip}:3000/download"
 
+    t_cfg = get_tunnel_manager().get_config()
+    configured_routes = {
+        "lan": {
+            "key": "lan",
+            "name": f"Local Wi-Fi ({net_info.get('wifi_ssid', 'Wi-Fi')})",
+            "url": f"http://{lan_ip}:3000",
+            "provider": "Local LAN",
+            "badge": "LAN Only",
+            "is_configured": True,
+        }
+    }
+    if t_cfg.get("ngrok_url"):
+        configured_routes["ngrok"] = {
+            "key": "ngrok",
+            "name": "Ngrok Free Static Domain",
+            "url": t_cfg["ngrok_url"],
+            "provider": "Ngrok Static",
+            "badge": "100% Uptime",
+            "is_configured": True,
+        }
+    if t_cfg.get("custom_url"):
+        configured_routes["custom"] = {
+            "key": "custom",
+            "name": "Cloud Host / Custom Domain",
+            "url": t_cfg["custom_url"],
+            "provider": "Custom Domain",
+            "badge": "Cloud Host",
+            "is_configured": True,
+        }
+    cloudflare_live_url = t_cfg.get("cloudflare_url") or (public_https_base if (public_https_base and "trycloudflare.com" in public_https_base) else None)
+    configured_routes["cloudflare"] = {
+        "key": "cloudflare",
+        "name": "Cloudflare Quick Tunnel",
+        "url": cloudflare_live_url or "https://auto.trycloudflare.com",
+        "provider": "Cloudflare",
+        "badge": "100% Free",
+        "is_configured": bool(cloudflare_live_url),
+        "is_active": bool(public_https_base and "trycloudflare.com" in public_https_base),
+    }
+
     return {
         "status": "success",
         "lan_ip": lan_ip,
         "wifi_ssid": net_info.get("wifi_ssid", "Wi-Fi Network"),
         "public_https_url": public_https_base,
         "tunnel_provider": tunnel_provider,
+        "tunnel_config": t_cfg,
+        "configured_routes": configured_routes,
+        "active_route": t_cfg.get("active_route", "auto"),
         "frontend_port": 3000,
         "backend_port": 8000,
         "backend_http_url": backend_http_url,

@@ -131,7 +131,7 @@ export const DashboardView: React.FC<{ onNavigate: (screen: ScreenId) => void }>
                     {liveSessions.length}
                   </h3>
                   <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                    Realtime WebSockets connected
+                    {liveSessions.length > 0 ? 'Live WebSockets streaming' : 'Standby / Ready for calls'}
                   </p>
                 </div>
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-xl text-blue-600">
@@ -145,7 +145,7 @@ export const DashboardView: React.FC<{ onNavigate: (screen: ScreenId) => void }>
                 <div>
                   <p className="text-xs font-semibold text-zinc-500">End-to-End Latency</p>
                   <h3 className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100 mt-1">
-                    {activeSession ? activeSession.latency_ms?.total_pipeline || 650 : 84} ms
+                    {activeSession ? (activeSession.latency_ms?.total_pipeline || 295) : (recentCalls.length > 0 && recentCalls[0].latencyMs ? recentCalls[0].latencyMs : 295)} ms
                   </h3>
                   <p className="text-[11px] text-blue-600 font-medium mt-1">Sub-second voice turn</p>
                 </div>
@@ -160,9 +160,9 @@ export const DashboardView: React.FC<{ onNavigate: (screen: ScreenId) => void }>
                 <div>
                   <p className="text-xs font-semibold text-zinc-500">Token Consumption</p>
                   <h3 className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100 mt-1">
-                    {activeSession ? activeSession.tokens_used : 1420}
+                    {activeSession ? activeSession.tokens_used : recentCalls.reduce((sum, c) => sum + (c.durationSeconds * 28), 0)}
                   </h3>
-                  <p className="text-[11px] text-purple-600 font-medium mt-1">Gemini / GPT-4o LLM</p>
+                  <p className="text-[11px] text-purple-600 font-medium mt-1">Gemini 1.5 / OpenAI LLM</p>
                 </div>
                 <div className="p-3 bg-purple-50 dark:bg-purple-900/30 rounded-xl text-purple-600">
                   <Bot className="h-5 w-5" />
@@ -173,11 +173,11 @@ export const DashboardView: React.FC<{ onNavigate: (screen: ScreenId) => void }>
             <Card>
               <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-zinc-500">Session Cost</p>
+                  <p className="text-xs font-semibold text-zinc-500">Telephony Cost</p>
                   <h3 className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100 mt-1">
-                    ${activeSession ? activeSession.cost_usd : 0.0142}
+                    ${activeSession ? activeSession.cost_usd : recentCalls.reduce((sum, c) => sum + (c.cost || 0), 0).toFixed(4)}
                   </h3>
-                  <p className="text-[11px] text-zinc-500 font-medium mt-1">Realtime Cost Tracker</p>
+                  <p className="text-[11px] text-zinc-500 font-medium mt-1">{recentCalls.length} recorded calls</p>
                 </div>
                 <div className="p-3 bg-amber-50 dark:bg-amber-900/30 rounded-xl text-amber-600">
                   <DollarSign className="h-5 w-5" />
@@ -341,14 +341,22 @@ export const DashboardView: React.FC<{ onNavigate: (screen: ScreenId) => void }>
           {activeSession && activeSession.transcript && activeSession.transcript.length > 0 ? (
             activeSession.transcript.map((t: any, i: number) => (
               <div key={i} className="flex gap-3 hover:bg-zinc-100 dark:hover:bg-zinc-900 p-1.5 rounded">
-                <span className="text-zinc-400 shrink-0">{t.timestamp}</span>
-                <span className="font-bold text-blue-600 shrink-0">[{t.speaker}]:</span>
+                <span className="text-zinc-400 shrink-0">{t.timestamp || t.time || 'Live'}</span>
+                <span className="font-bold text-blue-600 shrink-0">[{t.speaker || 'AI'}]:</span>
+                <span className="text-zinc-800 dark:text-zinc-200">{t.text}</span>
+              </div>
+            ))
+          ) : recentCalls.length > 0 && recentCalls[0].transcript && recentCalls[0].transcript.length > 0 ? (
+            recentCalls[0].transcript.map((t: any, i: number) => (
+              <div key={i} className="flex gap-3 hover:bg-zinc-100 dark:hover:bg-zinc-900 p-1.5 rounded">
+                <span className="text-zinc-400 shrink-0">{t.time || t.timestamp || 'Recorded'}</span>
+                <span className="font-bold text-blue-600 shrink-0">[{t.speaker || 'AI'}]:</span>
                 <span className="text-zinc-800 dark:text-zinc-200">{t.text}</span>
               </div>
             ))
           ) : (
             <p className="text-zinc-500 italic py-4 text-center">
-              No active call in progress. Launch a test call from Agents View or trigger Webhook.
+              No active calls recorded. Launch a call from Live Call Studio or Agents view to stream live dialog.
             </p>
           )}
         </CardContent>

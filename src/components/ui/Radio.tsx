@@ -40,7 +40,7 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
               htmlFor={optId}
               className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
                 isSelected
-                  ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-950/20'
+                  ? 'border-teal-600 bg-teal-50/40 dark:bg-teal-950/30'
                   : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700'
               }`}
             >
@@ -55,7 +55,7 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
               />
               <div
                 className={`mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${
-                  isSelected ? 'border-blue-600 bg-blue-600' : 'border-zinc-400 dark:border-zinc-600'
+                  isSelected ? 'border-teal-600 bg-teal-600' : 'border-zinc-400 dark:border-zinc-600'
                 }`}
               >
                 {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}

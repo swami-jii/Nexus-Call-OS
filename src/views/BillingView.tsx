@@ -250,7 +250,8 @@ export const BillingView: React.FC = () => {
                 <div className="pt-2 flex items-center gap-2">
                   <Button
                     size="sm"
-                    className="bg-white text-blue-700 hover:bg-blue-50 border-none font-bold"
+                    variant="white"
+                    className="!bg-white !text-blue-700 hover:!bg-blue-50 border-none font-bold shadow-sm"
                     onClick={() => setActiveTab('plans')}
                   >
                     Change Subscription

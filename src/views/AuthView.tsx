@@ -29,7 +29,7 @@ export const AuthView: React.FC<{ onNavigate: (screen: ScreenId) => void }> = ({
   const [subScreen, setSubScreen] = useState<AuthSubScreen>('login');
   
   // Login Form State
-  const [loginEmail, setLoginEmail] = useState('admin@nexus.ai');
+  const [loginEmail, setLoginEmail] = useState('admin@createcall.ai');
   const [loginPassword, setLoginPassword] = useState('Admin@123');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -179,25 +179,25 @@ export const AuthView: React.FC<{ onNavigate: (screen: ScreenId) => void }> = ({
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         {/* Brand Header */}
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-2">
           <img
             src="/app-icon.png"
             alt="Create Call Favicon"
-            className="mx-auto h-14 w-14 rounded-2xl object-cover shadow-lg"
+            className="mx-auto h-16 w-16 rounded-2xl object-cover shadow-lg"
           />
           <div className="flex justify-center items-center">
             <img
               src="/create-call-banner-dark.png"
               alt="Create Call OS"
-              className="h-10 w-auto object-contain hidden dark:block"
+              className="h-12 w-auto object-contain hidden dark:block"
             />
             <img
               src="/create-call-banner-light.png"
               alt="Create Call OS"
-              className="h-10 w-auto object-contain block dark:hidden"
+              className="h-12 w-auto object-contain block dark:hidden"
             />
           </div>
-          <p className="text-xs font-semibold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase">
+          <p className="text-xs font-semibold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase -mt-2">
             Crafting Digital Possibilities
           </p>
         </div>
@@ -509,7 +509,7 @@ export const AuthView: React.FC<{ onNavigate: (screen: ScreenId) => void }> = ({
         <div className="text-center">
           <Button variant="link" size="sm" onClick={async () => {
             try {
-              await login({ email: loginEmail || 'alex.vance@nexus.ai', password: loginPassword || 'NexusPass2026!' }, true);
+              await login({ email: loginEmail || 'admin@createcall.ai', password: loginPassword || 'Admin@123' }, true);
             } catch {}
             onNavigate('dashboard');
           }}>

@@ -18,6 +18,7 @@ from backend.models.models import (
     User,
     Workflow,
     WorkspaceSettings,
+    GatewayTunnelConfig,
 )
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "Contact",
     "Coupon",
     "DeviceSession",
+    "GatewayTunnelConfig",
     "Integration",
     "KnowledgeDocument",
     "Notification",

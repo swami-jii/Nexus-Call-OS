@@ -44,13 +44,13 @@ export const Dropdown: React.FC<DropdownProps> = ({
 
       {isOpen && (
         <div
-          className={`absolute z-50 mt-1.5 w-52 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl py-1 focus:outline-none ${
+          className={`absolute z-50 mt-1.5 w-54 rounded-xl border border-zinc-200 dark:border-zinc-750 bg-white/95 dark:bg-[#111827]/98 backdrop-blur-md shadow-2xl py-1.5 focus:outline-none ring-1 ring-black/5 dark:ring-white/10 animate-in fade-in-0 zoom-in-95 duration-100 ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >
           {items.map((item, idx) => {
             if (item.divider) {
-              return <div key={idx} className="my-1 border-t border-zinc-100 dark:border-zinc-800" />;
+              return <div key={idx} className="my-1 border-t border-zinc-100 dark:border-zinc-800 mx-1" />;
             }
 
             return (
@@ -62,16 +62,16 @@ export const Dropdown: React.FC<DropdownProps> = ({
                   if (item.onClick) item.onClick();
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs sm:text-sm font-medium transition-colors text-left ${
+                className={`w-[calc(100%-8px)] mx-1 flex items-center gap-2.5 px-3 py-2 text-xs sm:text-sm font-medium transition-colors text-left rounded-lg ${
                   item.disabled
                     ? 'opacity-40 cursor-not-allowed'
                     : item.danger
-                    ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30'
-                    : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer'
+                    : 'text-zinc-700 dark:text-zinc-200 hover:bg-teal-50/80 dark:hover:bg-zinc-800/90 hover:text-teal-800 dark:hover:text-teal-300 cursor-pointer'
                 }`}
               >
-                {item.icon && <span className="shrink-0">{item.icon}</span>}
-                <span>{item.label}</span>
+                {item.icon && <span className="shrink-0 text-zinc-400 dark:text-zinc-400">{item.icon}</span>}
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}

@@ -78,7 +78,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleTheme]);
 
-  const isFullScreenPage = activeScreen === 'auth' || activeScreen === 'maintenance';
+  const isFullScreenPage = activeScreen === 'auth';
 
   if (isFullScreenPage) {
     return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">{children}</div>;

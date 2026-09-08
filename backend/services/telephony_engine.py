@@ -45,7 +45,7 @@ class TelephonyCallingEngine:
         # Fetch 0ms live date, time, and day of week context
         dt = LiveKnowledgeService.get_live_datetime_context()
 
-        model_ctx_line = f"ACTIVE ENGINE: {active_model} (Nexus Voice AI Platform)" if active_model else "ACTIVE ENGINE: Nexus Voice AI Platform"
+        model_ctx_line = f"ACTIVE ENGINE: {active_model} (Create Call Voice AI Platform)" if active_model else "ACTIVE ENGINE: Create Call Voice AI Platform"
 
         prompt = f"""You are {agent_name}, a friendly, warm, intelligent live human telephone receptionist for {clean_biz}.
 

@@ -586,7 +586,7 @@ export const KnowledgeBaseView: React.FC = () => {
           <CardHeader>
             <CardTitle>Website Import & Automated Web Crawler</CardTitle>
             <CardDescription>
-              Enter a website URL (`https://`). Nexus OS will automatically crawl pages, extract textual content, and create vector chunk embeddings.
+              Enter a website URL (`https://`). Create Call OS will automatically crawl pages, extract textual content, and create vector chunk embeddings.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -658,7 +658,7 @@ export const KnowledgeBaseView: React.FC = () => {
         <div className="p-4 bg-zinc-900 text-zinc-100 rounded-xl font-mono text-xs max-h-80 overflow-y-auto leading-relaxed">
           <p className="text-zinc-400">// VECTOR EMBEDDING CHUNK #1 (Similarity Score: 0.984)</p>
           <p className="mt-2 text-emerald-400">
-            Nexus AI Voice Agent Knowledge Kernel initialized. Standard procedures dictate that customer inquiries regarding refund policies are routed to tier 2 supervisors when amount exceeds $500.
+            Create Call OS AI Voice Agent Knowledge Kernel initialized. Standard procedures dictate that customer inquiries regarding refund policies are routed to tier 2 supervisors when amount exceeds $500.
           </p>
           <p className="mt-4 text-zinc-400">// VECTOR EMBEDDING CHUNK #2 (Similarity Score: 0.912)</p>
           <p className="mt-2 text-zinc-300">

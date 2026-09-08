@@ -260,3 +260,20 @@ export interface SubscriptionPlan {
   popular?: boolean;
 }
 
+export interface NotificationItem {
+  id: string;
+  title: string;
+  desc: string;
+  message?: string;
+  time?: string;
+  created_at?: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+  category: 'telephony' | 'calls' | 'system' | 'billing' | 'security';
+  read: boolean;
+  is_read?: boolean;
+  actionLabel?: string;
+  actionUrl?: string;
+  user_id?: string | null;
+  organization_id?: string | null;
+}
+

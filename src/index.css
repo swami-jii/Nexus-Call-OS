@@ -2,10 +2,17 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-zinc-750: #27272a;
+  --color-zinc-850: #18181b;
+  --color-zinc-925: #11141c;
+  --color-brand-primary: #0d9488;
+  --color-brand-accent: #059669;
+  --color-brand-cyan: #06b6d4;
+}
 
 /* ============================================================
-   NEXUS CALL OS — DESIGN SYSTEM TOKENS
-   One font scale. Applied to every component.
+   CREATE CALL OS — DESIGN SYSTEM TOKENS & COLOR THEORY
    ============================================================ */
 
 :root {
@@ -48,7 +55,7 @@
 }
 
 /* ============================================================
-   BASE RESETS
+   BASE RESETS & GLOBAL THEME STYLES
    ============================================================ */
 
 *, *::before, *::after {
@@ -69,9 +76,26 @@ body {
   line-height: var(--leading-normal);
 }
 
+::selection {
+  background-color: rgba(13, 148, 136, 0.35);
+  color: inherit;
+}
+
+/* Dark mode explicit option styling for native select dropdowns */
+.dark select option,
+.dark option {
+  background-color: #18181b !important;
+  color: #f4f4f5 !important;
+}
+
+select option,
+option {
+  background-color: #ffffff;
+  color: #18181b;
+}
+
 /* ============================================================
    TYPOGRAPHY UTILITIES
-   Applied via className in components
    ============================================================ */
 
 .ds-h1 {
@@ -123,8 +147,8 @@ body {
 }
 .custom-scrollbar::-webkit-scrollbar,
 .scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 .custom-scrollbar::-webkit-scrollbar-track,
 .scrollbar-thin::-webkit-scrollbar-track {
@@ -132,10 +156,61 @@ body {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb,
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(150, 150, 150, 0.3);
+  background: rgba(150, 150, 150, 0.25);
   border-radius: 9999px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover,
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(150, 150, 150, 0.6);
+  background: rgba(13, 148, 136, 0.6);
+}
+
+/* ============================================================
+   GLOBAL INTERACTIVE CURSOR RULES
+   Guarantees cursor: pointer on every clickable element, button,
+   tab, link, toggle, option, dropdown, modal trigger, and control.
+   ============================================================ */
+
+button,
+[role="button"],
+[type="button"],
+[type="submit"],
+[type="reset"],
+a,
+a *,
+select,
+summary,
+[role="tab"],
+[role="menuitem"],
+[role="menuitemcheckbox"],
+[role="menuitemradio"],
+[role="option"],
+[role="switch"],
+[role="checkbox"],
+[role="radio"],
+[role="link"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+input[type="file"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+label[for],
+label:has(input[type="checkbox"]),
+label:has(input[type="radio"]),
+label:has(input[type="file"]),
+.cursor-pointer,
+[onclick],
+[data-clickable="true"] {
+  cursor: pointer !important;
+}
+
+button:disabled,
+[disabled],
+[aria-disabled="true"],
+.disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed !important;
 }

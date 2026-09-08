@@ -2,7 +2,21 @@ import React from 'react';
 
 export interface BadgeProps {
   children: React.ReactNode;
-  variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'outline' | 'secondary';
+  variant?:
+    | 'default'
+    | 'primary'
+    | 'success'
+    | 'warning'
+    | 'danger'
+    | 'outline'
+    | 'secondary'
+    | 'emerald'
+    | 'blue'
+    | 'purple'
+    | 'zinc'
+    | 'info'
+    | 'teal'
+    | 'amber';
   size?: 'sm' | 'md';
   icon?: React.ReactNode;
   dot?: boolean;
@@ -17,11 +31,11 @@ export const Badge: React.FC<BadgeProps> = ({
   dot = false,
   className = '',
 }) => {
-  const variants = {
+  const variants: Record<string, string> = {
     default:
       'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700',
     primary:
-      'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900',
+      'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80',
     secondary:
       'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700',
     success:
@@ -32,16 +46,37 @@ export const Badge: React.FC<BadgeProps> = ({
       'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900',
     outline:
       'bg-transparent text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-700',
+    emerald:
+      'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80',
+    blue:
+      'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80',
+    purple:
+      'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80',
+    zinc:
+      'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700',
+    info:
+      'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800/80',
+    teal:
+      'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80',
+    amber:
+      'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80',
   };
 
-  const dotColors = {
+  const dotColors: Record<string, string> = {
     default:   'bg-zinc-400',
-    primary:   'bg-blue-600',
+    primary:   'bg-teal-600',
     secondary: 'bg-zinc-400',
     success:   'bg-emerald-500',
     warning:   'bg-amber-500',
     danger:    'bg-red-500',
     outline:   'bg-zinc-400',
+    emerald:   'bg-emerald-500',
+    blue:      'bg-sky-500',
+    purple:    'bg-purple-500',
+    zinc:      'bg-zinc-400',
+    info:      'bg-cyan-500',
+    teal:      'bg-teal-500',
+    amber:     'bg-amber-500',
   };
 
   // sm = 11px / caption — inside table cells

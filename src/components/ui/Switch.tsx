@@ -35,8 +35,8 @@ export const Switch: React.FC<SwitchProps> = ({
         aria-checked={checked}
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
-        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 ${
-          checked ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-700'
+        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 cursor-pointer ${
+          checked ? 'bg-teal-600' : 'bg-zinc-300 dark:bg-zinc-700'
         }`}
       >
         <span

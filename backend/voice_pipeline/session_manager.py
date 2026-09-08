@@ -8,7 +8,7 @@ class CallSession:
     call_id: str
     stream_sid: str | None = None
     agent_id: str | None = None
-    agent_name: str = "Nexus Voice Assistant"
+    agent_name: str = "Create Call Voice Assistant"
     to_number: str = ""
     from_number: str = ""
     direction: str = "outbound"

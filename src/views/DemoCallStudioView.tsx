@@ -674,9 +674,9 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   const realWebhooksList = useMemo(() => {
     const fromRegistry = customRegistry['webhooks'] || [];
     const list: any[] = [
-      { id: 'wh-global-crm', name: 'Global CRM Webhook (POST /v1/calls)', url: 'https://api.nexuscall.io/v1/crm-sync' },
-      { id: 'wh-realtime', name: 'Real-Time Turn-by-Turn Event Dispatcher', url: 'wss://events.nexuscall.io/live-stream' },
-      { id: 'wh-zapier', name: 'Zapier & Make Automation Webhook', url: 'https://hooks.zapier.com/hooks/catch/nexus' },
+      { id: 'wh-global-crm', name: 'Global CRM Webhook (POST /v1/calls)', url: 'https://api.createcall.ai/v1/crm-sync' },
+      { id: 'wh-realtime', name: 'Real-Time Turn-by-Turn Event Dispatcher', url: 'wss://events.createcall.ai/live-stream' },
+      { id: 'wh-zapier', name: 'Zapier & Make Automation Webhook', url: 'https://hooks.zapier.com/hooks/catch/createcall' },
       { id: 'wh-disabled', name: 'Local Studio Only (No External Webhook)', url: 'none' },
     ];
     fromRegistry.forEach((w: any) => {

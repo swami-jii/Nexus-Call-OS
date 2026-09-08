@@ -17,6 +17,7 @@ import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { Dropdown } from '../ui/Dropdown';
 import { Avatar } from '../ui/Avatar';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 export interface HeaderProps {
   activeScreen: ScreenId;
@@ -37,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { unreadCount } = useNotifications();
 
   const getBreadcrumbTitle = (screen: ScreenId) => {
     const titles: Record<ScreenId, string> = {
@@ -142,11 +144,13 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onNavigate('dashboard')}
             className="flex items-center gap-2 cursor-pointer select-none"
           >
-            <div className="h-7 w-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-sm">
-              N
-            </div>
+            <img
+              src="/app-icon.png"
+              alt="Create Call"
+              className="h-7 w-7 rounded-lg object-contain shadow-xs"
+            />
             <span className="font-extrabold text-xs tracking-tight text-zinc-900 dark:text-zinc-100 hidden sm:inline">
-              NEXUS<span className="text-blue-600 dark:text-blue-400">.OS</span>
+              CREATE CALL<span className="text-teal-600 dark:text-teal-400">.OS</span>
             </span>
           </div>
         </div>
@@ -155,7 +159,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[180px] sm:max-w-xs"
+          className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs text-zinc-500 dark:text-zinc-400 hover:border-teal-500/40 truncate max-w-[180px] sm:max-w-xs"
         >
           <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
           <span className="truncate text-[11px]">Search commands...</span>
@@ -170,7 +174,11 @@ export const Header: React.FC<HeaderProps> = ({
             title="Notifications"
           >
             <Bell className="h-4 w-4" />
-            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-zinc-950" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-teal-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-zinc-950">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -184,7 +192,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <Dropdown
             trigger={
-              <button type="button" className="p-0.5 rounded-full ring-2 ring-blue-500/20">
+              <button type="button" className="p-0.5 rounded-full ring-2 ring-teal-500/20">
                 <Avatar name={user?.fullName || 'User'} size="xs" status="online" />
               </button>
             }
@@ -254,11 +262,15 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenNotifications}
-            title="Notifications"
+            title={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
             className="relative p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <Bell className="h-4 w-4" />
-            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-zinc-950" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-teal-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-zinc-950">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
           {/* Profile Dropdown */}

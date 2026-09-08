@@ -1,6 +1,6 @@
 {
-  "name": "Nexus Call OS - Mobile Gateway",
-  "short_name": "Nexus Gateway",
+  "name": "Create Call OS - Mobile Gateway",
+  "short_name": "Create Call Gateway",
   "description": "AI Voice Calling & GSM SIM Telephony Bridge for Android, iPhone & Desktop",
   "start_url": "/#/mobile-gateway",
   "display": "standalone",

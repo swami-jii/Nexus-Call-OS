@@ -46,8 +46,8 @@ export const SettingsView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // General Settings State
-  const [workspaceName, setWorkspaceName] = useState('Nexus AI Voice OS Workspace');
-  const [workspaceId] = useState('ws_nexus_9801293840129');
+  const [workspaceName, setWorkspaceName] = useState('Create Call OS Workspace');
+  const [workspaceId] = useState('ws_createcall_9801293840129');
   const [timezone, setTimezone] = useState('America/Los_Angeles (PST -08:00)');
   const [language, setLanguage] = useState('en-US (English)');
   const [currency, setCurrency] = useState('USD ($)');
@@ -98,9 +98,9 @@ export const SettingsView: React.FC = () => {
 
   // Team & Roles State
   const [teamMembers, setTeamMembers] = useState([
-    { id: 'm1', name: 'Alex Vance (You)', email: 'alex.vance@nexus.ai', role: 'Owner / Super Admin', scope: 'Full Workspace Access' },
-    { id: 'm2', name: 'Elena Rostova', email: 'elena.r@nexus.ai', role: 'Voice Engineer', scope: 'Agent Configuration & RAG' },
-    { id: 'm3', name: 'Marcus Brody', email: 'marcus@nexus.ai', role: 'Call Center Operator', scope: 'Campaign Execution & Logs' },
+    { id: 'm1', name: 'Alex Vance (You)', email: 'alex.vance@createcall.ai', role: 'Owner / Super Admin', scope: 'Full Workspace Access' },
+    { id: 'm2', name: 'Elena Rostova', email: 'elena.r@createcall.ai', role: 'Voice Engineer', scope: 'Agent Configuration & RAG' },
+    { id: 'm3', name: 'Marcus Brody', email: 'marcus@createcall.ai', role: 'Call Center Operator', scope: 'Campaign Execution & Logs' },
   ]);
 
   // Invites Modal

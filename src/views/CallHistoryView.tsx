@@ -462,7 +462,7 @@ export const CallHistoryView: React.FC = () => {
             className="w-full max-w-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl h-full shadow-2xl border border-zinc-200/90 dark:border-zinc-800/90 rounded-3xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right-8 duration-300 ease-out"
           >
             {/* Drawer Header */}
-            <div className="p-4.5 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-3 bg-gradient-to-r from-zinc-50/90 to-white/90 dark:from-zinc-850/90 dark:to-zinc-900/90">
+            <div className="p-4.5 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-3 bg-gradient-to-r from-zinc-50/90 to-white/90 dark:from-zinc-900/90 dark:to-zinc-950">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                   <FileText className="h-4.5 w-4.5" />
@@ -493,7 +493,7 @@ export const CallHistoryView: React.FC = () => {
             {/* Drawer Body (Scrollable with Smooth Touch) */}
             <div className="flex-1 p-5 overflow-y-auto space-y-4 text-xs font-sans no-scrollbar">
               {/* Caller Intelligence Hero Card */}
-              <div className="p-4 bg-gradient-to-br from-zinc-50 to-emerald-50/30 dark:from-zinc-850/80 dark:to-emerald-950/20 border border-zinc-200/90 dark:border-zinc-800 rounded-3xl space-y-3 shadow-2xs">
+              <div className="p-4 bg-gradient-to-br from-zinc-50 to-emerald-50/30 dark:from-zinc-900/90 dark:to-emerald-950/20 border border-zinc-200/90 dark:border-zinc-800 rounded-3xl space-y-3 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                     <User className="h-3.5 w-3.5 text-blue-500" />
@@ -591,7 +591,7 @@ export const CallHistoryView: React.FC = () => {
                 </div>
 
                 {/* Dynamic Waveform Visualizer */}
-                <div className="flex items-center gap-1 h-7 px-1 bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-850">
+                <div className="flex items-center gap-1 h-7 px-1 bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-800">
                   {Array.from({ length: 36 }).map((_, i) => (
                     <div
                       key={i}
@@ -600,7 +600,7 @@ export const CallHistoryView: React.FC = () => {
                       }`}
                       style={{
                         height: isPlaying
-                          ? `${Math.max(20, (Math.sin(i * 0.8 + currentTimeSec) + 1) * 50)}%`
+                           ? `${Math.max(20, (Math.sin(i * 0.8 + currentTimeSec) + 1) * 50)}%`
                           : '25%',
                       }}
                     />
@@ -609,7 +609,7 @@ export const CallHistoryView: React.FC = () => {
               </div>
 
               {/* AI Call Intelligence & Notes */}
-              <div className="p-4 bg-zinc-50 dark:bg-zinc-850/70 rounded-3xl border border-zinc-200/90 dark:border-zinc-800 space-y-2.5 text-xs shadow-2xs">
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-900/80 rounded-3xl border border-zinc-200/90 dark:border-zinc-800 space-y-2.5 text-xs shadow-2xs">
                 <div className="flex items-center justify-between">
                   <span className="font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
                     <Sparkles className="h-4 w-4 text-amber-500" />
@@ -635,10 +635,10 @@ export const CallHistoryView: React.FC = () => {
                     rows={3}
                     value={notesText}
                     onChange={(e) => setNotesText(e.target.value)}
-                    className="w-full p-3 text-xs rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full p-3 text-xs rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 ) : (
-                  <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed font-medium bg-white/70 dark:bg-zinc-900/60 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800/80">
+                  <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium bg-white/90 dark:bg-zinc-950/80 p-3 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/80">
                     {selectedCall.summary || 'Call processed successfully by AI Voice Assistant.'}
                   </p>
                 )}
@@ -691,7 +691,7 @@ export const CallHistoryView: React.FC = () => {
                       );
                     })
                   ) : (
-                    <div className="p-5 text-center text-zinc-400 italic bg-zinc-50 dark:bg-zinc-850/50 rounded-3xl border border-zinc-200 dark:border-zinc-800">
+                    <div className="p-5 text-center text-zinc-400 italic bg-zinc-50 dark:bg-zinc-900/60 rounded-3xl border border-zinc-200 dark:border-zinc-800">
                       No transcript messages recorded for this call.
                     </div>
                   )}
@@ -700,11 +700,11 @@ export const CallHistoryView: React.FC = () => {
             </div>
 
             {/* Drawer Footer with Smooth Rounded Controls */}
-            <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/90 dark:bg-zinc-850/90 flex items-center justify-between gap-3">
+            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/95 dark:bg-zinc-900/95 flex items-center justify-between gap-3">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                className="text-xs font-bold rounded-2xl border-zinc-300 dark:border-zinc-700 h-9 px-4"
+                className="text-xs font-bold rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 h-9 px-4 shadow-xs"
                 onClick={handleCloseInspect}
               >
                 Close Inspector

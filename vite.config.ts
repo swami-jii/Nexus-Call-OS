@@ -16,15 +16,29 @@ export default defineConfig(() => {
       allowedHosts: true as true,
       cors: true,
       clearScreen: false,
+      warmup: {
+        clientFiles: [
+          './src/main.tsx',
+          './src/App.tsx',
+          './src/views/MobileGatewayView.tsx',
+          './src/views/AndroidGatewayView.tsx',
+          './src/views/DashboardView.tsx',
+        ],
+      },
       hmr: {
         overlay: false,
       },
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Permissions-Policy': 'microphone=*, camera=*, geolocation=*',
+        'bypass-tunnel-reminder': 'true',
+        'ngrok-skip-browser-warning': 'true',
       },
       watch: process.env.DISABLE_HMR === 'true' ? null : {
         ignored: [
+          '**/create_call_dev.db',
+          '**/create_call_dev.db-wal',
+          '**/create_call_dev.db-shm',
           '**/nexus_dev.db',
           '**/nexus_dev.db-wal',
           '**/nexus_dev.db-shm',
@@ -50,9 +64,7 @@ export default defineConfig(() => {
         '/redoc': { target: 'http://127.0.0.1:8000', changeOrigin: true },
         '/openapi.json': { target: 'http://127.0.0.1:8000', changeOrigin: true },
         '/ws': { target: 'ws://127.0.0.1:8000', ws: true },
-
       },
     },
-
   };
 });
