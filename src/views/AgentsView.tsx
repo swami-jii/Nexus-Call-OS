@@ -1697,7 +1697,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
   const allPromptTemplates = useMemo(() => {
     const list: Array<{ id: string; name: string; description: string; prompt: string; group?: string }> = [];
 
-    // Group 1: Configured Workspace Templates from API & Integrations
+    // ONLY Configured Workspace Templates from API & Integrations (Zero hardcoded/static blueprints)
     try {
       const saved = localStorage.getItem('nexus_custom_items');
       if (saved) {
@@ -1719,16 +1719,36 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
       }
     } catch {}
 
-    // Group 2: Built-in Industry Blueprints
-    PROMPT_INDUSTRY_PRESETS.forEach((p) => {
-      list.push({
-        ...p,
-        group: 'Enterprise Industry Blueprints',
-      });
-    });
-
     return list;
   }, [integrationsSyncTrigger, isEditModalOpen, isCreateModalOpen, activeTab]);
+
+  const handleDeletePromptTemplate = (templateId: string) => {
+    if (!templateId) return;
+    try {
+      const saved = localStorage.getItem('nexus_custom_items');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.prompt_templates)) {
+          const target = parsed.prompt_templates.find(
+            (pt: any) => String(pt.id || pt.name || '').trim() === templateId.trim()
+          );
+          const templateTitle = target?.display_name || target?.name || 'Template';
+          parsed.prompt_templates = parsed.prompt_templates.filter(
+            (pt: any) => String(pt.id || pt.name || '').trim() !== templateId.trim()
+          );
+          localStorage.setItem('nexus_custom_items', JSON.stringify(parsed));
+          window.dispatchEvent(new Event('nexus_business_rules_updated'));
+          window.dispatchEvent(new Event('storage'));
+          setIntegrationsSyncTrigger((c) => c + 1);
+          setSelectedPromptTemplateId('');
+          setPromptTemplate('');
+          addToast('success', `Deleted prompt template '${templateTitle}' from workspace`);
+        }
+      }
+    } catch (err) {
+      addToast('error', 'Failed to delete prompt template');
+    }
+  };
 
   const handleSelectPromptPreset = (presetId: string) => {
     setSelectedPromptTemplateId(presetId);
@@ -2827,22 +2847,74 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ onNavigate }) => {
                 )}
               </div>
 
-              {/* Industry & Workspace Template Selector */}
-              <div>
-                <CommandPaletteSelect
-                  label="Choose Prompt Template (Built-in + API & Integrations)"
-                  options={allPromptTemplates.map((p) => ({
-                    value: p.id,
-                    label: p.name,
-                    description: p.description,
-                    group: p.group || 'Prompt Templates',
-                    icon: <Sparkles className="h-3.5 w-3.5 text-purple-500" />,
-                  }))}
-                  value={selectedPromptTemplateId}
-                  onChange={(val) => handleSelectPromptPreset(val)}
-                  placeholder="Select or search prompt template..."
-                  variant="purple"
-                />
+              {/* Workspace Template Selector from API & Integrations */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Choose Prompt Template (Configured in API & Integrations)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {selectedPromptTemplateId && allPromptTemplates.some((p) => p.id === selectedPromptTemplateId) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePromptTemplate(selectedPromptTemplateId)}
+                        className="text-[11px] text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-semibold cursor-pointer flex items-center gap-1 hover:underline"
+                        title="Delete selected template from workspace"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        <span>Delete Template</span>
+                      </button>
+                    )}
+                    {onNavigate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.setItem('nexus_integrations_active_tab', 'prompt_templates');
+                          onNavigate('integrations');
+                        }}
+                        className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline font-semibold cursor-pointer flex items-center gap-1"
+                      >
+                        <Settings2 className="h-3 w-3" />
+                        <span>Manage in API & Integrations</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {allPromptTemplates.length > 0 ? (
+                  <CommandPaletteSelect
+                    options={allPromptTemplates.map((p) => ({
+                      value: p.id,
+                      label: p.name,
+                      description: p.description,
+                      group: p.group || '⭐ Configured in API & Integrations',
+                      icon: <Sparkles className="h-3.5 w-3.5 text-purple-500" />,
+                    }))}
+                    value={selectedPromptTemplateId}
+                    onChange={(val) => handleSelectPromptPreset(val)}
+                    placeholder="Select or search prompt template from API & Integrations..."
+                    variant="purple"
+                  />
+                ) : (
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-950/50 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      No custom prompt templates configured yet in API & Integrations.
+                    </span>
+                    {onNavigate && (
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        onClick={() => {
+                          localStorage.setItem('nexus_integrations_active_tab', 'prompt_templates');
+                          onNavigate('integrations');
+                        }}
+                        leftIcon={<Plus className="h-3 w-3" />}
+                      >
+                        Create in API & Integrations
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Variable Chips Toolbar */}
