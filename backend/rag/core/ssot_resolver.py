@@ -34,6 +34,22 @@ class SSOTResolver:
         user_id: Optional[str] = None
     ) -> Optional[dict[str, Any]]:
         """Resolves active LLM / Vision model from Tab 1 (tab1_llm_providers) and ProviderCredential SSOT."""
+        # Auto-infer provider from model name if provider not explicitly passed
+        if not selected_provider and selected_model and selected_model.lower() not in ["dynamic", "default", "none", "auto-optimized"]:
+            sm_lower = selected_model.lower()
+            if "gemini" in sm_lower:
+                selected_provider = "google"
+            elif any(k in sm_lower for k in ["qwen", "gpt-oss"]):
+                selected_provider = "groq"
+            elif "claude" in sm_lower:
+                selected_provider = "anthropic"
+            elif any(k in sm_lower for k in ["gpt-4", "gpt-3.5", "o1", "o3", "text-embedding"]):
+                selected_provider = "openai"
+            elif any(k in sm_lower for k in ["nvidia", "mistral", "nvapi"]):
+                selected_provider = "nvidia"
+            elif "openrouter" in sm_lower:
+                selected_provider = "openrouter"
+
         if db is not None:
             # 1. Check Tab 1 LlmProvider table
             try:

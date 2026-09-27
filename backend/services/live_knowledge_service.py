@@ -321,22 +321,22 @@ class LiveKnowledgeService:
     async def get_live_search_summary(cls, query: str) -> str:
         """
         Dynamically fetches encyclopedic fact summaries from Wikipedia Search REST API or DuckDuckGo Instant Answer
-        across all 104+ global languages in <100ms.
+        across all 104+ global languages with a tight 500ms timeout.
         """
         clean_q = re.sub(r'[^\w\s\u0900-\u097F]', '', query).strip()
-        if not clean_q or len(clean_q) < 3:
+        if not clean_q or len(clean_q) < 4:
             return ""
 
-        # 1. Dynamic Wikipedia Search Query API
+        # 1. Dynamic Wikipedia Search Query API (with 500ms strict timeout for telephony)
         search_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(clean_q)}&utf8=&format=json"
         try:
-            async with httpx.AsyncClient(timeout=3.0, headers=HTTP_HEADERS, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=0.5, headers=HTTP_HEADERS, follow_redirects=True) as client:
                 res = await client.get(search_url)
                 if res.status_code == 200:
                     results = res.json().get("query", {}).get("search", [])
                     if results:
                         top_title = results[0].get("title", "")
-                        if top_title:
+                        if top_title and not any(ign in top_title.lower() for ign in ["list of", "discography", "disambiguation"]):
                             summary_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(top_title.replace(' ', '_'))}"
                             s_res = await client.get(summary_url)
                             if s_res.status_code == 200:
@@ -344,12 +344,12 @@ class LiveKnowledgeService:
                                 if extract:
                                     return f"Factual Summary for '{top_title}': {extract[:350]}"
         except Exception as e:
-            logger.warning(f"Wikipedia search warning: {e}")
+            logger.debug(f"Wikipedia search skipped: {e}")
 
         # 2. Dynamic DuckDuckGo Instant Answer
         ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(clean_q)}&format=json&no_html=1&skip_disambig=1"
         try:
-            async with httpx.AsyncClient(timeout=3.0, headers=HTTP_HEADERS, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=0.4, headers=HTTP_HEADERS, follow_redirects=True) as client:
                 res = await client.get(ddg_url)
                 if res.status_code == 200:
                     data = res.json()
@@ -372,10 +372,22 @@ class LiveKnowledgeService:
         if not txt or len(txt) < 2:
             return None
 
-        # Factual query resolution for weather or explicit knowledge lookups
+        lower_txt = txt.lower()
+
+        # Guard: Ignore conversational inquiries, persona questions, and greetings from triggering slow web lookups
+        conversational_guards = [
+            "aapka naam", "your name", "who are you", "who r u", "kaun ho", "kon ho",
+            "kya naam", "what is your name", "what are you", "what can you do", "aap kya karte",
+            "kya karte ho", "help me", "madad", "pricing", "plans", "cost", "budget", "hello",
+            "hi", "hey", "namaste", "kem cho", "vanakkam", "kaise ho", "kese ho", "how are you",
+            "book appointment", "call transfer", "speak to manager", "agent", "bye", "alvida", "goodbye"
+        ]
+        if any(cg in lower_txt for cg in conversational_guards):
+            return None
+
         words = txt.split()
         if len(words) >= 1:
-            # 1. Dynamic lookup for real-time clock / time / date
+            # 1. Dynamic lookup for real-time clock / time / date (0ms local CPU computation)
             if re.search(r'\b(time|clock|samay|samye|waqt|baje|ghadi|date|tarikh|din|aaj)\b', txt, re.IGNORECASE):
                 dt = cls.get_live_datetime_context()
                 return f"REAL-TIME CLOCK & DATE GROUND TRUTH: Current time is {dt['current_time']} on {dt['day_of_week']}, {dt['current_date']} (Timezone: {dt['timezone']})."
@@ -388,7 +400,7 @@ class LiveKnowledgeService:
 
             # 3. Dynamic lookup for financial currencies
             if re.search(r'\b(currency|forex|dollar|rupee|usd|inr|crypto|bitcoin|btc|ethereum|eth|solana)\b', txt, re.IGNORECASE):
-                from_c = "BTC" if "btc" in txt.lower() or "bitcoin" in txt.lower() else ("ETH" if "eth" in txt.lower() or "ethereum" in txt.lower() else ("USD" if "dollar" in txt.lower() or "usd" in txt.lower() else "EUR"))
+                from_c = "BTC" if "btc" in lower_txt or "bitcoin" in lower_txt else ("ETH" if "eth" in lower_txt or "ethereum" in lower_txt else ("USD" if "dollar" in lower_txt or "usd" in lower_txt else "EUR"))
                 res = await cls.get_live_currency_rate(from_curr=from_c, to_curr="INR")
                 if res:
                     return f"REAL-TIME FINANCIAL GROUND TRUTH: {res}"
@@ -400,8 +412,8 @@ class LiveKnowledgeService:
                     api_summaries = "; ".join([f"{a.get('api')}: {a.get('description')} ({a.get('url')})" for a in cat_results])
                     return f"PUBLIC APIS CATALOG GROUND TRUTH: {api_summaries}"
 
-            # 5. Dynamic Encyclopedic / Factual Web Search
-            if len(words) >= 3 and any(w in txt.lower() for w in ["kya hai", "what is", "who is", "tell me about", "kaha hai", "where is", "details of"]):
+            # 5. Dynamic Encyclopedic / Factual Web Search (only for explicit factual inquiries like 'who founded Google', 'capital of France')
+            if len(words) >= 4 and any(w in lower_txt for w in ["search for", "tell me about", "capital of", "who invented", "founder of", "population of"]):
                 search_res = await cls.get_live_search_summary(txt)
                 if search_res:
                     return f"FACTUAL SEARCH GROUND TRUTH: {search_res}"

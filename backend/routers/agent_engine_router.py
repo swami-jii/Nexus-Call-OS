@@ -219,7 +219,7 @@ async def process_agent_turn(
     if raw_ai_text:
         ai_text, _ = TelephonyCallingEngine.extract_hangup_signal(raw_ai_text)
 
-    # Intelligent natural fallback if offline or LLM provider unavailable
+    # Intelligent natural dynamic fallback if offline or LLM provider temporarily unavailable
     if not ai_text or not ai_text.strip():
         if skill:
             ai_text = SkillRegistry.evaluate_skill(
@@ -232,32 +232,13 @@ async def process_agent_turn(
             if live_ground_truth:
                 ai_text = f"Hello! {live_ground_truth}"
             else:
-                prompt_lower = custom_instructions.lower()
                 caller_name_val = (
-                    (req.variables.get("caller_name") or req.variables.get("client_name") or "there")
+                    (req.variables.get("caller_name") or req.variables.get("client_name") or "")
                     if req.variables
-                    else "there"
+                    else ""
                 )
-                if "maya" in prompt_lower or "graphic design" in prompt_lower or "brand" in prompt_lower:
-                    ai_text = (
-                        f"Hello {caller_name_val}! I'm Maya, your Creative Graphic Designer and Brand Strategist. "
-                        f"I'd love to help with your requirements regarding '{input_text}'. "
-                        "We specialize in logo design, brand identity systems, and UI/UX assets. "
-                        "Would you like to explore creative concepts or schedule a 15-minute design discovery call?"
-                    )
-                elif "video" in prompt_lower or "editing" in prompt_lower:
-                    ai_text = (
-                        f"Hello {caller_name_val}! I am your Video Editing Intake specialist. "
-                        f"I have noted your inquiry regarding '{input_text}'. We handle YouTube edits, short-form reels, and commercial post-production. "
-                        "Could you share your preferred timeline and raw footage length?"
-                    )
-                elif "booking" in prompt_lower or "appointment" in prompt_lower or "schedule" in prompt_lower:
-                    ai_text = (
-                        f"Hello {caller_name_val}! I am {agent_name}. Thank you for reaching out regarding '{input_text}'. "
-                        "I can check our calendar availability and confirm an appointment for you right away. What date and time work best?"
-                    )
-                else:
-                    ai_text = f"Hello {caller_name_val}! I am {agent_name}. How can I assist you with your inquiry today?"
+                greeting_prefix = f"Hello {caller_name_val}! " if caller_name_val else "Hello! "
+                ai_text = f"{greeting_prefix}I am {agent_name}. How can I assist you with your requirements today?"
 
     # Clean any leaked formatting, symbols, or identifiers
     if ai_text:

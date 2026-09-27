@@ -50,7 +50,7 @@ class DynamicLLMInvoker:
                 from google.genai import types
                 client = genai.Client(api_key=api_key)
                 models_to_try = [model] if (model and model.lower() not in ["dynamic", "default", "none"]) else []
-                for gm in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash-8b"]:
+                for gm in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]:
                     if gm not in models_to_try:
                         models_to_try.append(gm)
 
@@ -62,7 +62,7 @@ class DynamicLLMInvoker:
                         gen_kwargs = {
                             "system_instruction": system_prompt,
                             "temperature": 0.2,
-                            "max_output_tokens": 2048,
+                            "max_output_tokens": 1024,
                         }
                         if "json" in system_prompt.lower():
                             gen_kwargs["response_mime_type"] = "application/json"
@@ -86,7 +86,6 @@ class DynamicLLMInvoker:
                 logger.warning(f"Gemini calling error: {e}")
                 return {"error": str(e)}
 
-
         # 2. OpenAI / Groq / DeepSeek / OpenRouter / NVIDIA via OpenAI client
         elif any(p in provider for p in ["openai", "groq", "deepseek", "openrouter", "nvidia"]):
             try:
@@ -107,15 +106,15 @@ class DynamicLLMInvoker:
 
                 models_to_try = [model] if (model and model.lower() not in ["dynamic", "default", "none"]) else []
                 if "nvidia" in provider:
-                    for fallback_m in ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "mistralai/mistral-large-2-instruct", "deepseek-ai/deepseek-v4-flash-0731"]:
+                    for fallback_m in ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.1-70b-instruct", "mistralai/mistral-large-2-instruct", "deepseek-ai/deepseek-v4-flash-0731"]:
                         if fallback_m not in models_to_try:
                             models_to_try.append(fallback_m)
                 elif "groq" in provider:
-                    for fallback_m in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]:
+                    for fallback_m in ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"]:
                         if fallback_m not in models_to_try:
                             models_to_try.append(fallback_m)
                 elif "openrouter" in provider:
-                    for fallback_m in ["meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-exp:free", "deepseek/deepseek-chat"]:
+                    for fallback_m in ["meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-chat", "google/gemini-2.5-flash"]:
                         if fallback_m not in models_to_try:
                             models_to_try.append(fallback_m)
                 elif "openai" in provider:
@@ -135,7 +134,7 @@ class DynamicLLMInvoker:
                                 {"role": "user", "content": user_prompt}
                             ],
                             temperature=0.2,
-                            max_tokens=1500
+                            max_tokens=1000
                         )
                         if response.choices and response.choices[0].message and response.choices[0].message.content:
                             return response.choices[0].message.content
@@ -208,7 +207,7 @@ class DynamicLLMInvoker:
                 from google.genai import types
                 client = genai.Client(api_key=api_key)
                 models_to_try = [model] if (model and model.lower() not in ["dynamic", "default", "none"]) else []
-                for gm in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash-8b"]:
+                for gm in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]:
                     if gm not in models_to_try:
                         models_to_try.append(gm)
 
@@ -220,7 +219,7 @@ class DynamicLLMInvoker:
                         gen_kwargs = {
                             "system_instruction": system_prompt,
                             "temperature": temperature,
-                            "max_output_tokens": max_tokens,
+                            "max_output_tokens": min(max_tokens, 120),
                         }
                         response = client.models.generate_content(
                             model=m,
@@ -264,15 +263,15 @@ class DynamicLLMInvoker:
 
                 models_to_try = [model] if (model and model.lower() not in ["dynamic", "default", "none"]) else []
                 if "nvidia" in provider:
-                    for fallback_m in ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "mistralai/mistral-large-2-instruct", "deepseek-ai/deepseek-v4-flash-0731"]:
+                    for fallback_m in ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.1-70b-instruct", "mistralai/mistral-large-2-instruct", "deepseek-ai/deepseek-v4-flash-0731"]:
                         if fallback_m not in models_to_try:
                             models_to_try.append(fallback_m)
                 elif "groq" in provider:
-                    for fallback_m in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]:
+                    for fallback_m in ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"]:
                         if fallback_m not in models_to_try:
                             models_to_try.append(fallback_m)
                 elif "openrouter" in provider:
-                    for fallback_m in ["meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-exp:free", "deepseek/deepseek-chat"]:
+                    for fallback_m in ["meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-chat", "google/gemini-2.5-flash"]:
                         if fallback_m not in models_to_try:
                             models_to_try.append(fallback_m)
                 elif "openai" in provider:
@@ -291,7 +290,7 @@ class DynamicLLMInvoker:
                             model=m,
                             messages=messages,
                             temperature=temperature,
-                            max_tokens=max_tokens
+                            max_tokens=min(max_tokens, 120)
                         )
                         if response.choices and response.choices[0].message and response.choices[0].message.content:
                             return response.choices[0].message.content
@@ -324,6 +323,9 @@ class DynamicLLMInvoker:
 
         return None
 
+    _async_openai_clients: dict[str, Any] = {}
+    _gemini_clients: dict[str, Any] = {}
+
     @classmethod
     async def call_conversation_llm_async(
         cls,
@@ -332,35 +334,165 @@ class DynamicLLMInvoker:
         messages: Optional[list[dict[str, Any]]] = None,
         config: Optional[dict[str, Any]] = None,
         temperature: float = 0.35,
-        max_tokens: int = 600,
+        max_tokens: int = 120,
         db: Optional[Session] = None,
         user_input: Optional[str] = None,
         preferred_language: Optional[str] = None,
         **kwargs: Any
     ) -> dict[str, Any]:
-        """Asynchronous multi-turn conversation calling for real-time telephony agents."""
-        loop = asyncio.get_event_loop()
-
+        """Asynchronous multi-turn conversation calling for real-time telephony agents with connection pooling."""
         # Consolidate history
         history: list[dict[str, Any]] = []
         raw_list = conversation_history if conversation_history is not None else (messages or [])
         for item in raw_list:
-            r = item.get("role") or item.get("speaker") or "user"
-            t = item.get("text") or item.get("content") or ""
+            r = str(item.get("role") or item.get("speaker") or "user").strip().lower()
+            t = str(item.get("text") or item.get("content") or "").strip()
             if t:
-                history.append({"role": r, "text": t})
+                history.append({"role": "user" if r in ["user", "caller", "human"] else "assistant", "content": t})
 
-        if user_input and (not history or history[-1].get("text") != user_input):
-            history.append({"role": "user", "text": user_input})
+        if user_input and (not history or history[-1].get("content") != user_input):
+            history.append({"role": "user", "content": user_input})
 
         # Resolve config if missing
         cfg = config
         if not cfg and db:
             cfg = cls.resolve_selected_llm_config(db=db)
 
-        if not cfg or not cfg.get("api_key"):
+        if not cfg or (not cfg.get("api_key") and cfg.get("provider", "").lower() != "ollama"):
             return {"text": "", "error": "No active LLM API credentials configured"}
 
+        provider = str(cfg.get("provider") or "").lower()
+        api_key = str(cfg.get("api_key") or "")
+        model = str(cfg.get("model") or "")
+        base_url = cfg.get("base_url")
+
+        # 1. Native Async Google Gemini
+        if "gemini" in provider or "google" in provider:
+            try:
+                from google import genai
+                from google.genai import types
+
+                if api_key not in cls._gemini_clients:
+                    cls._gemini_clients[api_key] = genai.Client(api_key=api_key)
+                g_client = cls._gemini_clients[api_key]
+
+                models_to_try = [model] if (model and model.lower() not in ["dynamic", "default", "none", "auto-optimized"]) else []
+                for gm in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]:
+                    if gm not in models_to_try:
+                        models_to_try.append(gm)
+
+                # Format dialogue for Gemini contents
+                formatted_dialogue = ""
+                for dt in history:
+                    speaker_label = "Caller" if dt["role"] == "user" else "Assistant"
+                    formatted_dialogue += f"{speaker_label}: {dt['content']}\n"
+                formatted_dialogue += "Assistant: "
+
+                for m in models_to_try:
+                    if not m:
+                        continue
+                    try:
+                        gen_kwargs = {
+                            "system_instruction": system_prompt,
+                            "temperature": temperature,
+                            "max_output_tokens": min(max_tokens, 120),
+                        }
+                        response = await g_client.aio.models.generate_content(
+                            model=m,
+                            contents=formatted_dialogue,
+                            config=types.GenerateContentConfig(**gen_kwargs)
+                        )
+                        if response and response.text:
+                            return {"text": response.text.strip(), "error": None}
+                    except Exception as me:
+                        err_str = str(me).lower()
+                        if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
+                            break
+                        continue
+            except Exception as e:
+                logger.warning(f"Async Gemini error: {e}")
+
+        # 2. Native Async OpenAI / Groq / DeepSeek / OpenRouter / NVIDIA
+        elif any(p in provider for p in ["openai", "groq", "deepseek", "openrouter", "nvidia", "ollama"]):
+            try:
+                import openai
+                effective_base = base_url
+                if not effective_base:
+                    if "nvidia" in provider:
+                        effective_base = "https://integrate.api.nvidia.com/v1"
+                    elif "groq" in provider:
+                        effective_base = "https://api.groq.com/openai/v1"
+                    elif "deepseek" in provider:
+                        effective_base = "https://api.deepseek.com/v1"
+                    elif "openrouter" in provider:
+                        effective_base = "https://openrouter.ai/api/v1"
+                    elif "ollama" in provider:
+                        effective_base = "http://localhost:11434/v1"
+
+                client_key = f"{provider}::{api_key}::{effective_base}"
+                if client_key not in cls._async_openai_clients:
+                    cls._async_openai_clients[client_key] = openai.AsyncOpenAI(
+                        api_key=api_key or "ollama",
+                        base_url=effective_base
+                    )
+                async_client = cls._async_openai_clients[client_key]
+
+                models_to_try = [model] if (model and model.lower() not in ["dynamic", "default", "none", "auto-optimized"]) else []
+                if "groq" in provider:
+                    for fallback_m in ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"]:
+                        if fallback_m not in models_to_try:
+                            models_to_try.append(fallback_m)
+                elif "nvidia" in provider:
+                    for fallback_m in ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.1-70b-instruct", "mistralai/mistral-large-2-instruct"]:
+                        if fallback_m not in models_to_try:
+                            models_to_try.append(fallback_m)
+                elif "openrouter" in provider:
+                    for fallback_m in ["meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-chat", "google/gemini-2.5-flash"]:
+                        if fallback_m not in models_to_try:
+                            models_to_try.append(fallback_m)
+                elif "openai" in provider:
+                    for fallback_m in ["gpt-4o-mini", "gpt-4o"]:
+                        if fallback_m not in models_to_try:
+                            models_to_try.append(fallback_m)
+                elif not models_to_try:
+                    models_to_try = ["gpt-4o-mini"]
+
+                dialogue_msgs = [{"role": "system", "content": system_prompt}] + history
+
+                for m in models_to_try:
+                    try:
+                        resp = await async_client.chat.completions.create(
+                            model=m,
+                            messages=dialogue_msgs,
+                            temperature=temperature,
+                            max_tokens=min(max_tokens, 120)
+                        )
+                        if resp.choices and resp.choices[0].message and resp.choices[0].message.content:
+                            return {"text": resp.choices[0].message.content.strip(), "error": None}
+                    except Exception:
+                        continue
+            except Exception as e:
+                logger.warning(f"Async OpenAI/Groq/NVIDIA error: {e}")
+
+        # 3. Anthropic Claude
+        elif "anthropic" in provider or "claude" in provider:
+            try:
+                import anthropic
+                a_client = anthropic.AsyncAnthropic(api_key=api_key)
+                resp = await a_client.messages.create(
+                    model=model or "claude-3-5-sonnet-20241022",
+                    max_tokens=min(max_tokens, 120),
+                    system=system_prompt,
+                    messages=history,
+                    temperature=temperature
+                )
+                if resp.content and len(resp.content) > 0:
+                    return {"text": resp.content[0].text.strip(), "error": None}
+            except Exception as e:
+                logger.warning(f"Async Anthropic error: {e}")
+
+        # Fallback to synchronous thread executor if native async failed
+        loop = asyncio.get_event_loop()
         res = await loop.run_in_executor(
             None,
             cls.call_conversation_llm,
@@ -368,12 +500,10 @@ class DynamicLLMInvoker:
             history,
             cfg,
             temperature,
-            max_tokens
+            min(max_tokens, 120)
         )
         if isinstance(res, str):
-            return {"text": res, "error": None}
+            return {"text": res.strip(), "error": None}
         elif isinstance(res, dict) and res.get("text"):
             return res
-        elif isinstance(res, dict) and res.get("error"):
-            return {"text": "", "error": res["error"]}
         return {"text": "", "error": "No response from LLM"}

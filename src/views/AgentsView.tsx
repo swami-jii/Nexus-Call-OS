@@ -157,51 +157,27 @@ export const generateAgentFallbackResponse = (
   skillName?: string,
   vars?: Record<string, string>
 ): string => {
-  const promptLower = (systemPrompt || '').toLowerCase();
   const msgLower = userMsg.toLowerCase();
-  const clientName = vars?.client_name || vars?.caller_name || 'there';
-  const studioName = vars?.studio_name || vars?.company_name || 'our studio';
+  const clientName = vars?.client_name || vars?.caller_name || '';
+  const orgName = vars?.company_name || vars?.organization_name || '';
+  const salutation = clientName ? `Hello ${clientName}! ` : 'Hello! ';
 
   if (skillName && skillName !== 'none') {
-    if (skillName.includes('booking') || skillName.includes('appointment')) {
-      return `Hello ${clientName}! I am ${agentName}. I'd be delighted to assist you with booking an appointment regarding '${userMsg}'. We have availability tomorrow at 11:00 AM or 3:30 PM. Which slot works best for you?`;
+    const sLower = skillName.toLowerCase();
+    if (sLower.includes('book') || sLower.includes('appoint')) {
+      return `${salutation}I am ${agentName}. I would be delighted to assist you with scheduling regarding '${userMsg}'. What date and time slot works best for you?`;
     }
-    if (skillName.includes('support') || skillName.includes('ticket')) {
-      return `Thank you for reaching out to customer support. I have logged your request: "${userMsg}". Let me verify your details and resolve this for you right away. Could you please confirm your registered phone number?`;
+    if (sLower.includes('payment') || sLower.includes('bill')) {
+      return `${salutation}I am ${agentName}. I can assist you with your payment and account details for '${userMsg}'.`;
     }
   }
 
-  if (promptLower.includes('maya') || promptLower.includes('graphic design') || promptLower.includes('brand') || promptLower.includes('studio')) {
-    if (msgLower.includes('hi') || msgLower.includes('hello') || msgLower.includes('who are you')) {
-      return `Hello ${clientName}! I'm Maya, your Creative Graphic Designer and Brand Strategist representing ${studioName}. I help craft distinctive logo designs, full brand identities, and UI/UX assets. What kind of creative project are you looking to launch?`;
-    }
-    if (msgLower.includes('price') || msgLower.includes('cost') || msgLower.includes('budget') || msgLower.includes('quote')) {
-      return `Our design packages are tailored to your scope—from agile brand identity sprints to full product design systems. To provide an exact timeline and estimate, let's schedule a 15-minute discovery consultation. What day works best for you this week?`;
-    }
-    if (msgLower.includes('timeline') || msgLower.includes('deadline')) {
-      const deadline = vars?.project_deadline || 'next Friday';
-      return `We deliver initial creative concepts within 3 to 5 business days, ensuring we align with your target deadline (${deadline}). What is your primary milestone date?`;
-    }
-    return `That sounds like a wonderful creative direction! Regarding "${userMsg}", ${studioName} can create high-impact assets perfectly tailored to your target audience. Would you like to schedule a 15-minute design discovery call to discuss further?`;
+  if (msgLower.includes('hello') || msgLower.includes('hi') || msgLower.includes('hey') || msgLower.includes('namaste')) {
+    const brandAffiliation = orgName ? ` from ${orgName}` : '';
+    return `${salutation}I am ${agentName}${brandAffiliation}. How may I assist you today?`;
   }
 
-  if (promptLower.includes('video') || promptLower.includes('editing')) {
-    return `Hello ${clientName}! I am your Video Editing Intake specialist. I've noted your request: "${userMsg}". We handle short-form reels, YouTube productions, and commercial post-production. Could you share your target platform and raw footage length?`;
-  }
-
-  if (promptLower.includes('booking') || promptLower.includes('appointment') || promptLower.includes('schedule')) {
-    return `Hello ${clientName}! I am ${agentName}. I'd be happy to assist you with scheduling. Regarding "${userMsg}", I have calendar availability tomorrow at 10:00 AM or Thursday at 2:00 PM. Would either of those times work for your call?`;
-  }
-
-  if (promptLower.includes('health') || promptLower.includes('clinic') || promptLower.includes('patient')) {
-    return `Hello ${clientName}! I am ${agentName} from the clinic reception. I have noted your inquiry: "${userMsg}". Let me check our practitioner schedule to arrange an appointment for you. What day works best?`;
-  }
-
-  if (msgLower.includes('hello') || msgLower.includes('hi') || msgLower.includes('hey')) {
-    return `Hello ${clientName}! I am ${agentName}, your AI voice assistant at ${vars?.company_name || 'Create Call OS'}. How may I assist you with your requirements today?`;
-  }
-
-  return `Thank you for reaching out. I am ${agentName}, and I've noted: "${userMsg}". Based on our system configuration, I'm ready to assist you further. Is there anything specific you would like me to process or confirm?`;
+  return `${salutation}I am ${agentName}. I have noted: "${userMsg}". How would you like to proceed?`;
 };
 
 interface AgentPromptTagDropdownPanelProps {
