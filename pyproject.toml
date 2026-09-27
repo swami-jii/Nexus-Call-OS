@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nexus-call-os"
+name = "create-call-os"
 version = "1.0.0"
-description = "Nexus AI Voice Operating System Backend"
+description = "Create Call OS AI Voice Operating System Backend"
 readme = "README.md"
 requires-python = ">=3.10"
 

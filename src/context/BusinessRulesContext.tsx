@@ -135,7 +135,7 @@ const DEFAULT_BUSINESS_TYPES: BusinessTypeItem[] = [
   { id: 'bt_4', name: 'School & Education', description: 'Admissions inquiries, fee structure guidance, and parent-teacher meeting booking.', category: 'Education', default_greeting: 'Welcome to St. Xavier International School Admissions Hotline. How may I assist you with student enrollment today?', primary_behaviour: 'Admissions Guidance', default_ai_tone: 'Polite & Informative', default_language: 'English (United States)', persona: 'Sarah (Admission Counselor)', status: 'Active' },
   { id: 'bt_5', name: 'Coaching & Academy', description: 'Entrance exam batch inquiry, demo class booking, and course syllabus guide.', category: 'Education', default_greeting: 'Hello! Welcome to Pinnacle Test Prep Academy. Are you inquiring about IIT-JEE, NEET, or Foundation coaching batches?', primary_behaviour: 'Demo Class Booking', default_ai_tone: 'Motivational', default_language: 'Hindi (India)', persona: 'Alex (Academic Advisor)', status: 'Active' },
   { id: 'bt_6', name: 'E-Commerce & Retail', description: 'Order status tracking, return/refund requests, and product recommendation AI.', category: 'Retail', default_greeting: 'Hi there! Thank you for calling Customer Care. Please share your order ID or what item you need help with.', primary_behaviour: 'Order Tracking & Support', default_ai_tone: 'Friendly & Quick', default_language: 'English (United States)', persona: 'Emily (Support SDR)', status: 'Active' },
-  { id: 'bt_7', name: 'B2B SaaS & Tech', description: 'Software product demo booking, pricing inquiry, and technical onboarding.', category: 'Technology', default_greeting: 'Thanks for calling Nexus Enterprise Tech. Would you like to schedule a 15-minute product demo or speak to tech support?', primary_behaviour: 'B2B Demo Scheduling', default_ai_tone: 'Professional & Technical', default_language: 'English (United States)', persona: 'James (Enterprise SDR)', status: 'Active' },
+  { id: 'bt_7', name: 'B2B SaaS & Tech', description: 'Software product demo booking, pricing inquiry, and technical onboarding.', category: 'Technology', default_greeting: 'Thanks for calling Create Call Enterprise Tech. Would you like to schedule a 15-minute product demo or speak to tech support?', primary_behaviour: 'B2B Demo Scheduling', default_ai_tone: 'Professional & Technical', default_language: 'English (United States)', persona: 'James (Enterprise SDR)', status: 'Active' },
   { id: 'bt_8', name: 'Financial & Banking', description: 'Loan application status follow-ups, EMI payment reminders, and credit card FAQs.', category: 'Finance', default_greeting: 'Welcome to Premier Financial Services. How can I assist with your loan application or account today?', primary_behaviour: 'Account & Loan Verification', default_ai_tone: 'Formal & Secure', default_language: 'English (United States)', persona: 'David (Banking AI)', status: 'Active' }
 ];
 
@@ -176,49 +176,114 @@ const DEFAULT_POLICIES: BusinessPolicyItem[] = [
 const BusinessRulesContext = createContext<BusinessRulesContextType | undefined>(undefined);
 
 export const BusinessRulesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [businessTypes, setBusinessTypes] = useState<BusinessTypeItem[]>(DEFAULT_BUSINESS_TYPES);
-  const [departments, setDepartments] = useState<DepartmentItem[]>(DEFAULT_DEPARTMENTS);
-  const [workingHours, setWorkingHours] = useState<WorkingHoursItem[]>(DEFAULT_WORKING_HOURS);
-  const [languages, setLanguages] = useState<LanguageItem[]>(DEFAULT_LANGUAGES);
-  const [businessPolicies, setBusinessPolicies] = useState<BusinessPolicyItem[]>(DEFAULT_POLICIES);
+  const getIsSuperAdmin = () => {
+    try {
+      const email = (localStorage.getItem('nexus_user_email') || '').toLowerCase().trim();
+      return email === 'admin@createcall.ai';
+    } catch {
+      return false;
+    }
+  };
+
+  const isSuperAdmin = getIsSuperAdmin();
+
+  const [businessTypes, setBusinessTypes] = useState<BusinessTypeItem[]>(() => isSuperAdmin ? DEFAULT_BUSINESS_TYPES : []);
+  const [departments, setDepartments] = useState<DepartmentItem[]>(() => isSuperAdmin ? DEFAULT_DEPARTMENTS : []);
+  const [workingHours, setWorkingHours] = useState<WorkingHoursItem[]>(() => isSuperAdmin ? DEFAULT_WORKING_HOURS : []);
+  const [languages, setLanguages] = useState<LanguageItem[]>(() => isSuperAdmin ? DEFAULT_LANGUAGES : []);
+  const [businessPolicies, setBusinessPolicies] = useState<BusinessPolicyItem[]>(() => isSuperAdmin ? DEFAULT_POLICIES : []);
   const [countryCodes, setCountryCodes] = useState<CountryCodeItem[]>([]);
   const [activeCountryCode, setActiveCountryCode] = useState<CountryCodeItem | null>(null);
 
-  const [activeBusinessType, setActiveBusinessType] = useState<BusinessTypeItem | null>(DEFAULT_BUSINESS_TYPES[0]);
-  const [activeDepartment, setActiveDepartment] = useState<DepartmentItem | null>(DEFAULT_DEPARTMENTS[0]);
-  const [activeWorkingHours, setActiveWorkingHours] = useState<WorkingHoursItem | null>(DEFAULT_WORKING_HOURS[0]);
-  const [activeLanguage, setActiveLanguage] = useState<LanguageItem | null>(DEFAULT_LANGUAGES[0]);
-  const [activePolicies, setActivePolicies] = useState<BusinessPolicyItem[]>(DEFAULT_POLICIES);
+  const [activeBusinessType, setActiveBusinessType] = useState<BusinessTypeItem | null>(() => isSuperAdmin ? DEFAULT_BUSINESS_TYPES[0] : null);
+  const [activeDepartment, setActiveDepartment] = useState<DepartmentItem | null>(() => isSuperAdmin ? DEFAULT_DEPARTMENTS[0] : null);
+  const [activeWorkingHours, setActiveWorkingHours] = useState<WorkingHoursItem | null>(() => isSuperAdmin ? DEFAULT_WORKING_HOURS[0] : null);
+  const [activeLanguage, setActiveLanguage] = useState<LanguageItem | null>(() => isSuperAdmin ? DEFAULT_LANGUAGES[0] : null);
+  const [activePolicies, setActivePolicies] = useState<BusinessPolicyItem[]>(() => isSuperAdmin ? DEFAULT_POLICIES : []);
 
   const loadSavedCustomItems = useCallback(() => {
     try {
-      const raw = localStorage.getItem('nexus_custom_items');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.business_types && Array.isArray(parsed.business_types) && parsed.business_types.length > 0) {
+      const activeEmail = (localStorage.getItem('nexus_user_email') || '').toLowerCase().trim();
+      const isTargeted = Boolean(localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id'));
+      const isAdmin = activeEmail === 'admin@createcall.ai' && !isTargeted;
+      const userKey = `nexus_custom_items_${activeEmail}`;
+      const saved = localStorage.getItem(userKey) || (isAdmin ? localStorage.getItem('nexus_custom_items') : null);
+
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.business_types && Array.isArray(parsed.business_types)) {
           setBusinessTypes(parsed.business_types);
-          setActiveBusinessType(parsed.business_types[0]);
+          setActiveBusinessType(parsed.business_types.length > 0 ? parsed.business_types[0] : null);
+        } else {
+          setBusinessTypes(isAdmin ? DEFAULT_BUSINESS_TYPES : []);
+          setActiveBusinessType(isAdmin ? DEFAULT_BUSINESS_TYPES[0] : null);
         }
-        if (parsed.departments && Array.isArray(parsed.departments) && parsed.departments.length > 0) {
+
+        if (parsed.departments && Array.isArray(parsed.departments)) {
           setDepartments(parsed.departments);
-          setActiveDepartment(parsed.departments[0]);
+          setActiveDepartment(parsed.departments.length > 0 ? parsed.departments[0] : null);
+        } else {
+          setDepartments(isAdmin ? DEFAULT_DEPARTMENTS : []);
+          setActiveDepartment(isAdmin ? DEFAULT_DEPARTMENTS[0] : null);
         }
-        if (parsed.working_hours && Array.isArray(parsed.working_hours) && parsed.working_hours.length > 0) {
+
+        if (parsed.working_hours && Array.isArray(parsed.working_hours)) {
           setWorkingHours(parsed.working_hours);
-          setActiveWorkingHours(parsed.working_hours[0]);
+          setActiveWorkingHours(parsed.working_hours.length > 0 ? parsed.working_hours[0] : null);
+        } else {
+          setWorkingHours(isAdmin ? DEFAULT_WORKING_HOURS : []);
+          setActiveWorkingHours(isAdmin ? DEFAULT_WORKING_HOURS[0] : null);
         }
+
         if (parsed.languages && Array.isArray(parsed.languages) && parsed.languages.length > 0) {
           setLanguages(parsed.languages);
           setActiveLanguage(parsed.languages[0]);
+        } else {
+          setLanguages(isAdmin ? DEFAULT_LANGUAGES : []);
+          setActiveLanguage(isAdmin ? DEFAULT_LANGUAGES[0] : null);
         }
-        if (parsed.business_policies && Array.isArray(parsed.business_policies) && parsed.business_policies.length > 0) {
+
+        if (parsed.business_policies && Array.isArray(parsed.business_policies)) {
           setBusinessPolicies(parsed.business_policies);
           setActivePolicies(parsed.business_policies);
+        } else {
+          setBusinessPolicies(isAdmin ? DEFAULT_POLICIES : []);
+          setActivePolicies(isAdmin ? DEFAULT_POLICIES : []);
         }
+
         if (parsed.country_codes && Array.isArray(parsed.country_codes) && parsed.country_codes.length > 0) {
           setCountryCodes(parsed.country_codes);
           setActiveCountryCode(parsed.country_codes[0]);
+        } else {
+          setCountryCodes([]);
+          setActiveCountryCode(null);
         }
+      } else if (!isAdmin) {
+        // Fresh normal user or targeted tenant with no custom rules saved
+        setBusinessTypes([]);
+        setActiveBusinessType(null);
+        setDepartments([]);
+        setActiveDepartment(null);
+        setWorkingHours([]);
+        setActiveWorkingHours(null);
+        setLanguages([]);
+        setActiveLanguage(null);
+        setBusinessPolicies([]);
+        setActivePolicies([]);
+        setCountryCodes([]);
+        setActiveCountryCode(null);
+      } else {
+        // Super Admin sovereign workspace fallback defaults
+        setBusinessTypes(DEFAULT_BUSINESS_TYPES);
+        setActiveBusinessType(DEFAULT_BUSINESS_TYPES[0]);
+        setDepartments(DEFAULT_DEPARTMENTS);
+        setActiveDepartment(DEFAULT_DEPARTMENTS[0]);
+        setWorkingHours(DEFAULT_WORKING_HOURS);
+        setActiveWorkingHours(DEFAULT_WORKING_HOURS[0]);
+        setLanguages(DEFAULT_LANGUAGES);
+        setActiveLanguage(DEFAULT_LANGUAGES[0]);
+        setBusinessPolicies(DEFAULT_POLICIES);
+        setActivePolicies(DEFAULT_POLICIES);
       }
     } catch (e) {
       console.error('Error reading nexus_custom_items from localStorage', e);
@@ -234,9 +299,13 @@ export const BusinessRulesProvider: React.FC<{ children: React.ReactNode }> = ({
 
     window.addEventListener('nexus_business_rules_updated', handleCustomItemEvent);
     window.addEventListener('storage', handleCustomItemEvent);
+    window.addEventListener('createcall:sovereign_target_changed', handleCustomItemEvent);
+    window.addEventListener('createcall:tenant_data_updated', handleCustomItemEvent);
     return () => {
       window.removeEventListener('nexus_business_rules_updated', handleCustomItemEvent);
       window.removeEventListener('storage', handleCustomItemEvent);
+      window.removeEventListener('createcall:sovereign_target_changed', handleCustomItemEvent);
+      window.removeEventListener('createcall:tenant_data_updated', handleCustomItemEvent);
     };
   }, [loadSavedCustomItems]);
 
@@ -294,19 +363,29 @@ export const BusinessRulesProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [activeLanguage]);
 
   const buildAgentSystemPromptWithRules = useCallback((basePrompt: string, businessTypeId?: string, departmentId?: string) => {
-    const bt = businessTypes.find(b => b.id === businessTypeId || b.name === businessTypeId) || activeBusinessType || DEFAULT_BUSINESS_TYPES[0];
-    const dept = departments.find(d => d.id === departmentId || d.name === departmentId) || activeDepartment || DEFAULT_DEPARTMENTS[0];
+    const bt = businessTypes.find(b => b.id === businessTypeId || b.name === businessTypeId) || activeBusinessType;
+    const dept = departments.find(d => d.id === departmentId || d.name === departmentId) || activeDepartment;
 
-    const ruleBlocks = [
-      `\n\n--- ENTERPRISE BUSINESS & RULES SSOT GUARDRAILS ---`,
-      `[BUSINESS VERTICAL]: ${bt.name} (${bt.category || 'General'})`,
-      `[DEFAULT GREETING]: "${bt.default_greeting || 'Hello! How can I assist you today?'}"`,
-      `[AI TONE & BEHAVIOR]: ${bt.default_ai_tone || 'Professional'} - Mode: ${bt.primary_behaviour || 'Standard Inbound/Outbound'}`,
-      `[DEPARTMENT ROUTING]: ${dept.name} (Extension ${dept.extension || '#101'}, Strategy: ${dept.transfer_strategy || 'Round Robin'}, Overflow: ${dept.overflow_department || 'Support'})`,
-      `[OPERATIONAL POLICIES]: ${activePolicies.map(p => `${p.name} (${p.violation_action || 'Strict Compliance'})`).join('; ')}`
-    ];
+    const ruleBlocks: string[] = [];
+    if (bt) {
+      ruleBlocks.push(`[BUSINESS VERTICAL]: ${bt.name} (${bt.category || 'General'})`);
+      if (bt.default_greeting) {
+        ruleBlocks.push(`[DEFAULT GREETING]: "${bt.default_greeting}"`);
+      }
+      if (bt.default_ai_tone || bt.primary_behaviour) {
+        ruleBlocks.push(`[AI TONE & BEHAVIOR]: ${bt.default_ai_tone || 'Professional'} - Mode: ${bt.primary_behaviour || 'Standard Inbound/Outbound'}`);
+      }
+    }
+    if (dept) {
+      ruleBlocks.push(`[DEPARTMENT ROUTING]: ${dept.name} (Extension ${dept.extension || '#101'}, Strategy: ${dept.transfer_strategy || 'Round Robin'}, Overflow: ${dept.overflow_department || 'Support'})`);
+    }
+    if (activePolicies.length > 0) {
+      ruleBlocks.push(`[OPERATIONAL POLICIES]: ${activePolicies.map(p => `${p.name} (${p.violation_action || 'Strict Compliance'})`).join('; ')}`);
+    }
 
-    return basePrompt + ruleBlocks.join('\n');
+    if (ruleBlocks.length === 0) return basePrompt;
+
+    return basePrompt + `\n\n--- ENTERPRISE BUSINESS & RULES SSOT GUARDRAILS ---\n` + ruleBlocks.join('\n');
   }, [businessTypes, departments, activeBusinessType, activeDepartment, activePolicies]);
 
   return (

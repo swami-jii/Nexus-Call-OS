@@ -10,10 +10,11 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import get_current_user, get_current_user_optional
 from backend.database.session import get_db
 from backend.integrations.registry_service import registry_service
 from backend.models.models import Agent, ProviderCredential, User, WebhookSubscription
+from backend.tenant import TenantContext, get_tenant_context
 from backend.utils.crypto import decrypt_secret, encrypt_secret
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class CredentialPayload(BaseModel):
 
 class ProviderTestPayload(BaseModel):
     provider: str
+    category: str | None = None
     api_key: str | None = None
     credential_id: str | None = None
     endpoint: str | None = None
@@ -196,7 +198,7 @@ def _ensure_provider_credential_columns(db: Session):
 @router.get("/all-categories")
 async def list_all_categories(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Retrieve canonical configured records from all categories with full metadata."""
     _ensure_provider_credential_columns(db)
@@ -234,8 +236,9 @@ async def list_all_categories(
 
     result: dict[str, list[dict[str, Any]]] = {k: [] for k in canonical_tables}
 
+    org_id = tenant.effective_org_id or "default_org"
     creds = db.query(ProviderCredential).filter(
-        ProviderCredential.organization_id == current_user.organization_id
+        ProviderCredential.organization_id == org_id
     ).all()
 
     seen_ids_per_cat: dict[str, set[str]] = {k: set() for k in canonical_tables}
@@ -263,6 +266,15 @@ async def list_all_categories(
 
         p_name = c.provider_name or ""
         disp_name = getattr(c, 'display_name', None) or p_name.replace("_", " ").title()
+
+        # For AI engine categories (llm, stt, voice, embeddings, vision_doc), only include active/configured providers
+        if cat in ["llm", "stt", "voice", "embeddings", "vision_doc"]:
+            p_lower = p_name.lower()
+            is_local = any(loc in p_lower for loc in ["ollama", "lmstudio", "vllm", "localai", "piper", "whisper", "faster_whisper", "chroma"])
+            c_status = getattr(c, 'status', '') or ''
+            is_active_or_owner = c_status in ["Connected", "Active", "Ready"] or getattr(c, 'is_owner_key', False)
+            if not raw_key and not is_local and not is_active_or_owner:
+                continue
 
         item: dict[str, Any] = {
             "id": c.id,
@@ -314,7 +326,7 @@ async def list_all_categories(
                 f"plain_key, encrypted_key, base_url, primary_model, selection_strategy, "
                 f"api_version, status, created_at, updated_at "
                 f"FROM {table_name} WHERE organization_id = :org_id"
-            ), {"org_id": current_user.organization_id}).fetchall()
+            ), {"org_id": org_id}).fetchall()
         except Exception:
             rows = []
 
@@ -341,6 +353,13 @@ async def list_all_categories(
 
             provider_name = m.get("provider_name") or ""
             display_name = m.get("display_name") or provider_name.replace("_", " ").title()
+
+            # For AI engine categories (llm, stt, voice, embeddings, vision_doc), only include active/configured providers
+            if cat_key in ["llm", "stt", "voice", "embeddings", "vision_doc"]:
+                p_lower = provider_name.lower()
+                is_local = any(loc in p_lower for loc in ["ollama", "lmstudio", "vllm", "localai", "piper", "whisper", "faster_whisper", "chroma"])
+                if not raw_key and not is_local and m.get("status") != "Connected":
+                    continue
 
             result[cat_key].append({
                 "id": m.get("id"),
@@ -377,7 +396,7 @@ async def list_all_categories(
     try:
         wh_subs = (
             db.query(WebhookSubscription)
-            .filter(WebhookSubscription.organization_id == current_user.organization_id)
+            .filter(WebhookSubscription.organization_id == org_id)
             .order_by(WebhookSubscription.created_at.desc())
             .all()
         )
@@ -437,68 +456,24 @@ async def list_all_categories(
 @router.get("/llm")
 async def list_llm_providers(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Retrieve canonical configured LLM providers from group1_ai_voice__1_llm_providers."""
-    all_cats = await list_all_categories(db=db, current_user=current_user)
+    all_cats = await list_all_categories(db=db, tenant=tenant)
     result = all_cats.get("llm", [])
     return {"providers": result, "credentials": result}
-
-@router.get("/all-categories")
-async def list_all_categories_credentials(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """List all credentials partitioned by category for workspace configuration sync."""
-    _ensure_provider_credential_columns(db)
-    creds = db.query(ProviderCredential).filter(
-        ProviderCredential.organization_id == current_user.organization_id
-    ).all()
-
-    by_category: dict = {}
-    for c in creds:
-        cat = c.category or "llm"
-        if cat not in by_category:
-            by_category[cat] = []
-
-        raw_meta = getattr(c, 'metadata_json', None)
-        meta_parsed = {}
-        if raw_meta:
-            try:
-                meta_parsed = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
-            except Exception:
-                meta_parsed = {}
-
-        raw_key = getattr(c, 'plain_key', None) or decrypt_secret(str(c.encrypted_key))
-        item_obj = {
-            **meta_parsed,
-            "id": c.id,
-            "provider": c.provider_name,
-            "category": cat,
-            "name": meta_parsed.get("name") or getattr(c, 'display_name', None) or c.provider_name.replace('_', ' ').title(),
-            "display_name": getattr(c, 'display_name', None) or meta_parsed.get("display_name") or c.provider_name.replace('_', ' ').title(),
-            "base_url": getattr(c, 'base_url', None) or meta_parsed.get("base_url") or meta_parsed.get("sip_host") or meta_parsed.get("ip_host") or "",
-            "primary_model": getattr(c, 'primary_model', None) or meta_parsed.get("primary_model") or "dynamic",
-            "selection_strategy": getattr(c, 'selection_strategy', None) or "dynamic",
-            "api_version": getattr(c, 'api_version', None) or meta_parsed.get("api_version") or "v1",
-            "plain_key": raw_key,
-            "status": meta_parsed.get("status") or "Active",
-            "metadata": meta_parsed
-        }
-        by_category[cat].append(item_obj)
-
-    return by_category
 
 @router.get("")
 @router.get("/")
 async def list_credentials(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """List all credentials configured for the organization."""
     _ensure_provider_credential_columns(db)
+    org_id = tenant.effective_org_id or "default_org"
     creds = db.query(ProviderCredential).filter(
-        ProviderCredential.organization_id == current_user.organization_id
+        ProviderCredential.organization_id == org_id
     ).all()
     
     result = []
@@ -547,32 +522,28 @@ async def list_credentials(
 async def save_credential(
     payload: CredentialPayload,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Save or update a provider credential or configuration record."""
     _ensure_provider_credential_columns(db)
     provider_name = payload.provider.lower().strip()
+    org_id = tenant.effective_org_id or "default_org"
+    user_id = tenant.effective_user_id
     
-    # Enforce only super_admin / owner can set owner keys
-    if payload.is_owner and current_user.role != "super_admin" and current_user.role != "Owner":
-        raise HTTPException(status_code=403, detail="Only owners can set workspace-level credentials")
-
-    # Check if record exists
+    # Save or update credential for effective organization
     existing = None
     if payload.id:
         existing = db.query(ProviderCredential).filter(
             ProviderCredential.id == payload.id,
-            ProviderCredential.organization_id == current_user.organization_id
+            ProviderCredential.organization_id == org_id
         ).first()
         
-    # Only fallback to provider_name check for singleton provider categories (llm, stt, voice, embeddings, vision_doc)
+    # Fallback check by provider_name and category within organization
     if not existing and payload.category in ["llm", "stt", "voice", "embeddings", "vision_doc"]:
         existing = db.query(ProviderCredential).filter(
-            ProviderCredential.organization_id == current_user.organization_id,
+            ProviderCredential.organization_id == org_id,
             ProviderCredential.provider_name == provider_name,
             ProviderCredential.category == payload.category,
-            ProviderCredential.is_owner_key == payload.is_owner,
-            ProviderCredential.user_id == (None if payload.is_owner else current_user.id)
         ).first()
 
     meta_str = None
@@ -586,7 +557,7 @@ async def save_credential(
             existing.encrypted_key = encrypt_secret(payload.api_key)
             existing.plain_key = payload.api_key
         existing.is_owner_key = payload.is_owner
-        existing.user_id = None if payload.is_owner else current_user.id
+        existing.user_id = None if payload.is_owner else user_id
         if payload.base_url is not None:
             existing.base_url = payload.base_url
         if payload.primary_model is not None:
@@ -606,8 +577,8 @@ async def save_credential(
         target_id = payload.id if payload.id and len(payload.id) > 2 else f"{payload.category}_{uuid.uuid4().hex[:12]}"
         new_cred = ProviderCredential(
             id=target_id,
-            organization_id=current_user.organization_id,
-            user_id=None if payload.is_owner else current_user.id,
+            organization_id=org_id,
+            user_id=None if payload.is_owner else user_id,
             provider_name=provider_name,
             category=payload.category,
             encrypted_key=encrypt_secret(key_to_save),
@@ -742,15 +713,16 @@ def _delete_from_subtab_tables(db: Session, cred_id: str, category: str | None =
 async def delete_credential(
     credential_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
+    org_id = tenant.effective_org_id or "default_org"
     query = db.query(ProviderCredential).filter(
         (ProviderCredential.id == credential_id) |
         (ProviderCredential.provider_name == credential_id) |
         (ProviderCredential.display_name == credential_id)
     )
-    if current_user.organization_id:
-        query = query.filter(ProviderCredential.organization_id == current_user.organization_id)
+    if org_id:
+        query = query.filter(ProviderCredential.organization_id == org_id)
 
     creds = query.all()
     deleted = False
@@ -890,10 +862,10 @@ async def bulk_sync_credentials(
 async def delete_all_category_records(
     category_name: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Delete all records for an entire category from provider_credentials and dedicated subtab table."""
-    org_id = current_user.organization_id or "default_org"
+    org_id = tenant.effective_org_id or "default_org"
     tbl = SUBTAB_TABLE_MAP.get(category_name)
 
     # 1. Delete from provider_credentials
@@ -914,16 +886,22 @@ async def delete_all_category_records(
     return {"status": "success", "message": f"All records for category '{category_name}' have been removed from database."}
 
 @router.post("/test")
+@router.post("/test/")
 async def test_connection(
     payload: ProviderTestPayload,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User | None = Depends(get_current_user_optional)
 ):
     """Test connection using a real API key or stored credential through central registry service."""
     provider = payload.provider.lower().strip()
     api_key = payload.api_key
     
     if not api_key or api_key == "DB_KEY":
+        if not current_user:
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication token is missing, expired, or invalid. Please sign in to test saved credentials."
+            )
         api_key = resolve_credential_key(db, str(current_user.organization_id), str(current_user.id), provider, payload.credential_id)
         
     clean_key = (api_key or "").strip()
@@ -951,7 +929,10 @@ async def test_connection(
     # 2. Perform live network ping/query to real provider API
     start_time = time.perf_counter()
 
-    if provider in ["elevenlabs", "cartesia", "deepgram", "google_cloud", "azure_speech", "piper", "coqui", "kokoro", "whisper_local"]:
+    cat_hint = (payload.category or "").lower().strip()
+    is_voice = cat_hint == "voice" or provider in ["elevenlabs", "cartesia", "deepgram_aura", "google_tts", "azure_speech", "piper", "coqui", "kokoro", "playht", "fish_audio", "lmnt"]
+
+    if is_voice:
         results = await registry_service.get_voice_models(provider, api_key=clean_key, endpoint=payload.endpoint)
     else:
         results = await registry_service.get_llm_models(provider, api_key=clean_key, endpoint=payload.endpoint)
@@ -973,32 +954,36 @@ async def test_connection(
 
     models_count = len(results)
 
-    return {
+    response_payload = {
         "status": "connected",
         "provider": provider,
         "latency_ms": latency_ms,
         "models_count": models_count,
+        "models": results if not is_voice else [],
+        "voices": results if is_voice else [],
         "message": f"Connection to {provider.upper()} verified successfully ({models_count} models/voices loaded in {latency_ms}ms)."
     }
+    return response_payload
 
 
 @router.get("/{credential_id}/dependencies")
 async def check_dependencies(
     credential_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Check workspace dependencies (agents, campaigns, workflows, automations) bound to a record before deletion."""
+    org_id = tenant.effective_org_id or "default_org"
     cred = db.query(ProviderCredential).filter(
         ProviderCredential.id == credential_id,
-        ProviderCredential.organization_id == current_user.organization_id
+        ProviderCredential.organization_id == org_id
     ).first()
 
     name = cred.display_name if cred and cred.display_name else (cred.provider_name if cred else credential_id)
     search_term = (name or credential_id).lower()
 
     # Query real agents bound to this credential/rule
-    agents_query = db.query(Agent).filter(Agent.organization_id == current_user.organization_id).all()
+    agents_query = db.query(Agent).filter(Agent.organization_id == org_id).all()
     matching_agents = [
         a for a in agents_query
         if search_term in (a.name or "").lower()

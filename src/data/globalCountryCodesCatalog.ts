@@ -3484,3 +3484,30 @@ export function detectCountryFromPhone(input: string): Country | null {
   }
   return null;
 }
+
+/**
+ * Single Source of Truth (SSOT) dynamic resolver for regional and country-specific social channels
+ */
+export function getCountryDefaultSocialChannels(country: GlobalCountryCodeItem | null | undefined): string[] {
+  if (!country) {
+    return ['twitter', 'linkedin', 'github', 'website', 'youtube', 'instagram', 'whatsapp', 'tiktok'];
+  }
+  const code = (country.iso2 || '').toUpperCase();
+  const reg = (country.region || '').toLowerCase();
+
+  if (code === 'IN') return ['whatsapp', 'linkedin', 'youtube', 'instagram', 'twitter', 'github', 'telegram', 'website'];
+  if (code === 'CN') return ['wechat', 'weibo', 'douyin', 'bilibili', 'website', 'github'];
+  if (code === 'JP') return ['line', 'twitter', 'youtube', 'instagram', 'github', 'website'];
+  if (code === 'KR') return ['kakaotalk', 'naver', 'youtube', 'instagram', 'twitter', 'website', 'github'];
+  if (code === 'RU' || code === 'BY' || code === 'KZ') return ['vk', 'telegram', 'ok', 'youtube', 'website'];
+  if (code === 'DE' || code === 'AT' || code === 'CH') return ['linkedin', 'xing', 'twitter', 'website', 'youtube', 'instagram', 'github', 'whatsapp'];
+  if (['AE', 'SA', 'QA', 'KW', 'OM', 'BH'].includes(code)) return ['whatsapp', 'instagram', 'linkedin', 'twitter', 'telegram', 'snapchat', 'youtube', 'website'];
+  if (code === 'BR' || code === 'PT') return ['whatsapp', 'instagram', 'linkedin', 'youtube', 'twitter', 'facebook', 'tiktok', 'website'];
+  if (['US', 'CA', 'GB', 'AU', 'NZ', 'IE'].includes(code)) return ['twitter', 'linkedin', 'github', 'website', 'youtube', 'instagram', 'whatsapp', 'tiktok'];
+  if (reg === 'asia') return ['whatsapp', 'facebook', 'youtube', 'instagram', 'tiktok', 'telegram', 'linkedin', 'website'];
+  if (reg === 'europe') return ['linkedin', 'whatsapp', 'instagram', 'facebook', 'youtube', 'twitter', 'website'];
+  if (reg === 'africa') return ['whatsapp', 'facebook', 'tiktok', 'instagram', 'youtube', 'twitter', 'linkedin', 'website'];
+  if (reg === 'south america') return ['whatsapp', 'instagram', 'facebook', 'tiktok', 'youtube', 'twitter', 'linkedin', 'website'];
+  return ['twitter', 'linkedin', 'github', 'website', 'youtube', 'instagram', 'whatsapp', 'tiktok'];
+}
+

@@ -69,11 +69,26 @@ html {
   text-rendering: optimizeLegibility;
 }
 
+html, body, #root {
+  min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  background-color: #f8fafc;
+  color: #09090b;
+}
+
+html.dark, html.dark body, html.dark #root, .dark html, .dark body, .dark #root {
+  background-color: #09090b;
+  color: #f4f4f5;
+}
+
 body {
   font-family: var(--font-family);
   font-size: var(--text-body);
   font-weight: var(--weight-normal);
   line-height: var(--leading-normal);
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 ::selection {
@@ -164,6 +179,17 @@ option {
   background: rgba(13, 148, 136, 0.6);
 }
 
+/* Hide Scrollbar Utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* ============================================================
    GLOBAL INTERACTIVE CURSOR RULES
    Guarantees cursor: pointer on every clickable element, button,
@@ -213,4 +239,174 @@ input:disabled,
 select:disabled,
 textarea:disabled {
   cursor: not-allowed !important;
+}
+
+/* ============================================================
+   PAYMENT & PROVISIONING ANIMATION UTILITIES
+   ============================================================ */
+
+@keyframes laserSweep {
+  0% { transform: translateY(0); opacity: 0.85; }
+  50% { transform: translateY(112px); opacity: 1; filter: drop-shadow(0 0 6px #10b981); }
+  100% { transform: translateY(0); opacity: 0.85; }
+}
+
+@keyframes cardShimmer {
+  0% { transform: translateX(-150%) skewX(-20deg); opacity: 0; }
+  25% { opacity: 0.45; }
+  65% { transform: translateX(250%) skewX(-20deg); opacity: 0.45; }
+  100% { transform: translateX(250%) skewX(-20deg); opacity: 0; }
+}
+
+@keyframes terminalPulseGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(13, 148, 136, 0.2); }
+  50% { box-shadow: 0 0 35px rgba(13, 148, 136, 0.5); }
+}
+
+.animate-laser {
+  animation: laserSweep 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-card-shimmer {
+  animation: cardShimmer 4s ease-in-out infinite;
+}
+
+.animate-terminal-glow {
+  animation: terminalPulseGlow 2.5s ease-in-out infinite;
+}
+
+/* 3D Flip Card Utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Custom Scrollbar Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ============================================================
+   OFFICIAL TAX INVOICE PRINT OPTIMIZATION
+   Strict 1-Page High-Definition Document Isolation
+   ============================================================ */
+@page {
+  size: A4 portrait;
+  margin: 6mm 8mm;
+}
+
+@media print {
+  /* 1. Global Reset for Paper Printing */
+  html,
+  body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #09090b !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 2. Hide all app chrome, sidebars, navigations, toasts, and non-printable wrappers */
+  header,
+  nav,
+  aside,
+  footer,
+  [role="navigation"],
+  [role="banner"],
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* 3. Hide all body children by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* 4. Reveal ONLY the designated printable invoice container and its children */
+  #invoice-printable-document,
+  #invoice-printable-document * {
+    visibility: visible !important;
+  }
+
+  #invoice-printable-document {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 12px 16px !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #09090b !important;
+    overflow: visible !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 5. Force crisp contrast for text and tables in print */
+  #invoice-printable-document table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #invoice-printable-document th,
+  #invoice-printable-document td {
+    color: #09090b !important;
+  }
+
+  /* Force light backgrounds for badges & tables in print */
+  #invoice-printable-document .dark\:bg-zinc-800,
+  #invoice-printable-document .dark\:bg-zinc-850,
+  #invoice-printable-document .dark\:bg-zinc-900,
+  #invoice-printable-document .dark\:bg-zinc-800\/40,
+  #invoice-printable-document .dark\:bg-teal-950\/20,
+  #invoice-printable-document .dark\:bg-teal-950\/30 {
+    background-color: #f8fafc !important;
+  }
+
+  #invoice-printable-document .dark\:text-zinc-50,
+  #invoice-printable-document .dark\:text-zinc-100,
+  #invoice-printable-document .dark\:text-zinc-200,
+  #invoice-printable-document .dark\:text-zinc-300,
+  #invoice-printable-document .dark\:text-zinc-400 {
+    color: #18181b !important;
+  }
+
+  #invoice-printable-document .dark\:border-zinc-700,
+  #invoice-printable-document .dark\:border-zinc-800,
+  #invoice-printable-document .dark\:border-zinc-700\/80 {
+    border-color: #e4e4e7 !important;
+  }
 }

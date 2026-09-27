@@ -17,7 +17,7 @@ export interface BadgeProps {
     | 'info'
     | 'teal'
     | 'amber';
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
   icon?: React.ReactNode;
   dot?: boolean;
   className?: string;
@@ -59,7 +59,7 @@ export const Badge: React.FC<BadgeProps> = ({
     teal:
       'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80',
     amber:
-      'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80',
+      'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80',
   };
 
   const dotColors: Record<string, string> = {
@@ -79,11 +79,13 @@ export const Badge: React.FC<BadgeProps> = ({
     amber:     'bg-amber-500',
   };
 
+  // xs = 10px compact indicator
   // sm = 11px / caption — inside table cells
   // md = 12px / caption — standalone badges
-  const sizes = {
-    sm: 'px-2    py-0.5 text-[0.6875rem] gap-1',
-    md: 'px-2.5  py-1   text-xs          gap-1.5',
+  const sizes: Record<string, string> = {
+    xs: 'px-2 py-0.5 text-[10px] leading-tight gap-1 font-semibold',
+    sm: 'px-2 py-0.5 text-[0.6875rem] gap-1',
+    md: 'px-2.5 py-1 text-xs gap-1.5',
   };
 
   return (

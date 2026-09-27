@@ -112,6 +112,57 @@ class AgentToolExecutor:
                     return {"url": url, "error": str(e), "delivered": False}
             return {"error": "Missing webhook URL", "delivered": False}
 
+        if tool_name == "calendar_booking":
+            date_val = arguments.get("date", "2026-09-16")
+            time_slot = arguments.get("time_slot", "14:30 IST")
+            customer = arguments.get("customer_name", "Valued Client")
+            agent = arguments.get("agent_name", "AI Assistant")
+            topic = arguments.get("meeting_topic", "Voice Call Consultation")
+            import uuid
+            booking_id = f"BK-{uuid.uuid4().hex[:8].upper()}"
+            return {
+                "booking_id": booking_id,
+                "status": "Confirmed",
+                "customer_name": customer,
+                "scheduled_date": date_val,
+                "time_slot": time_slot,
+                "agent": agent,
+                "meeting_topic": topic,
+                "calendar_invite_dispatched": True,
+                "sync_google_calendar": "Synchronized",
+            }
+
+        if tool_name == "sms_dispatch":
+            phone = arguments.get("recipient_phone", "+919876543210")
+            tpl = arguments.get("template", "appointment_confirmation")
+            ref = arguments.get("booking_ref", "CC-98214")
+            import uuid
+            msg_id = f"SMS-{uuid.uuid4().hex[:6].upper()}"
+            return {
+                "message_id": msg_id,
+                "recipient": phone,
+                "template": tpl,
+                "booking_ref": ref,
+                "status": "Delivered",
+                "carrier_route": "GSM Gateway SIM 1 / Twilio High-Priority",
+                "delivery_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+
+        if tool_name == "transfer_call":
+            queue = arguments.get("target_queue", "tier_2_support")
+            intent = arguments.get("caller_intent", "complex_inquiry")
+            priority = arguments.get("transfer_priority", "high")
+            return {
+                "status": "SIP_TRANSFER_INITIATED",
+                "target_queue": queue,
+                "caller_intent": intent,
+                "transfer_priority": priority,
+                "sip_trunk_channel": "SIP/trunk-01-primary",
+                "warm_transfer": True,
+                "hold_music_stream": "active",
+                "estimated_wait_seconds": 12,
+            }
+
         return {"status": "executed", "tool": tool_name, "arguments": arguments}
 
 

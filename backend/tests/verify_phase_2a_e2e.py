@@ -32,7 +32,7 @@ def run_phase_2a_verification():
         contact = db.query(Contact).first()
         user = db.query(User).first()
         
-        org_name = org.name if org else "Nexus Enterprise AI"
+        org_name = org.name if org else "Create Call OS Enterprise"
         contact_name = contact.name if contact else "Aarav Sharma"
         
         print(f"\n[1] Active DB Environment State:")
@@ -95,7 +95,7 @@ def run_phase_2a_verification():
 
         # Check that raw tags were cleanly resolved
         assert "{{" not in data2.get('interpolated_prompt', ''), "Error: raw {{}} found in prompt!"
-        assert org_name in data2.get('interpolated_prompt', '') or "Nexus" in data2.get('interpolated_prompt', ''), "Error: Org name missing!"
+        assert org_name in data2.get('interpolated_prompt', '') or "Create Call" in data2.get('interpolated_prompt', ''), "Error: Org name missing!"
         print("  [OK] TEST 2 PASSED: All variables dynamically resolved with zero raw brackets.")
 
         # -------------------------------------------------------------

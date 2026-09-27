@@ -23,7 +23,7 @@ def health_check(db: Session = Depends(get_db)):
 
     return {
         "status": "healthy",
-        "service": "Nexus AI Voice OS Backend Engine",
+        "service": "Create Call OS Backend Engine",
         "version": "2.4.0",
         "database": db_status,
         "telephony_status": "operational",

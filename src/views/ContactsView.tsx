@@ -3,7 +3,7 @@ import {
   Plus, Phone, Mail, Trash2, Edit2, Check, Users, GitMerge, AlertCircle,
   Sparkles, Database, ChevronDown, ChevronUp, FileSpreadsheet, Eye, Download, UploadCloud,
   Folder, RefreshCw, ExternalLink, HardDrive, Layers, LayoutGrid, List, Search,
-  CheckCircle, Undo2, Sliders, Variable
+  CheckCircle, Undo2, Sliders, Variable, Crown, Megaphone, Play, PhoneCall
 } from 'lucide-react';
 import { DataTable, Column } from '../components/ui/DataTable';
 import { Button } from '../components/ui/Button';
@@ -14,7 +14,17 @@ import { Select } from '../components/ui/Select';
 import { Contact } from '../types';
 import { contactRepository, uploadRepository } from '../repository';
 import { useToast } from '../components/ui/Toast';
+import { CampaignReturnBanner } from '../components/campaigns/CampaignReturnBanner';
 import { FilePreviewModal, PreviewableFile } from '../components/ui/FilePreviewModal';
+import { triggerNavigationHandoff } from '../lib/handoffNavigation';
+import { usePlanEntitlements } from '../hooks/usePlanEntitlements';
+import { PlanGuardrailModal } from '../components/ui/PlanGuardrailModal';
+import {
+  getTenantStorage,
+  setTenantStorage,
+  getActiveUserEmail,
+  getActiveTargetOrgId,
+} from '../tenant';
 
 const countryCodes = [
   { code: '+1', flag: '🇺🇸', name: 'United States (+1)' },
@@ -322,10 +332,24 @@ const ComboboxValueInput: React.FC<{
   );
 };
 
-export const ContactsView: React.FC = () => {
+export interface ContactsViewProps {
+  onNavigate?: (screen: string) => void;
+}
+
+export const ContactsView: React.FC<ContactsViewProps> = ({ onNavigate }) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // SSOT Plan Governance Engine
+  const {
+    entitlements,
+    isUnlimited,
+    isSuperAdmin,
+    guardrailModal,
+    triggerGuardrail,
+    closeGuardrail,
+  } = usePlanEntitlements();
 
   const [activeTab, setActiveTab] = useState<'contacts' | 'uploads'>('contacts');
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
@@ -372,10 +396,48 @@ export const ContactsView: React.FC = () => {
 
   const { addToast } = useToast();
 
+  // Launch AI Campaign directly with selected or all contacts
+  const handleLaunchCampaignFromContacts = (customContactsList?: Contact[]) => {
+    const targetList = customContactsList && customContactsList.length > 0 ? customContactsList : contacts;
+    if (targetList.length === 0) {
+      addToast({
+        type: 'warning',
+        title: 'No Contacts Found',
+        description: 'Please add or import contacts before launching an AI calling campaign.',
+      });
+      return;
+    }
+
+    try {
+      localStorage.setItem('nexus_campaign_handoff_selected_contacts', JSON.stringify(targetList));
+      localStorage.setItem('nexus_campaign_resume_wizard', 'true');
+      const draft = {
+        draftId: `draft_${Date.now()}`,
+        isWizardOpen: true,
+        wizardStep: 3,
+        newCampaignAudienceSource: 'selected_contacts',
+        newCampaignTotalLeads: String(targetList.length),
+        newCampaignName: `Campaign (${targetList.length} Leads - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`,
+        selectedContactIds: targetList.map(c => c.id),
+      };
+      setTenantStorage('nexus_campaign_wizard_draft', draft);
+      localStorage.setItem('nexus_campaign_wizard_draft', JSON.stringify(draft));
+    } catch {}
+
+    triggerNavigationHandoff(onNavigate, {
+      sourceScreen: 'contacts',
+      sourceLabel: 'Contacts & Leads Hub',
+      contextTitle: `${targetList.length} Selected Leads`,
+      contextBadge: 'Audience Enrolled',
+      targetScreen: 'campaigns',
+      customData: { contactsCount: targetList.length },
+    });
+  };
+
   const [customValueHistory, setCustomValueHistory] = useState<Record<string, string[]>>(() => {
     try {
-      const saved = localStorage.getItem('nexus_field_value_history');
-      if (saved) return JSON.parse(saved);
+      const saved = getTenantStorage<Record<string, string[]>>('nexus_field_value_history');
+      if (saved) return saved;
     } catch (e) {}
     return {};
   });
@@ -389,7 +451,7 @@ export const ContactsView: React.FC = () => {
       if (!existing.includes(cleanVal)) {
         const next = { ...prev, [cleanKey]: [...existing, cleanVal] };
         try {
-          localStorage.setItem('nexus_field_value_history', JSON.stringify(next));
+          setTenantStorage('nexus_field_value_history', next);
         } catch (e) {}
         return next;
       }
@@ -399,9 +461,14 @@ export const ContactsView: React.FC = () => {
 
   const { registeredVariables, registeredDataFields, allRegisteredFields } = useMemo(() => {
     try {
-      const saved = localStorage.getItem('nexus_custom_items');
+      const isCurrentSovereign = getActiveUserEmail() === 'admin@createcall.ai' && !getActiveTargetOrgId();
+      const saved = getTenantStorage<any>('nexus_custom_items') || (
+        isCurrentSovereign
+          ? (localStorage.getItem('nexus_custom_items') ? JSON.parse(localStorage.getItem('nexus_custom_items')!) : null)
+          : null
+      );
       if (saved) {
-        const parsed = JSON.parse(saved);
+        const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
         const vars = Array.isArray(parsed.variables) ? parsed.variables : [];
         const fields = Array.isArray(parsed.custom_fields) ? parsed.custom_fields : [];
         return {
@@ -460,6 +527,18 @@ export const ContactsView: React.FC = () => {
   useEffect(() => {
     loadContacts();
     loadUploadedFiles();
+
+    const handleTargetChange = () => {
+      loadContacts();
+      loadUploadedFiles();
+    };
+
+    window.addEventListener('createcall:sovereign_target_changed', handleTargetChange);
+    window.addEventListener('createcall:tenant_data_updated', handleTargetChange);
+    return () => {
+      window.removeEventListener('createcall:sovereign_target_changed', handleTargetChange);
+      window.removeEventListener('createcall:tenant_data_updated', handleTargetChange);
+    };
   }, []);
 
   const handleClearAllContacts = async () => {
@@ -608,7 +687,7 @@ export const ContactsView: React.FC = () => {
         name: newContact.name || '',
         email: newContact.email || '',
         phone: fullPhone,
-        company: newContact.company || 'Enterprise Corp',
+        company: newContact.company || '',
         leadScore: 75,
         status: (newContact.status as any) || 'new',
         tags: tagsList,
@@ -1317,6 +1396,14 @@ export const ContactsView: React.FC = () => {
         <div className="flex items-center gap-1.5 whitespace-nowrap">
           <button
             type="button"
+            title="Launch AI Calling Campaign for this Contact"
+            onClick={() => handleLaunchCampaignFromContacts([row])}
+            className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 transition-colors shadow-xs cursor-pointer"
+          >
+            <Megaphone className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
             title="Edit Contact & Variables"
             onClick={() => {
               setSelectedContact({ ...row });
@@ -1346,39 +1433,78 @@ export const ContactsView: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Contact Directory & Leads</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0">
+        {/* ROW 1: Heading on Left + Plan Badge on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
+              Contact Directory & Leads
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Badge
+              variant="outline"
+              className="text-xs font-semibold px-2 py-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer hover:bg-amber-500/20 transition-all"
+              onClick={() =>
+                triggerGuardrail(
+                  'custom',
+                  'Plan Governance & Contact Directory Allocation',
+                  `Active plan "${entitlements.planName}" gives your workspace unlimited customer lead directory management and CRM synchronization.`
+                )
+              }
+              title="Click to view subscription plan entitlements"
+            >
+              <Crown className="w-3 h-3 text-amber-500" />
+              <span>Plan: {entitlements.planName}</span>
+            </Badge>
+          </div>
+        </div>
+
+        {/* ROW 2: Description on Left + Action Buttons on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Manage target customer leads, CRM sync entries, and dynamic business parameters.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            title="Reload contacts and files from database"
-          >
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="xs"
+              leftIcon={<RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />}
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="h-7.5 text-xs font-semibold px-2.5 shadow-2xs"
+              title="Reload contacts and files from database"
+            >
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
 
           {activeTab === 'contacts' && (
             <>
               {contacts.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsClearAllModalOpen(true)}
-                  className="border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                  leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                >
-                  Clear All ({contacts.length})
-                </Button>
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                    leftIcon={<Megaphone className="h-3.5 w-3.5" />}
+                    onClick={() => handleLaunchCampaignFromContacts()}
+                  >
+                    Launch Campaign ({contacts.length})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsClearAllModalOpen(true)}
+                    className="border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                    leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                  >
+                    Clear All
+                  </Button>
+                </>
               )}
               <Button
                 variant="outline"
@@ -1437,6 +1563,7 @@ export const ContactsView: React.FC = () => {
               </Button>
             </>
           )}
+          </div>
         </div>
       </div>
 
@@ -1552,6 +1679,23 @@ export const ContactsView: React.FC = () => {
             onBulkDelete={handleBulkDelete}
             onBulkStatusChange={handleBulkStatusChange}
             bulkStatusOptions={['new', 'contacted', 'qualified', 'converted', 'unreachable']}
+            renderCustomBulkActions={(selectedIds, setSelectedIds) => {
+              const subset = contacts.filter((c) => selectedIds.includes(c.id));
+              return (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs"
+                  leftIcon={<Megaphone className="h-3.5 w-3.5" />}
+                  onClick={() => {
+                    handleLaunchCampaignFromContacts(subset);
+                    setSelectedIds([]);
+                  }}
+                >
+                  ⚡ Launch AI Campaign for {selectedIds.length} Selected Leads
+                </Button>
+              );
+            }}
             onImportFile={handleImportFile}
             onExport={handleExportContacts}
             searchPlaceholder="Search contacts by name, email, phone, company, variables..."
@@ -2756,6 +2900,20 @@ export const ContactsView: React.FC = () => {
           />
         );
       })()}
+
+      {/* Plan Guardrail Luxury Modal */}
+      <PlanGuardrailModal
+        isOpen={guardrailModal.isOpen}
+        title={guardrailModal.title}
+        message={guardrailModal.message}
+        featureKey={guardrailModal.featureKey}
+        requiredTier={guardrailModal.requiredTier}
+        currentUsage={guardrailModal.currentUsage}
+        maxQuota={guardrailModal.maxQuota}
+        upgradeBenefit={guardrailModal.upgradeBenefit}
+        onClose={closeGuardrail}
+        onNavigate={onNavigate as any}
+      />
     </div>
   );
 };

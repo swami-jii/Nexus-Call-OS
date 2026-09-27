@@ -251,10 +251,106 @@ class DynamicRegistryService:
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                # -------------------------------------------------------------
+                # 1. SPECIALIZED STT (Speech-to-Text) PROVIDER MODEL DISCOVERY
+                # -------------------------------------------------------------
+                if p in ["deepgram", "deepgram_stt", "deepgram_nova", "deepgram-nova"]:
+                    effective_key = clean_key or os.getenv("DEEPGRAM_API_KEY", "")
+                    headers = {}
+                    if effective_key:
+                        headers["Authorization"] = f"Token {effective_key}"
+                    try:
+                        res = await client.get("https://api.deepgram.com/v1/models", headers=headers)
+                        if res.status_code == 200:
+                            data = res.json()
+                            stt_models = data.get("stt", []) or data.get("models", [])
+                            for m in stt_models:
+                                canonical = m.get("canonical_name") or m.get("name") or ""
+                                meta = m.get("metadata") or {}
+                                disp = meta.get("display_name") or canonical.replace("-", " ").title()
+                                if canonical:
+                                    models.append({
+                                        "id": canonical,
+                                        "label": f"{disp} ({canonical})",
+                                        "contextWindow": "36+ Languages • Realtime STT"
+                                    })
+                    except Exception:
+                        pass
+
+                    if not models:
+                        # Standard Deepgram Nova & Whisper STT Model Catalog
+                        models.extend([
+                            {"id": "nova-3", "label": "Nova-3 (Latest Frontier Universal STT)", "contextWindow": "36+ Langs • Ultra Low Latency"},
+                            {"id": "nova-2", "label": "Nova-2 General (Realtime Telephony STT)", "contextWindow": "36+ Langs • 99% Accuracy"},
+                            {"id": "nova-2-phonecall", "label": "Nova-2 Phonecall (8kHz Telecom Optimized)", "contextWindow": "Telephony Audio • Diarization"},
+                            {"id": "nova-2-conversationalai", "label": "Nova-2 Conversational AI (Sub-100ms Stream)", "contextWindow": "Fast Stream • Voice Agent"},
+                            {"id": "nova-2-meeting", "label": "Nova-2 Meeting (Multi-Speaker Diarization)", "contextWindow": "Multi-party • Timestamps"},
+                            {"id": "nova-2-medical", "label": "Nova-2 Medical (Clinical Vocabulary)", "contextWindow": "Healthcare • HIPAA"},
+                            {"id": "nova-2-finance", "label": "Nova-2 Finance & Banking", "contextWindow": "Fintech • Numbers & Terms"},
+                            {"id": "enhanced", "label": "Enhanced General STT", "contextWindow": "Standard Transcription"},
+                            {"id": "base", "label": "Base General STT", "contextWindow": "Standard Speech Recognition"},
+                            {"id": "whisper-large", "label": "Deepgram Hosted Whisper Large v3", "contextWindow": "OpenAI Whisper Engine"},
+                            {"id": "whisper-medium", "label": "Deepgram Hosted Whisper Medium", "contextWindow": "Balanced Latency"},
+                            {"id": "whisper-small", "label": "Deepgram Hosted Whisper Small", "contextWindow": "Lightweight STT"}
+                        ])
+
+                elif p in ["assemblyai", "assembly_ai"]:
+                    effective_key = clean_key or os.getenv("ASSEMBLYAI_API_KEY", "")
+                    models.extend([
+                        {"id": "universal-2", "label": "Universal-2 (Realtime Multilingual STT)", "contextWindow": "14+ Langs • Diarization"},
+                        {"id": "conformer-2", "label": "Conformer-2 (Production Telephony STT)", "contextWindow": "Telephony • Punctuation"},
+                        {"id": "slam-1", "label": "SLAM-1 (Speech-Language Acoustic Model)", "contextWindow": "Low Latency Stream"},
+                        {"id": "conformer-1", "label": "Conformer-1 (Legacy Telephony)", "contextWindow": "Standard Speech"},
+                        {"id": "nano", "label": "Nano (Ultra Lightweight STT)", "contextWindow": "Fastest Inference"}
+                    ])
+
+                elif p in ["openai_whisper", "whisper_cloud"]:
+                    models.extend([
+                        {"id": "whisper-1", "label": "Whisper-1 (OpenAI Cloud Transcription)", "contextWindow": "99+ Languages • Word Timestamps"}
+                    ])
+
+                elif p in ["groq_whisper"]:
+                    models.extend([
+                        {"id": "whisper-large-v3", "label": "Whisper Large v3 (Groq LPU Ultra Fast)", "contextWindow": "Sub-50ms • 99+ Languages"},
+                        {"id": "whisper-large-v3-turbo", "label": "Whisper Large v3 Turbo (Groq LPU Realtime)", "contextWindow": "Fastest Speech LPU"},
+                        {"id": "distil-whisper-large-v3-en", "label": "Distil-Whisper Large v3 English", "contextWindow": "English Only • High Speed"}
+                    ])
+
+                elif p in ["google_speech", "google_cloud_stt"]:
+                    models.extend([
+                        {"id": "chirp_2", "label": "Chirp 2 (Google Foundation Multilingual STT)", "contextWindow": "125+ Languages • Telephony"},
+                        {"id": "chirp", "label": "Chirp 1 Universal Speech Model", "contextWindow": "100+ Languages"},
+                        {"id": "telephony", "label": "Telephony Dedicated (8kHz/16kHz)", "contextWindow": "PSTN Call Recording"},
+                        {"id": "phone_call", "label": "Phone Call Enhanced Recognition", "contextWindow": "Call Center Voice"},
+                        {"id": "latest_long", "label": "Latest Long Audio Transcription", "contextWindow": "Meeting / Podcast"},
+                        {"id": "latest_short", "label": "Latest Short Utterance Recognizer", "contextWindow": "Voice Commands"}
+                    ])
+
+                elif p in ["azure_speech_stt", "azure_stt"]:
+                    models.extend([
+                        {"id": "conversation-telephony", "label": "Conversation Telephony (Neural STT)", "contextWindow": "100+ Languages • Call Center"},
+                        {"id": "universal-v2", "label": "Universal Speech Model v2", "contextWindow": "Realtime Streaming"},
+                        {"id": "fast-transcription", "label": "Fast Batch Transcription", "contextWindow": "Sub-second File Transcribe"}
+                    ])
+
+                elif p in ["faster_whisper", "whisper_cpp", "local_whisper", "vosk", "nvidia_riva", "custom_stt_endpoint"]:
+                    models.extend([
+                        {"id": "whisper-large-v3", "label": "Whisper Large v3 (Local GPU / CUDA)", "contextWindow": "Highest Local Accuracy • 99 Langs"},
+                        {"id": "whisper-large-v3-turbo", "label": "Whisper Large v3 Turbo (Local Fast GPU)", "contextWindow": "Optimized Realtime Voice"},
+                        {"id": "distil-whisper-large-v3", "label": "Distil-Whisper Large v3 (Lightweight)", "contextWindow": "Low VRAM • Fast Speed"},
+                        {"id": "whisper-medium", "label": "Whisper Medium (Standard Local Model)", "contextWindow": "Balanced CPU/GPU"},
+                        {"id": "whisper-small", "label": "Whisper Small (Low Latency Local)", "contextWindow": "Fast CPU Realtime"},
+                        {"id": "whisper-base", "label": "Whisper Base (Ultra Fast Local)", "contextWindow": "Minimal CPU Footprint"},
+                        {"id": "whisper-tiny", "label": "Whisper Tiny (Embedded Realtime)", "contextWindow": "Micro Latency"}
+                    ])
+
+                # -------------------------------------------------------------
+                # 2. CLOUD LLM PROVIDER REST MODEL DISCOVERY
+                # -------------------------------------------------------------
                 matched_key = next((k for k in CLOUD_MODEL_ENDPOINTS if k == p or k in p), None)
                 
                 # Check if this is a known cloud provider with custom or default endpoint
-                if matched_key and not (endpoint and ("localhost" in endpoint or "127.0.0.1" in endpoint)):
+                if not models and matched_key and not (endpoint and ("localhost" in endpoint or "127.0.0.1" in endpoint)):
                     cfg = CLOUD_MODEL_ENDPOINTS[matched_key]
                     effective_key = clean_key or os.getenv(cfg.get("env", ""), "") or os.getenv("LLM_API_KEY", "")
 
@@ -312,7 +408,9 @@ class DynamicRegistryService:
                                             lbl = m.get("name", m_id) if isinstance(m, dict) else m_id
                                             models.append({"id": m_id, "label": lbl, "contextWindow": "Live API"})
 
-                # Local Hardware Engines or Custom Self-Hosted Endpoints
+                # -------------------------------------------------------------
+                # 3. LOCAL HARDWARE ENGINES OR CUSTOM SELF-HOSTED ENDPOINTS
+                # -------------------------------------------------------------
                 if not models:
                     target_url = DynamicRegistryService.resolve_endpoint(p, endpoint)
                     base = target_url.rstrip("/")
@@ -334,7 +432,7 @@ class DynamicRegistryService:
                                         ctx_len = details.get("context_length")
                                         ctx_str = f"{round(ctx_len / 1024)}k Context" if ctx_len else ""
                                         
-                                        meta_parts = [p for p in [param_size, quant, ctx_str] if p]
+                                        meta_parts = [p_item for p_item in [param_size, quant, ctx_str] if p_item]
                                         context_desc = " • ".join(meta_parts) if meta_parts else "Local Engine"
                                         
                                         models.append({
@@ -364,6 +462,51 @@ class DynamicRegistryService:
                                             break
                             except Exception:
                                 pass
+
+                # -------------------------------------------------------------
+                # 4. ROBUST FALLBACK MODELS FOR COMMON PROVIDERS
+                # -------------------------------------------------------------
+                if not models:
+                    if p in ["google", "gemini", "google_ai_studio"]:
+                        models.extend([
+                            {"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash (Next-Gen Realtime Reasoning)", "contextWindow": "1M Context • Fast"},
+                            {"id": "gemini-2.0-flash-lite", "label": "Gemini 2.0 Flash-Lite (Low Latency Calling)", "contextWindow": "1M Context • Ultra Fast"},
+                            {"id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro (Deep Multimodal Reasoning)", "contextWindow": "2M Context Window"},
+                            {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash (Production Speed)", "contextWindow": "1M Context Window"}
+                        ])
+                    elif p in ["openai"]:
+                        models.extend([
+                            {"id": "gpt-4o", "label": "GPT-4o (Omni Multimodal Flagship)", "contextWindow": "128k Tokens"},
+                            {"id": "gpt-4o-mini", "label": "GPT-4o Mini (Ultra Fast & Cost Effective)", "contextWindow": "128k Tokens"},
+                            {"id": "o3-mini", "label": "o3-mini (High Speed Reasoning Model)", "contextWindow": "200k Tokens"},
+                            {"id": "o1-mini", "label": "o1-mini (STEM Reasoning Model)", "contextWindow": "128k Tokens"},
+                            {"id": "gpt-4-turbo", "label": "GPT-4 Turbo", "contextWindow": "128k Tokens"}
+                        ])
+                    elif p in ["anthropic"]:
+                        models.extend([
+                            {"id": "claude-3-5-sonnet-20241022", "label": "Claude 3.5 Sonnet (Frontier Intelligence)", "contextWindow": "200k Tokens"},
+                            {"id": "claude-3-5-haiku-20241022", "label": "Claude 3.5 Haiku (Fast Conversational)", "contextWindow": "200k Tokens"},
+                            {"id": "claude-3-opus-20240229", "label": "Claude 3 Opus (Complex Analysis)", "contextWindow": "200k Tokens"}
+                        ])
+                    elif p in ["groq"]:
+                        models.extend([
+                            {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B Versatile (LPU Ultra Fast)", "contextWindow": "128k Tokens"},
+                            {"id": "llama-3.1-8b-instant", "label": "Llama 3.1 8B Instant (Sub-100ms Inference)", "contextWindow": "128k Tokens"},
+                            {"id": "deepseek-r1-distill-llama-70b", "label": "DeepSeek R1 Distill Llama 70B (Reasoning)", "contextWindow": "128k Tokens"},
+                            {"id": "mixtral-8x7b-32768", "label": "Mixtral 8x7B MoE", "contextWindow": "32k Tokens"}
+                        ])
+                    elif p in ["deepseek"]:
+                        models.extend([
+                            {"id": "deepseek-chat", "label": "DeepSeek-V3 (State-of-the-Art MoE)", "contextWindow": "64k Tokens"},
+                            {"id": "deepseek-reasoner", "label": "DeepSeek-R1 (Advanced Reasoning & CoT)", "contextWindow": "64k Tokens"}
+                        ])
+                    elif p in ["ollama"]:
+                        models.extend([
+                            {"id": "llama3.3:latest", "label": "Llama 3.3 70B (Local Ollama)", "contextWindow": "Local Hardware"},
+                            {"id": "llama3.2:latest", "label": "Llama 3.2 3B (Fast CPU)", "contextWindow": "Local Hardware"},
+                            {"id": "deepseek-r1:latest", "label": "DeepSeek-R1 (Local Reasoning)", "contextWindow": "Local Hardware"},
+                            {"id": "mistral:latest", "label": "Mistral 7B (Local Offline)", "contextWindow": "Local Hardware"}
+                        ])
 
         except Exception as e:
             print(f"Error fetching dynamic models for provider {provider}: {e}")
@@ -401,19 +544,48 @@ class DynamicRegistryService:
                     res = await client.get("https://api.elevenlabs.io/v1/voices", headers=headers)
                     if res.status_code == 200:
                         for v in res.json().get("voices", []):
-                            labels = v.get("labels", {}) or {}
-                            gender = labels.get("gender") or "Unknown"
-                            accent = labels.get("accent") or "Unknown"
+                            labels = v.get("labels") or {}
+                            raw_gender = ""
+                            if isinstance(labels, dict):
+                                for lk, lv in labels.items():
+                                    if str(lk).lower() == "gender" and lv:
+                                        raw_gender = str(lv).strip()
+                                        break
+                            if not raw_gender:
+                                raw_gender = str(v.get("gender") or "").strip()
+
+                            g_lower = raw_gender.lower()
+                            if "female" in g_lower or "feminine" in g_lower:
+                                gender = "Female"
+                            elif "male" in g_lower or "masculine" in g_lower:
+                                gender = "Male"
+                            elif "neutral" in g_lower or "neutral" in (v_name + " " + v_desc).lower():
+                                gender = "Neutral"
+                            else:
+                                gender = "Neutral"
+
+                            accent = "Universal"
+                            if isinstance(labels, dict):
+                                for lk, lv in labels.items():
+                                    if str(lk).lower() == "accent" and lv:
+                                        accent = str(lv).strip()
+                                        break
+
                             v_name = v.get("name") or v.get("voice_id") or "Unknown"
+                            v_desc = v.get("description") or ""
+
+                            raw_prev = v.get("preview_url") or ""
+                            clean_prev = raw_prev if raw_prev.startswith("http") else ""
+
                             voices.append({
                                 "id": v.get("voice_id"),
                                 "name": v_name,
                                 "label": v_name,
-                                "gender": gender.capitalize() if gender != "Unknown" else "Unknown",
-                                "accent": accent.capitalize() if accent != "Unknown" else "Unknown",
-                                "preview_url": v.get("preview_url") or "Unknown",
+                                "gender": gender,
+                                "accent": accent.capitalize() if accent != "Universal" else "Universal",
+                                "preview_url": clean_prev,
                                 "category": v.get("category") or "ElevenLabs Conversational",
-                                "description": v.get("description") or "Hyper-realistic voice synthesis"
+                                "description": v_desc or f"{gender} voice ({accent})"
                             })
 
                 # 2. Cartesia Sonic (Live REST API)
@@ -424,13 +596,21 @@ class DynamicRegistryService:
                         if res.status_code == 200:
                             for v in res.json():
                                 v_name = v.get("name") or v.get("id") or "Unknown"
+                                raw_gender = str(v.get("gender") or "").strip().lower()
+                                if "female" in raw_gender or "feminine" in raw_gender:
+                                    v_gender = "Female"
+                                elif "male" in raw_gender or "masculine" in raw_gender:
+                                    v_gender = "Male"
+                                else:
+                                    v_gender = "Neutral"
+
                                 voices.append({
                                     "id": v.get("id") or v_name,
                                     "name": v_name,
                                     "label": v_name,
-                                    "gender": "Unknown",
+                                    "gender": v_gender,
                                     "accent": v.get("language") or "en-US",
-                                    "preview_url": "Unknown",
+                                    "preview_url": "",
                                     "category": "Cartesia Sonic",
                                     "description": v.get("description") or "Ultra low-latency streaming voice"
                                 })
@@ -458,7 +638,7 @@ class DynamicRegistryService:
                             display_name = raw_disp if raw_disp else canonical.replace("aura-", "").replace("-en", "").capitalize()
                             
                             tags = meta.get("tags", [])
-                            gender = "Female" if "feminine" in tags else ("Male" if "masculine" in tags else "Unknown")
+                            gender = "Female" if "feminine" in tags else ("Male" if "masculine" in tags else "Neutral")
                             accent = meta.get("accent") or (m.get("languages", ["en-US"])[0] if m.get("languages") else "en-US")
                             
                             v_id = canonical or m_name
@@ -490,32 +670,28 @@ class DynamicRegistryService:
                         v1_telephony_voices.sort(key=lambda x: (0 if "stella" in x["id"] else 1 if "asteria" in x["id"] else 2 if "athena" in x["id"] else 3 if "luna" in x["id"] else 4 if "helios" in x["id"] else 5))
                         voices.extend(v1_telephony_voices + v2_experimental_voices + other_voices)
 
-                # 4. Fish Audio Realtime (Live REST API - Queries /model endpoint)
-                elif p in ["fish_audio", "fish-audio", "fishaudio"]:
+                # 4. Fish Audio Open Sub-millisecond (Live REST API)
+                elif p in ["fish_audio", "fishaudio", "fish-audio"]:
                     key = clean_key if has_valid_key else os.getenv("FISH_AUDIO_API_KEY", "")
                     headers = {}
                     if key:
                         headers["Authorization"] = f"Bearer {key}"
                     res = await client.get("https://api.fish.audio/model", headers=headers)
                     if res.status_code == 200:
-                        data = res.json()
-                        items = data.get("items") or (data if isinstance(data, list) else [])
-                        for item in items:
-                            if isinstance(item, dict):
-                                m_id = item.get("_id") or item.get("id") or "Unknown"
-                                m_name = item.get("title") or item.get("name") or m_id
-                                tags = item.get("tags") or []
-                                gender = "Female" if "female" in tags else ("Male" if "male" in tags else "Unknown")
-                                voices.append({
-                                    "id": m_id,
-                                    "name": m_name,
-                                    "label": m_name,
-                                    "gender": gender,
-                                    "accent": (item.get("languages") or ["en"])[0],
-                                    "preview_url": "Unknown",
-                                    "category": "Fish Audio Realtime",
-                                    "description": item.get("description") or "Fish Audio voice model"
-                                })
+                        for item in res.json().get("items", []):
+                            m_title = item.get("title") or item.get("_id") or "Fish Audio Voice"
+                            raw_g = str(item.get("gender") or "").lower()
+                            f_gender = "Female" if "female" in raw_g else ("Male" if "male" in raw_g else "Neutral")
+                            voices.append({
+                                "id": item.get("_id"),
+                                "name": m_title,
+                                "label": m_title,
+                                "gender": f_gender,
+                                "accent": item.get("language") or "en-US",
+                                "preview_url": "Unknown",
+                                "category": "Fish Audio Realtime",
+                                "description": item.get("description") or "Fish Audio voice model"
+                            })
 
                 # 5. OpenAI Voice TTS (Official OpenAI Speech Models Specification)
                 elif p in ["openai", "openai_tts", "openai-tts"]:
@@ -544,11 +720,13 @@ class DynamicRegistryService:
                         if res.status_code == 200:
                             for v in res.json():
                                 v_name = v.get("name") or v.get("id") or "Unknown"
+                                raw_g = str(v.get("gender") or "").lower()
+                                p_gender = "Female" if "female" in raw_g else ("Male" if "male" in raw_g else "Neutral")
                                 voices.append({
                                     "id": v.get("id") or v.get("value") or v_name,
                                     "name": v_name,
                                     "label": v_name,
-                                    "gender": (v.get("gender") or "Unknown").capitalize(),
+                                    "gender": p_gender,
                                     "accent": v.get("language") or "en-US",
                                     "preview_url": v.get("sample") or "Unknown",
                                     "category": "PlayHT Turbo",
@@ -563,14 +741,15 @@ class DynamicRegistryService:
                         if res.status_code == 200:
                             for v in res.json().get("voices", []):
                                 name = v.get("name") or "Unknown"
-                                ssml_gender = v.get("ssmlGender") or "Unknown"
+                                ssml_gender = str(v.get("ssmlGender") or "").upper()
+                                g_gender = "Female" if "FEMALE" in ssml_gender else ("Male" if "MALE" in ssml_gender else "Neutral")
                                 lang_list = v.get("languageCodes") or []
                                 lang = lang_list[0] if lang_list else "en-US"
                                 voices.append({
                                     "id": name,
                                     "name": name,
                                     "label": name,
-                                    "gender": ssml_gender.capitalize() if ssml_gender != "Unknown" else "Unknown",
+                                    "gender": g_gender,
                                     "accent": lang,
                                     "preview_url": "Unknown",
                                     "category": "Cloud Google TTS",
@@ -589,11 +768,13 @@ class DynamicRegistryService:
                         if res.status_code == 200:
                             for v in res.json():
                                 v_name = v.get("LocalName") or v.get("DisplayName") or v.get("ShortName") or "Unknown"
+                                raw_g = str(v.get("Gender") or "").lower()
+                                az_gender = "Female" if "female" in raw_g else ("Male" if "male" in raw_g else "Neutral")
                                 voices.append({
                                     "id": v.get("ShortName") or v_name,
                                     "name": v_name,
                                     "label": v_name,
-                                    "gender": (v.get("Gender") or "Unknown").capitalize(),
+                                    "gender": az_gender,
                                     "accent": v.get("Locale") or "en-US",
                                     "preview_url": "Unknown",
                                     "category": "Azure Neural TTS",
@@ -608,11 +789,13 @@ class DynamicRegistryService:
                         if res.status_code == 200:
                             for v in res.json():
                                 v_name = v.get("name") or v.get("id") or "Unknown"
+                                raw_g = str(v.get("gender") or "").lower()
+                                lm_gender = "Female" if "female" in raw_g else ("Male" if "male" in raw_g else "Neutral")
                                 voices.append({
                                     "id": v.get("id") or v_name,
                                     "name": v_name,
                                     "label": v_name,
-                                    "gender": (v.get("gender") or "Unknown").capitalize(),
+                                    "gender": lm_gender,
                                     "accent": v.get("language") or "en-US",
                                     "preview_url": "Unknown",
                                     "category": "LMNT Realtime",
@@ -637,7 +820,7 @@ class DynamicRegistryService:
                                                 "id": i_id,
                                                 "name": i_name,
                                                 "label": i_name,
-                                                "gender": "Unknown",
+                                                "gender": "Neutral",
                                                 "accent": "Unknown",
                                                 "preview_url": "Unknown",
                                                 "category": "Local Hardware Engine",

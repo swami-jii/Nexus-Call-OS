@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-title" content="Create Call OS" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Dancing+Script:wght@600;700&family=Great+Vibes&family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sacramento&family=Satisfy&display=swap" rel="stylesheet" />
     <script>
       // Automatic Tunnel Bypass Setup for Ngrok / Public Gateway
       (function() {
@@ -23,8 +23,31 @@
           }
         } catch (e) {}
       })();
+
+      // Diagnostic Global Error Catcher
+      window.addEventListener('error', function(e) {
+        console.error('GLOBAL_ERROR_CAPTURED:', e);
+        var errBox = document.getElementById('global-error-banner');
+        if (!errBox) {
+          errBox = document.createElement('div');
+          errBox.id = 'global-error-banner';
+          errBox.style.cssText = 'position:fixed;top:20px;left:20px;right:20px;background:#7f1d1d;color:#fee2e2;padding:20px;border-radius:12px;z-index:999999;font-family:sans-serif;font-size:14px;border:1px solid #ef4444;box-shadow:0 10px 30px rgba(0,0,0,0.8);line-height:1.5;';
+          document.body.appendChild(errBox);
+        }
+        errBox.innerHTML = '<strong style="font-size:16px;color:#ffffff;">Application Script Error:</strong><br/><div style="margin-top:8px;font-family:monospace;background:#450a0a;padding:10px;border-radius:6px;word-break:break-all;">' + (e.message || 'Unknown error') + '</div><div style="margin-top:8px;font-size:12px;opacity:0.8;">' + (e.filename || '') + ':' + (e.lineno || '') + '</div><button onclick="window.location.reload()" style="margin-top:12px;padding:6px 14px;background:#ef4444;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">Reload Page</button>';
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('UNHANDLED_REJECTION_CAPTURED:', e);
+      });
     </script>
     <style>
+      html, body {
+        background-color: #09090b;
+        color: #f4f4f5;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+      }
       #initial-loader {
         position: fixed;
         inset: 0;
@@ -59,19 +82,52 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Remove initial loader once React mounts
-      const observer = new MutationObserver(function() {
-        const root = document.getElementById('root');
-        if (root && root.children.length > 0) {
-          const loader = document.getElementById('initial-loader');
+      (function() {
+        var dismissed = false;
+        function dismissLoader() {
+          if (dismissed) return;
+          dismissed = true;
+          var loader = document.getElementById('initial-loader');
           if (loader) {
+            loader.style.transition = 'opacity 0.25s ease, visibility 0.25s ease';
             loader.style.opacity = '0';
-            setTimeout(function() { if (loader && loader.parentNode) loader.parentNode.removeChild(loader); }, 300);
+            loader.style.pointerEvents = 'none';
+            setTimeout(function() {
+              if (loader && loader.parentNode) {
+                loader.parentNode.removeChild(loader);
+              }
+            }, 300);
           }
-          observer.disconnect();
         }
-      });
-      observer.observe(document.getElementById('root'), { childList: true });
+        window.__dismissInitialLoader = dismissLoader;
+
+        // 1. Immediate check if root already contains rendered markup
+        var root = document.getElementById('root');
+        if (root && root.children.length > 0) {
+          dismissLoader();
+        }
+
+        // 2. Mutation observer for dynamic React mounting
+        if (root && window.MutationObserver) {
+          var observer = new MutationObserver(function() {
+            if (root.children.length > 0) {
+              dismissLoader();
+              observer.disconnect();
+            }
+          });
+          observer.observe(root, { childList: true, subtree: true });
+        }
+
+        // 3. Fallback safety timer (dismiss after 4000ms max in case of stalled network)
+        setTimeout(dismissLoader, 4000);
+
+        // 4. Window load listener fallback
+        window.addEventListener('load', function() {
+          if (root && root.children.length > 0) {
+            dismissLoader();
+          }
+        });
+      })();
     </script>
   </body>
 </html>

@@ -71,23 +71,46 @@ export const ActivityView: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">Audit Activity Log</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+    <div className="space-y-4 pb-12">
+      {/* Top Header */}
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0">
+        {/* ROW 1: Heading on Left + Badges on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-lg bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 border border-teal-500/25 shrink-0">
+              <Activity className="h-3.5 w-3.5" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
+              Audit Activity Log
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Badge variant="emerald" className="text-xs shadow-2xs whitespace-nowrap">
+              Sovereign Audit Trail
+            </Badge>
+          </div>
+        </div>
+
+        {/* ROW 2: Description on Left + Action Buttons on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Complete compliance trail recording API key generations, prompt updates, carrier status, and telephony operations.
           </p>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchLogs}
+              isLoading={loading}
+              leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+              className="h-7.5 text-xs font-semibold px-2.5 shadow-2xs"
+            >
+              Refresh Log
+            </Button>
+          </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchLogs}
-          isLoading={loading}
-          leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
-        >
-          Refresh Log
-        </Button>
       </div>
 
       <DataTable

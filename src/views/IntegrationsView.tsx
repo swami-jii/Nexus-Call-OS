@@ -6,9 +6,9 @@ import {
   Server, Smartphone, Webhook, Wrench, Variable, Tag,
   Clock, MapPin, Building2, PhoneCall, Database, Sliders, ToggleLeft, ToggleRight,
   LayoutGrid, List, Table, Filter, Sparkles, Layers, Play, Volume2, HardDrive, Zap, Info,
-  Brain, FileText, Terminal, UploadCloud, FileUp, Search, Bot, Users,
+  Brain, FileText, Terminal, UploadCloud, FileUp, Search, Headphones, Users,
   Send, MessageSquare, Sparkles as SparklesIcon, PanelLeftClose, PanelLeftOpen, ChevronDown, Calendar,
-  ArrowRight, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Radio, CheckCircle2, XCircle, Shuffle, Timer, DollarSign, Gauge, Workflow
+  ArrowRight, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Radio, CheckCircle2, XCircle, Shuffle, Timer, DollarSign, Gauge, Workflow, Crown
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -18,6 +18,12 @@ import { useToast } from '../components/ui/Toast';
 import { CommandPaletteSelect, SelectOption } from '../components/ui/CommandPaletteSelect';
 import { GlobalLanguagePicker } from '../components/integrations/GlobalLanguagePicker';
 import { PublicApisCatalogTab } from '../components/integrations/PublicApisCatalogTab';
+import { CampaignReturnBanner } from '../components/campaigns/CampaignReturnBanner';
+import { usePlanEntitlements } from '../hooks/usePlanEntitlements';
+import { PlanGuardrailModal } from '../components/ui/PlanGuardrailModal';
+import { PlanLockedBadge } from '../components/ui/PlanLockedBadge';
+import { DEFAULT_BUSINESS_RULES_ITEMS } from '../constants/defaultBusinessRules';
+export { DEFAULT_BUSINESS_RULES_ITEMS };
 import {
   GLOBAL_COUNTRY_CODES_CATALOG,
   GlobalCountryCodeItem,
@@ -1351,7 +1357,7 @@ export const VISION_DOC_CATALOG: GenericAiProviderCatalogItem[] = [
 export const SIDEBAR_PROJECT_MODULES = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', category: 'Operational Suite' },
   { id: 'demo-studio', name: 'Live Call Studio', icon: '🔴', category: 'Operational Suite' },
-  { id: 'agents', name: 'AI Voice Agents', icon: '🤖', category: 'Operational Suite' },
+  { id: 'agents', name: 'AI Voice Agents', icon: '🎧', category: 'Operational Suite' },
   { id: 'call-history', name: 'Call History', icon: '📜', category: 'Operational Suite' },
   { id: 'analytics', name: 'Voice Analytics', icon: '📈', category: 'Operational Suite' },
   { id: 'campaigns', name: 'AI Campaigns', icon: '📢', category: 'Campaign & Telephony' },
@@ -1411,7 +1417,7 @@ export const getDynamicWorkspaceTargets = (
       });
     } catch (e) {}
 
-    return list.map(name => ({ value: name, label: `🤖 ${name}`, badge: 'AI Agent' }));
+    return list.map(name => ({ value: name, label: `🎙️ ${name}`, badge: 'AI Agent' }));
   }
 
   if (scope === 'Campaign Specific') {
@@ -1512,7 +1518,7 @@ export const WORKSPACE_SCOPE_OPTIONS: SelectOption[] = [
   },
   {
     value: 'Agent Specific',
-    label: '🤖 Specific AI Voice Agent(s)',
+    label: '🎙️ Specific AI Voice Agent(s)',
     description: 'Auto-synced live from all active workspace AI voice agents',
     group: 'LIVE WORKSPACE ENTITIES'
   },
@@ -1572,1023 +1578,95 @@ export const RULE_STATUS_OPTIONS: SelectOption[] = [
   }
 ];
 
-export const DEFAULT_BUSINESS_RULES_ITEMS: Record<string, any[]> = {
-  business_types: [
-    {
-      id: 'bt_dental_01',
-      name: 'Dental Clinic SSOT Rule',
-      display_name: 'Dental Clinic & Orthodontics',
-      category: 'Dental Clinic & Orthodontics',
-      internal_code: 'BUS-DENT-01',
-      description: 'Front desk patient appointment scheduling, insurance verification, and dental emergency triage.',
-      default_ai_tone: 'Professional & Corporate',
-      primary_behaviour: 'Appointment Based & Scheduling',
-      default_greeting: 'Hello! Thank you for calling Nexus Dental Care. I am your AI assistant. How may I help you with your appointment or dental inquiry today?',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'bt_hospital_02',
-      name: 'Hospital Care Management',
-      display_name: 'Hospital & Multi-Specialty Healthcare',
-      category: 'Hospital & Healthcare',
-      internal_code: 'BUS-HOSP-02',
-      description: 'Inpatient OPD booking, doctor round scheduling, and emergency room transfer protocol.',
-      default_ai_tone: 'Empathetic & Support-Focused',
-      primary_behaviour: 'Customer Support & Ticket Resolution',
-      default_greeting: 'Thank you for calling Metro Healthcare Hospital. I am here to help you connect with your doctor or schedule an OPD consultation.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'bt_realestate_03',
-      name: 'Real Estate Operations',
-      display_name: 'Real Estate & Property Management',
-      category: 'Real Estate & Property Management',
-      internal_code: 'BUS-PROP-03',
-      description: 'Lead qualification for property buyers, site visit scheduling, and mortgage inquiries.',
-      default_ai_tone: 'Sales & Persuasive',
-      primary_behaviour: 'Lead Generation & SDR Qualification',
-      default_greeting: 'Hi there! Thank you for inquiring about our luxury residential projects. Are you looking to buy, rent, or schedule a private site visit?',
-      status: 'Active',
-      scope: 'Global Workspace'
-    }
-  ],
-  departments: [
-    {
-      id: 'dept_sales_01',
-      name: 'Inbound Sales & SDR',
-      display_name: 'Inbound Sales & Lead Qualification',
-      dept_type: 'Sales & Business Development',
-      extension: '#101',
-      queue_priority: 10,
-      transfer_strategy: 'Round Robin (Equal Distribution)',
-      overflow_department: 'Customer Support & Helpdesk',
-      manager: 'Sarah Jenkins',
-      description: 'Handles all incoming pre-sales inquiries, demo requests, and pricing negotiations.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'dept_support_02',
-      name: 'Customer Support & FAQ',
-      display_name: 'Customer Support Tier 1',
-      dept_type: 'Customer Support & Helpdesk',
-      extension: '#102',
-      queue_priority: 20,
-      transfer_strategy: 'Least Busy / Idle Time First',
-      overflow_department: 'IT & Technical Operations',
-      manager: 'David Miller',
-      description: 'General inquiries, order status lookups, and account support.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'dept_billing_03',
-      name: 'Billing & Invoicing Escalations',
-      display_name: 'Billing & Accounts Team',
-      dept_type: 'Billing & Invoicing',
-      extension: '#103',
-      queue_priority: 15,
-      transfer_strategy: 'Sequential Extension Cascade',
-      overflow_department: 'Executive Management & Suite',
-      manager: 'Elena Rostova',
-      description: 'Subscription upgrades, payment disputes, refunds, and invoice requests.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    }
-  ],
-  working_hours: [
-    {
-      id: 'wh_ist_01',
-      name: 'Standard Business Hours (9AM - 6PM IST)',
-      display_name: 'Standard Working Shift (India)',
-      timezone: 'Asia/Kolkata (IST +05:30) - India',
-      country: 'India',
-      working_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-      morning_shift: '09:00 AM - 01:00 PM',
-      evening_shift: '02:00 PM - 06:00 PM',
-      break_timing: '01:00 PM - 02:00 PM',
-      is_247: false,
-      after_hours_action: 'Voicemail Recording & AI Transcript',
-      description: 'Standard 5-day enterprise operating shift with lunch break and voicemail failover.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'wh_247_02',
-      name: '24/7 Emergency Support Hotline',
-      display_name: '24/7 Continuous Helpline',
-      timezone: 'America/New_York (EST -05:00) - US East Coast',
-      country: 'Global',
-      working_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-      morning_shift: '00:00 AM - 12:00 PM',
-      evening_shift: '12:00 PM - 11:59 PM',
-      is_247: true,
-      after_hours_action: 'AI Agent Autonomous Continue (24x7)',
-      description: 'Non-stop 24/7 AI-powered hotline for emergency response and urgent caller triage.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    }
-  ],
-  languages: [
-    {
-      id: 'lang_hi_01',
-      name: 'Hindi (India) - hi-IN',
-      display_name: 'Hindi (India) Localization',
-      locale: 'hi-IN',
-      currency: 'INR (₹) - Indian Rupee',
-      number_format: 'Indian Lakhs (1,00,000.00)',
-      date_format: 'DD/MM/YYYY (UK/India/EU)',
-      time_format: '12-Hour (AM/PM) e.g. 02:30 PM',
-      telephone_format: '+91 (India PSTN)',
-      fallback_language: 'English (United States)',
-      description: 'Primary spoken language profile for Indian domestic campaigns with INR currency and Indian number formatting.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'lang_en_02',
-      name: 'English (United States) - en-US',
-      display_name: 'English (US) Localization',
-      locale: 'en-US',
-      currency: 'USD ($) - US Dollar',
-      number_format: 'Standard Int. (1,000,000.00)',
-      date_format: 'MM/DD/YYYY (US Format)',
-      time_format: '12-Hour (AM/PM) e.g. 02:30 PM',
-      telephone_format: '+1 (US & Canada NANP)',
-      fallback_language: 'English (UK)',
-      description: 'North American English localization with USD currency and US date conventions.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'lang_es_03',
-      name: 'Spanish (Spain / LatAm) - es-ES',
-      display_name: 'Spanish Localization',
-      locale: 'es-ES',
-      currency: 'EUR (€) - Euro',
-      number_format: 'European Dot (1.000.000,00)',
-      date_format: 'DD/MM/YYYY (UK/India/EU)',
-      time_format: '24-Hour (Military) e.g. 14:30',
-      telephone_format: '+34 (Spain PSTN)',
-      fallback_language: 'English (United States)',
-      description: 'Spanish international localization profile with Euro currency support.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    }
-  ],
-  country_codes: GLOBAL_COUNTRY_CODES_CATALOG.map((c: any) => ({
-    id: c.id || `country_${c.iso2.toLowerCase()}`,
-    name: `${c.name} (${c.dialCode})`,
-    display_name: `${c.flag} ${c.name} (${c.dialCode})`,
-    country_name: c.name,
-    country: c.name,
-    dial_code: c.dialCode,
-    dialCode: c.dialCode,
-    iso2: c.iso2,
-    iso3: c.iso3,
-    flag: c.flag,
-    region: c.region,
-    carrier_route: c.carrierRoute || 'Direct PSTN / GSM Route',
-    description: `Official sovereign dial code for ${c.name} (${c.iso2}/${c.iso3}). Outbound E.164 cellular and PSTN trunk route.`,
-    status: c.isActive ? 'Active' : 'Draft',
-    scope: 'Global Workspace'
-  })),
-  business_policies: [
-    {
-      id: 'pol_hipaa_01',
-      name: 'Strict Call Recording & HIPAA Compliance',
-      display_name: 'HIPAA & 100% Call Recording Consent',
-      policy_category: 'Privacy & Data Governance',
-      policy_type: 'Mandatory (Strict Block)',
-      severity: 'High (Critical Action)',
-      execution_time: 'Before Call Connect',
-      violation_action: 'Block Action Immediately',
-      description: 'Ensures caller gives verbal or digital consent prior to recording any medical or sensitive information.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'pol_guard_02',
-      name: 'Max Call Duration & Retries Guardrail',
-      display_name: 'Call Duration & Auto-Retry Limit',
-      policy_category: 'Escalation & Supervisor Takeover',
-      policy_type: 'Optional (Advisory)',
-      severity: 'Medium (Warning)',
-      execution_time: 'During Live Call Stream',
-      violation_action: 'Transfer to Human Supervisor',
-      description: 'Caps single AI agent conversation duration to 15 minutes and max campaign attempts to 3 retries.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'pol_dnc_03',
-      name: 'Anti-Spam & Do-Not-Call (DNC) Filter',
-      display_name: 'DNC Compliance & Blacklist Guardrail',
-      policy_category: 'Do Not Call (DNC) Registry',
-      policy_type: 'Mandatory (Strict Block)',
-      severity: 'High (Critical Action)',
-      execution_time: 'Before Call Connect',
-      violation_action: 'Block Action Immediately',
-      description: 'Automatically blocks outbound dial attempts to numbers listed in national DNC registries.',
-      status: 'Active',
-      scope: 'Global Workspace'
-    }
-  ],
-  telephony_providers: [
-    {
-      id: 'tel_twilio_01',
-      name: 'Twilio Cloud Telephony',
-      display_name: 'Twilio Primary Cloud Carrier',
-      provider_type: 'Cloud Telephony',
-      country: 'United States & Global (+1)',
-      currency: 'USD ($)',
-      status: 'Active',
-      is_default: true,
-      account_sid: 'ACa9b8c7d6e5f41234567890abcdef12',
-      auth_token: '••••••••••••••••',
-      base_url: 'https://api.twilio.com/2010-04-01',
-      api_version: '2010-04-01',
-      webhook_url: 'https://api.nexuscall.os/v1/webhooks/voice/twilio',
-      pricing_mode: 'Paid',
-      cost_per_min: '$0.014',
-      inbound_cost: '$0.0085',
-      did_monthly_cost: '$1.00',
-      billing_interval: '60s/60s (Standard)',
-      live_balance: '$142.50',
-      latency: '18ms',
-      sla_health: '99.99%',
-      capabilities: { inbound: true, outbound: true, sms: true, mms: true, dtmf: true, recording: true, transfer: true, forwarding: true, conference: true, caller_id: true, sip: true },
-      description: 'Tier-1 global voice carrier with elastic SIP trunking, call recording, and SMS delivery.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'tel_telnyx_02',
-      name: 'Telnyx Enterprise Voice',
-      display_name: 'Telnyx High-Capacity Carrier',
-      provider_type: 'Cloud Telephony',
-      country: 'Global International PSTN',
-      currency: 'USD ($)',
-      status: 'Active',
-      is_default: false,
-      account_sid: 'KEY01829384756abcdef',
-      auth_token: '••••••••••••••••',
-      base_url: 'https://api.telnyx.com/v2',
-      api_version: 'v2',
-      webhook_url: 'https://api.nexuscall.os/v1/webhooks/voice/telnyx',
-      pricing_mode: 'Paid',
-      cost_per_min: '$0.007',
-      inbound_cost: '$0.005',
-      did_monthly_cost: '$0.85',
-      billing_interval: '1s/1s (Per-Second)',
-      live_balance: '$85.00',
-      latency: '14ms',
-      sla_health: '99.98%',
-      capabilities: { inbound: true, outbound: true, sms: true, mms: false, dtmf: true, recording: true, transfer: true, forwarding: true, conference: true, caller_id: true, sip: true },
-      description: 'Direct multi-cloud carrier routing with lowest latency and HD Opus voice support.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'tel_exotel_03',
-      name: 'Exotel India PSTN & DID Carrier',
-      display_name: 'Exotel India Telecom Gateway',
-      provider_type: 'Cloud Telephony',
-      country: 'India (+91 PSTN)',
-      currency: 'INR (₹)',
-      status: 'Active',
-      is_default: false,
-      account_sid: 'nexuscall_exotel_in',
-      auth_token: '••••••••••••••••',
-      base_url: 'https://api.exotel.com/v1',
-      api_version: 'v1',
-      webhook_url: 'https://api.nexuscall.os/v1/webhooks/voice/exotel',
-      pricing_mode: 'Paid',
-      cost_per_min: '₹0.70',
-      inbound_cost: '₹0.40',
-      did_monthly_cost: '₹500.00',
-      billing_interval: '60s/60s (Standard)',
-      live_balance: '₹4,200.00',
-      latency: '24ms',
-      sla_health: '99.95%',
-      capabilities: { inbound: true, outbound: true, sms: true, mms: false, dtmf: true, recording: true, transfer: true, forwarding: true, conference: false, caller_id: true, sip: false },
-      description: 'TRAI compliant telecom carrier for Indian domestic calling campaigns and virtual toll-free DIDs.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'tel_gsm_04',
-      name: 'Android GSM Gateway SIM Gateway',
-      display_name: 'Local Mobile SIM Carrier (Zero Cost)',
-      provider_type: 'GSM Carrier',
-      country: 'India (+91 PSTN)',
-      currency: 'INR (₹)',
-      status: 'Active',
-      is_default: false,
-      account_sid: '192.168.1.140:8080',
-      auth_token: '••••••••',
-      base_url: 'http://192.168.1.140:8080',
-      api_version: 'v1',
-      webhook_url: 'http://192.168.1.140:8080/events',
-      pricing_mode: 'Free',
-      cost_per_min: '₹0.00 / min (Free)',
-      inbound_cost: '₹0.00 / min (Free)',
-      did_monthly_cost: '₹0.00 (Zero Charge)',
-      billing_interval: 'Zero Platform Charge (Pass-Through)',
-      live_balance: 'Unlimited SIM Bundle',
-      latency: '8ms',
-      sla_health: '100%',
-      capabilities: { inbound: true, outbound: true, sms: true, mms: false, dtmf: true, recording: true, transfer: true, forwarding: true, conference: true, caller_id: true, sip: true },
-      description: 'Zero-cost companion Android smartphone SIM gateway using local unlimited carrier talk plans.',
-      scope: 'Global Workspace'
-    }
-  ],
-  sip_providers: [
-    {
-      id: 'sip_twilio_01',
-      preset_key: 'twilio_sip',
-      name: 'Twilio Elastic SIP Trunk',
-      display_name: 'Twilio Elastic SIP (Global PSTN)',
-      carrier: 'Twilio Cloud Telephony',
-      direction: 'Bidirectional',
-      sip_domain: 'sip.nexuscall.pstn.twilio.com',
-      sip_host: 'sip.pstn.twilio.com',
-      sip_port: '5060',
-      transport: 'TLS Port 5061 (Encrypted)',
-      outbound_proxy: '',
-      username: 'nexus_trunk_admin',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Registered (200 OK • 12ms)',
-      ip_whitelist: '54.172.60.0/23, 54.244.51.0/24',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'SRTP Mandatory (AES-128-GCM)',
-      cng_enabled: true,
-      concurrent_calls: '500 Channels',
-      cps_rate_limit: '50 CPS',
-      primary_carrier: 'Twilio Cloud Telephony',
-      secondary_carrier: 'Telnyx Private Cloud SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+1 (800) 555-0199',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Tier-1 global elastic SIP trunking with automated TLS and SRTP media stream encryption.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_telnyx_02',
-      preset_key: 'telnyx_sip',
-      name: 'Telnyx Private Cloud SIP Trunk',
-      display_name: 'Telnyx Direct Interconnect',
-      carrier: 'Telnyx Enterprise Voice',
-      direction: 'Bidirectional',
-      sip_domain: 'sip.telnyx.com',
-      sip_host: 'sip.telnyx.com',
-      sip_port: '5061',
-      transport: 'TLS Port 5061 (Encrypted)',
-      outbound_proxy: '',
-      username: 'telnyx_voice_sub',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Connected (IP ACL • 16ms)',
-      ip_whitelist: '192.76.120.0/22, 64.16.240.0/21',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'SRTP Mandatory (AES-128-GCM)',
-      cng_enabled: true,
-      concurrent_calls: '1000 Channels',
-      cps_rate_limit: '100 CPS',
-      primary_carrier: 'Telnyx Enterprise Voice',
-      secondary_carrier: 'Twilio Elastic SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+1 (888) 555-0144',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Dedicated high-capacity IP-authenticated trunk for massive concurrent outbound AI dialer campaigns.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_airtel_03',
-      preset_key: 'airtel_sip',
-      name: 'Bharti Airtel IQ Direct SIP Interconnect',
-      display_name: 'Airtel IQ Enterprise PSTN Trunk',
-      carrier: 'Bharti Airtel IQ',
-      direction: 'Bidirectional',
-      sip_domain: 'sip.airteliq.com',
-      sip_host: 'sip.airteliq.com',
-      sip_port: '5060',
-      transport: 'UDP Port 5060 (Standard)',
-      outbound_proxy: '',
-      username: 'airtel_iq_nexus_01',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Registered (200 OK • 8ms)',
-      ip_whitelist: '125.16.0.0/12, 182.79.0.0/16',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'Optional / Best-Effort',
-      cng_enabled: true,
-      concurrent_calls: '200 Channels',
-      cps_rate_limit: '25 CPS',
-      primary_carrier: 'Bharti Airtel IQ',
-      secondary_carrier: 'Tata Smartflo (TTBS) Enterprise SIP',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+91 11 4084 0000',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Certified Indian telecom carrier direct interconnect with zero-hop local PSTN routing and DLT compliance.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_tata_04',
-      preset_key: 'tata_sip',
-      name: 'Tata Smartflo (TTBS) Enterprise SIP',
-      display_name: 'Tata Smartflo Enterprise SIP',
-      carrier: 'Tata Tele Business Services',
-      direction: 'Bidirectional',
-      sip_domain: 'sip.tatasmartflo.com',
-      sip_host: 'sip.tatasmartflo.com',
-      sip_port: '5060',
-      transport: 'TLS Port 5061 (Encrypted)',
-      outbound_proxy: '',
-      username: 'ttbs_smartflo_trunk',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Registered (200 OK • 10ms)',
-      ip_whitelist: '115.112.0.0/14, 121.240.0.0/13',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'SRTP Mandatory (AES-128-GCM)',
-      cng_enabled: true,
-      concurrent_calls: '300 Channels',
-      cps_rate_limit: '30 CPS',
-      primary_carrier: 'Tata Tele Business Services',
-      secondary_carrier: 'Bharti Airtel IQ Direct SIP Interconnect',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+91 22 6123 4567',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Tata Tele Business Services cloud communication suite with enterprise DID bundles and high SLA uptime.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_jio_05',
-      preset_key: 'jio_sip',
-      name: 'Reliance Jio Enterprise SIP Trunk',
-      display_name: 'Reliance Jio 5G Enterprise SIP',
-      carrier: 'Reliance Jio Infocomm',
-      direction: 'Bidirectional',
-      sip_domain: 'ims.jio.com',
-      sip_host: 'sip.enterprise.jio.com',
-      sip_port: '5060',
-      transport: 'UDP Port 5060 (Standard)',
-      outbound_proxy: '',
-      username: 'jio_ent_sip_01',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Registered (200 OK • 6ms)',
-      ip_whitelist: '49.32.0.0/11, 157.32.0.0/11',
-      codecs: '📱 AMR-WB 16kHz VoLTE + G.711a',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'Optional / Best-Effort',
-      cng_enabled: true,
-      concurrent_calls: '500 Channels',
-      cps_rate_limit: '50 CPS',
-      primary_carrier: 'Reliance Jio Infocomm',
-      secondary_carrier: 'Bharti Airtel IQ Direct SIP Interconnect',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+91 22 7960 0000',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Native VoLTE and 5G NR voice interconnect across India with high packet delivery rate.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_freepbx_06',
-      preset_key: 'freepbx_sip',
-      name: 'FreePBX / Asterisk PBXact Softswitch',
-      display_name: 'Internal FreePBX Softswitch',
-      carrier: 'Internal PBX Server',
-      direction: 'Bidirectional',
-      sip_domain: 'pbx.local.internal',
-      sip_host: '192.168.1.200',
-      sip_port: '5060',
-      transport: 'UDP Port 5060 (Standard)',
-      outbound_proxy: '',
-      username: 'nexus_pjsip_trunk',
-      password: '••••••••••••••••',
-      auth_mode: '🔑 SIP Digest Authentication (Username & Password)',
-      registration_required: true,
-      registration_expires: '600s (10 Mins)',
-      registration_status: 'Registered (200 OK • 2ms)',
-      ip_whitelist: '192.168.1.0/24, 10.0.0.0/16',
-      codecs: '⚡ Opus Fullband + G.711 u-law',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'Optional / Best-Effort',
-      cng_enabled: true,
-      concurrent_calls: '100 Channels',
-      cps_rate_limit: '20 CPS',
-      primary_carrier: 'Internal PBX Server',
-      secondary_carrier: 'Twilio Elastic SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'Remote-Party-ID (RPID)',
-      outbound_cli: '1001',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Open-source Asterisk FreePBX server running on internal server hardware with zero per-minute costs.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_cisco_07',
-      preset_key: 'cisco_sip',
-      name: 'Cisco CUCM / CallManager Enterprise',
-      display_name: 'Cisco CallManager Trunk',
-      carrier: 'Cisco Enterprise Cluster',
-      direction: 'Bidirectional',
-      sip_domain: 'cucm.company.internal',
-      sip_host: '10.0.10.100',
-      sip_port: '5060',
-      transport: 'TLS Port 5061 (Encrypted)',
-      outbound_proxy: '',
-      username: 'cisco_sip_profile',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Registered (200 OK • 4ms)',
-      ip_whitelist: '10.0.10.0/24',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'SRTP Mandatory (AES-128-GCM)',
-      cng_enabled: true,
-      concurrent_calls: '500 Channels',
-      cps_rate_limit: '40 CPS',
-      primary_carrier: 'Cisco Enterprise Cluster',
-      secondary_carrier: 'Twilio Elastic SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'Remote-Party-ID (RPID)',
-      outbound_cli: '+1 (800) 555-0100',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Cisco Unified Communications Manager enterprise cluster SIP trunk connection.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_threecx_08',
-      preset_key: 'threecx_sip',
-      name: '3CX Phone System IP Gateway',
-      display_name: '3CX VoIP Phone System',
-      carrier: '3CX Cloud PBX',
-      direction: 'Bidirectional',
-      sip_domain: 'pbx.company.3cx.us',
-      sip_host: 'pbx.company.3cx.us',
-      sip_port: '5060',
-      transport: 'UDP Port 5060 (Standard)',
-      outbound_proxy: '',
-      username: '3cx_trunk_100',
-      password: '••••••••••••••••',
-      auth_mode: '🔑 SIP Digest Authentication (Username & Password)',
-      registration_required: true,
-      registration_expires: '600s (10 Mins)',
-      registration_status: 'Registered (200 OK • 14ms)',
-      ip_whitelist: '0.0.0.0/0',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'Optional / Best-Effort',
-      cng_enabled: true,
-      concurrent_calls: '100 Channels',
-      cps_rate_limit: '15 CPS',
-      primary_carrier: '3CX Cloud PBX',
-      secondary_carrier: 'Twilio Elastic SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+1 (800) 555-0300',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: '3CX IP-PBX Gateway trunk bridging AI Voice Agents to human softphone extensions.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_kamailio_09',
-      preset_key: 'kamailio_sip',
-      name: 'Kamailio Carrier-Grade SIP Proxy',
-      display_name: 'Kamailio High-Throughput Proxy',
-      carrier: 'Kamailio SBC Cluster',
-      direction: 'Bidirectional',
-      sip_domain: 'sbc.carrier.internal',
-      sip_host: '10.0.4.150',
-      sip_port: '5060',
-      transport: 'UDP Port 5060 (Standard)',
-      outbound_proxy: 'proxy.sbc.internal:5060',
-      username: 'kamailio_admin',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Connected (200 OK • 1ms)',
-      ip_whitelist: '10.0.4.0/24',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'Optional / Best-Effort',
-      cng_enabled: true,
-      concurrent_calls: '2000 Channels',
-      cps_rate_limit: '200 CPS',
-      primary_carrier: 'Kamailio SBC Cluster',
-      secondary_carrier: 'Telnyx Private Cloud SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+1 (800) 555-0400',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'High-throughput Kamailio Session Border Controller handling hundreds of thousands of concurrent calls.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_freeswitch_10',
-      preset_key: 'freeswitch_sip',
-      name: 'FreeSWITCH Realtime Core Engine',
-      display_name: 'FreeSWITCH Realtime Core Engine',
-      carrier: 'FreeSWITCH Softswitch Cluster',
-      direction: 'Bidirectional',
-      sip_domain: 'fs.nexuscall.internal',
-      sip_host: '10.0.4.160',
-      sip_port: '5060',
-      transport: 'TLS Port 5061 (Encrypted)',
-      outbound_proxy: '',
-      username: 'freeswitch_internal',
-      password: '••••••••••••••••',
-      auth_mode: '🔑 SIP Digest Authentication (Username & Password)',
-      registration_required: true,
-      registration_expires: '600s (10 Mins)',
-      registration_status: 'Registered (200 OK • 2ms)',
-      ip_whitelist: '10.0.4.0/24',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'SRTP Mandatory (AES-128-GCM)',
-      cng_enabled: true,
-      concurrent_calls: '1000 Channels',
-      cps_rate_limit: '100 CPS',
-      primary_carrier: 'FreeSWITCH Softswitch Cluster',
-      secondary_carrier: 'Twilio Elastic SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+1 (800) 555-0500',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'High-performance FreeSWITCH voice core with mod_sofia and real-time robotic media pipelines.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_commio_11',
-      preset_key: 'commio_sip',
-      name: 'Commio (ThinQ) LCR Voice Network',
-      display_name: 'Commio LCR Voice Routing',
-      carrier: 'Commio (ThinQ)',
-      direction: 'Bidirectional',
-      sip_domain: 'sip.thinq.com',
-      sip_host: 'sip.thinq.com',
-      sip_port: '5060',
-      transport: 'UDP Port 5060 (Standard)',
-      outbound_proxy: '',
-      username: 'commio_lcr_01',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Connected (IP ACL • 15ms)',
-      ip_whitelist: '192.240.150.0/24',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'Optional / Best-Effort',
-      cng_enabled: true,
-      concurrent_calls: '500 Channels',
-      cps_rate_limit: '50 CPS',
-      primary_carrier: 'Commio (ThinQ)',
-      secondary_carrier: 'Telnyx Private Cloud SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+1 (800) 555-0600',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'Least-Cost Routing multi-carrier wholesale SIP interconnect dynamically finding the cheapest path.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'sip_flowroute_12',
-      preset_key: 'flowroute_sip',
-      name: 'Flowroute HyperNetwork Direct SIP',
-      display_name: 'Flowroute HyperNetwork SIP',
-      carrier: 'Flowroute Intrado',
-      direction: 'Bidirectional',
-      sip_domain: 'sip.flowroute.com',
-      sip_host: 'sip.flowroute.com',
-      sip_port: '5060',
-      transport: 'TLS Port 5061 (Encrypted)',
-      outbound_proxy: '',
-      username: 'flowroute_nexus',
-      password: '••••••••••••••••',
-      auth_mode: 'IP Access Control List (ACL / Whitelisting)',
-      registration_required: false,
-      registration_expires: '3600s',
-      registration_status: 'Connected (IP ACL • 17ms)',
-      ip_whitelist: '216.115.69.0/24, 34.210.91.0/24',
-      codecs: '🎧 Opus HD + G.722 + PSTN',
-      dtmf_mode: '🔢 RFC 2833 / RFC 4733 (RTP Events)',
-      srtp: 'SRTP Mandatory (AES-128-GCM)',
-      cng_enabled: true,
-      concurrent_calls: '300 Channels',
-      cps_rate_limit: '30 CPS',
-      primary_carrier: 'Flowroute Intrado',
-      secondary_carrier: 'Twilio Elastic SIP Trunk',
-      failover_enabled: true,
-      failover_trigger: 'Immediate on SIP 5xx (500, 502, 503)',
-      caller_id_header: 'P-Asserted-Identity (PAI)',
-      outbound_cli: '+1 (800) 555-0700',
-      nat_traversal: 'STUN/TURN Assisted (25s Keepalive)',
-      status: 'Active',
-      description: 'HyperNetwork direct carrier SIP interconnection with granular route selection.',
-      scope: 'Global Workspace'
-    }
-  ],
-  gsm_gateways: [
-    {
-      id: 'gsm_s22_01',
-      name: 'Samsung Galaxy S22 5G Gateway #1',
-      display_name: 'Android Dual-SIM Gateway (Primary)',
-      device_type: 'Android GSM Gateway',
-      location: 'Headquarters Telecom Rack #1',
-      ip_host: '192.168.1.140:8080',
-      port: '8080',
-      protocol: 'WebRTC / HTTP Direct',
-      sim_slots: '2 Slots',
-      active_sims: '2 Active SIMs',
-      sim_labels: 'Slot 1: Cellular SIM #1 • Slot 2: Cellular SIM #2',
-      signal_strength: '98% (-65 dBm 5G NR)',
-      battery_level: '100% (AC Powered)',
-      pricing_mode: 'Free (Platform Zero-Charge)',
-      capabilities: 'HD Voice, Automated SMS, DTMF, Call Recording',
-      registration_status: 'Connected & Live (Latency: 8ms)',
-      status: 'Active',
-      description: 'Connected Android hardware gateway routing local domestic voice calls via unlimited carrier SIM bundles at zero platform charge.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'gsm_dinstar_02',
-      name: 'Dinstar UC2000-VG 32-Port GSM Box',
-      display_name: 'Hardware Multi-Port SIM Bank',
-      device_type: 'Multi-Port GSM Box',
-      location: 'Datacenter Server Room C-4',
-      ip_host: '192.168.1.160:5060',
-      port: '1001',
-      protocol: 'SIP / RTP (Port 5060)',
-      sim_slots: '32 Slots',
-      active_sims: '32 Active SIMs',
-      sim_labels: '32x SIM Pool (Auto-IMEI Anti-Blocking Rotation)',
-      signal_strength: '99% (Multi-Carrier Average)',
-      battery_level: '100% (Industrial UPS)',
-      pricing_mode: 'Free (Platform Zero-Charge)',
-      capabilities: '32 Concurrent Channels, Auto-IMEI Rotation, SIP Trunking',
-      registration_status: 'Connected & Live (32/32 SIMs Ready)',
-      status: 'Active',
-      description: 'Industrial 32-channel VoIP-to-GSM SIM box with intelligent round-robin and automatic IMEI anti-blocking rotation.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'gsm_huawei_03',
-      name: 'Huawei E3372h-320 USB 4G Dongle #1',
-      display_name: 'Direct USB Cellular Modem',
-      device_type: 'USB GSM Modem',
-      location: 'Master Telephony Server USB Bus 1-2',
-      ip_host: '/dev/ttyUSB0 (Voice) • 127.0.0.1:9090',
-      port: '115200',
-      protocol: 'AT Commands / chan_dongle',
-      sim_slots: '1 Slot',
-      active_sims: '1 Active SIM',
-      sim_labels: 'Slot 1: 4G LTE VoLTE Dedicated Line',
-      signal_strength: '95% (-68 dBm 4G VoLTE)',
-      battery_level: '100% (USB Host Powered)',
-      pricing_mode: 'Free (Platform Zero-Charge)',
-      capabilities: 'Direct Raw AT Engine, 16kHz AMR-WB VoLTE Audio, SMS Gateway',
-      registration_status: 'Connected & Live (Baud: 115200)',
-      status: 'Active',
-      description: 'Physical USB 4G cellular modem interfacing directly with chan_dongle and hardware serial AT commands.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'gsm_teltonika_04',
-      name: 'Teltonika RUT955 Industrial GSM Router',
-      display_name: 'DIN-Rail IoT Cellular Router',
-      device_type: 'Industrial GSM Router',
-      location: 'Industrial Server Cabinet Rack #2',
-      ip_host: '192.168.1.170:8080',
-      port: '1883',
-      protocol: 'MQTT / Modbus Telemetry',
-      sim_slots: '2 Slots',
-      active_sims: '2 Active SIMs',
-      sim_labels: 'Slot 1: Jio 4G M2M Telemetry • Slot 2: Vi VoLTE Backup',
-      signal_strength: '94% (-72 dBm Industrial LTE)',
-      battery_level: '100% (DIN-Rail UPS)',
-      pricing_mode: 'Free (Platform Zero-Charge)',
-      capabilities: 'Dual-SIM Hot-Swap Failover, Modbus RS485, MQTT Heartbeat',
-      registration_status: 'Connected & Live (MQTT Telemetry :1883)',
-      status: 'Active',
-      description: 'Rugged DIN-rail industrial cellular gateway featuring automated dual-SIM hot-swap failover and MQTT telemetry monitoring.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'gsm_esim_05',
-      name: 'Nexus Global eSIM Cloud Pool',
-      display_name: 'Virtual eSIM Roaming Matrix',
-      device_type: 'eSIM Cloud Gateway',
-      location: 'Global Cloud Edge Infrastructure',
-      ip_host: 'https://esim-edge.nexuscall.internal/v1',
-      port: '443',
-      protocol: 'Cloud eSIM Webhook',
-      sim_slots: '8 Slots',
-      active_sims: '8 Active Profiles',
-      sim_labels: 'Multi-IMSI Roaming (US, UK, IN, AE, SG Global Coverage)',
-      signal_strength: '100% (Virtual Cloud Pool)',
-      battery_level: '100% (Cloud Edge)',
-      pricing_mode: 'Free (Platform Zero-Charge)',
-      capabilities: 'Dynamic Multi-IMSI Carrier Switching, Zero Roaming Markup, Instant Provisioning',
-      registration_status: 'Connected & Live (8 Virtual Profiles Ready)',
-      status: 'Active',
-      description: 'Software-defined virtual eSIM calling array with dynamic geo-routing across 190+ countries with zero platform surcharge.',
-      scope: 'Global Workspace'
-    }
-  ],
-  call_routing: [
-    {
-      id: 'route_least_cost_01',
-      name: 'Smart Least-Cost Outbound Routing',
-      display_name: 'Least-Cost Outbound Dial Plan',
-      direction: 'Outbound',
-      priority: '1',
-      match_conditions: 'All Outbound Calling Campaigns • Domestic Numbers',
-      primary_route: 'Samsung Galaxy S22 5G Gateway #1 (Free SIM)',
-      secondary_route: 'Telnyx Elastic SIP Trunk ($0.007/min)',
-      failover_strategy: 'Immediate on 5xx Error, SIM Busy, or Timeout (>4s)',
-      cost_preference: 'Lowest Cost First (Zero-Charge SIM -> Cloud SIP)',
-      status: 'Active',
-      description: 'Automatically routes outbound calls through local Android SIM gateways first ($0.000 cost), falling back seamlessly to cloud SIP trunks if lines are occupied.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'route_inbound_vip_02',
-      name: 'Inbound VIP Support & DID Routing',
-      display_name: 'Inbound Customer Routing Rule',
-      direction: 'Inbound',
-      priority: '1',
-      match_conditions: 'All Inbound Toll-Free & DID Numbers • Business Hours',
-      primary_route: 'Twilio Cloud Telephony',
-      secondary_route: 'Direct SIP Interconnect (Twilio)',
-      failover_strategy: 'Instant Failover on SIP 486 Busy / Trunk Congestion',
-      cost_preference: 'Highest Quality & Audio Fidelity',
-      status: 'Active',
-      description: 'Dispatches incoming customer calls directly into AI Voice Agents with sub-100ms response latency and HD Opus audio.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'route_emergency_03',
-      name: 'Emergency Triage & After-Hours Cascade',
-      display_name: '24/7 Escalation Routing',
-      direction: 'Bidirectional',
-      priority: '1',
-      match_conditions: 'After-Hours Calls & Urgent Inquiries',
-      primary_route: 'Twilio Cloud Telephony',
-      secondary_route: 'Samsung Galaxy S22 5G Gateway #1',
-      failover_strategy: 'Simultaneous Ring (Parallel Cascade)',
-      cost_preference: 'Maximum Reliability / Zero Dropped Calls',
-      status: 'Active',
-      description: 'High-availability emergency routing rule ensuring 100% call delivery with dual-carrier parallel failover.',
-      scope: 'Global Workspace'
-    }
-  ],
-  dispositions: [
-    {
-      id: 'disp_booked_01',
-      name: 'Appointment Booked & Confirmed',
-      code: 'APPOINTMENT_BOOKED',
-      category: 'Connected (Positive Outcome)',
-      color: '#10B981',
-      is_system: true,
-      auto_trigger: 'Auto-sync to CRM Calendar & send SMS confirmation',
-      sentiment: 'Positive (High Intent)',
-      status: 'Active',
-      description: 'Caller successfully scheduled and confirmed an appointment with the AI Voice Agent.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'disp_interested_02',
-      name: 'Connected & Interested (Hot Lead)',
-      code: 'CONNECTED_HOT_LEAD',
-      category: 'Connected (Sales Qualified)',
-      color: '#3B82F6',
-      is_system: true,
-      auto_trigger: 'Assign high-priority lead to human SDR in CRM',
-      sentiment: 'Positive (Warm Prospect)',
-      status: 'Active',
-      description: 'Prospect expressed strong purchase or booking interest; queued for priority follow-up.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'disp_callback_03',
-      name: 'Follow-Up Scheduled / Callback Requested',
-      code: 'CALLBACK_REQUESTED',
-      category: 'Callback / Follow-Up',
-      color: '#8B5CF6',
-      is_system: true,
-      auto_trigger: 'Schedule automated callback dialer reminder',
-      sentiment: 'Neutral (Needs Follow-Up)',
-      status: 'Active',
-      description: 'Prospect requested a callback at a specific date and time.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'disp_voicemail_04',
-      name: 'Voicemail Left / Machine Detected (AMD)',
-      code: 'VOICEMAIL_LEFT',
-      category: 'Unreached / Machine',
-      color: '#F59E0B',
-      is_system: true,
-      auto_trigger: 'Queue automated retry attempt after 2 hours',
-      sentiment: 'Neutral (Answering Machine)',
-      status: 'Active',
-      description: 'AI Agent detected answering machine audio and dropped a pre-recorded voicemail message.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'disp_busy_05',
-      name: 'Busy Line / User Engaged',
-      code: 'LINE_BUSY',
-      category: 'Unreached (Retry Required)',
-      color: '#EF4444',
-      is_system: true,
-      auto_trigger: 'Immediate redial retry scheduled in 15 minutes',
-      sentiment: 'Neutral (Line Engaged)',
-      status: 'Active',
-      description: 'Carrier returned SIP 486 Busy Here or line engaged signal.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'disp_transfer_06',
-      name: 'Transferred to Human Agent / Desk Phone',
-      code: 'TRANSFERRED_TO_AGENT',
-      category: 'Connected (Live Transfer)',
-      color: '#06B6D4',
-      is_system: true,
-      auto_trigger: 'Log transfer duration and agent extension ID',
-      sentiment: 'Positive / Escalated',
-      status: 'Active',
-      description: 'Caller requested live representative assistance; call transferred seamlessly via SIP/PSTN.',
-      scope: 'Global Workspace'
-    },
-    {
-      id: 'disp_dnc_07',
-      name: 'Do-Not-Call (DNC) / Blacklist Request',
-      code: 'DO_NOT_CALL_DNC',
-      category: 'Compliance & Blacklist',
-      color: '#6B7280',
-      is_system: true,
-      auto_trigger: 'Add phone number to global DNC blacklist immediately',
-      sentiment: 'Negative / Opt-Out',
-      status: 'Active',
-      description: 'Caller opted out or requested removal; permanently suppressed from all future outbound campaigns.',
-      scope: 'Global Workspace'
-    }
-  ]
-};
+// DEFAULT_BUSINESS_RULES_ITEMS is exported from ../constants/defaultBusinessRules
 
-export const IntegrationsView: React.FC = () => {
+export const IntegrationsView: React.FC<{ onNavigate?: (screen: string) => void }> = ({ onNavigate }) => {
   // Top-level stable state for card key visibility and copy tokens (prevents React Hooks in loops violation)
   const [revealedCardKeys, setRevealedCardKeys] = useState<Record<string, boolean>>({});
   const [copiedCardKeys, setCopiedCardKeys] = useState<Record<string, boolean>>({});
+
+  // Plan Entitlements & Guardrails Engine
+  const {
+    isSuperAdmin,
+    isUnlimited,
+    entitlements,
+    canAccessLlm,
+    canAccessStt,
+    canAccessTts,
+    canAccessCodec,
+    canAccessGsm,
+    canAccessWebhooks,
+    canAccessVoiceCloning,
+    checkResourceQuota,
+    guardrailModal,
+    triggerGuardrail,
+    closeGuardrail,
+    refreshEntitlements,
+  } = usePlanEntitlements();
+
+  // Filtered catalogs based on user's subscription plan (Super Admin gets all 60+ full catalogs)
+  const visibleCloudLlmCatalog = useMemo(() => {
+    if (isSuperAdmin) return CLOUD_LLM_CATALOG;
+    return CLOUD_LLM_CATALOG.filter(c => canAccessLlm(c.provider));
+  }, [isSuperAdmin, canAccessLlm]);
+
+  const visibleLocalLlmCatalog = useMemo(() => {
+    if (isSuperAdmin) return LOCAL_LLM_CATALOG;
+    return LOCAL_LLM_CATALOG.filter(c => canAccessLlm(c.provider));
+  }, [isSuperAdmin, canAccessLlm]);
+
+  const visibleCloudVoiceCatalog = useMemo(() => {
+    if (isSuperAdmin) return CLOUD_VOICE_CATALOG;
+    return CLOUD_VOICE_CATALOG.filter(c => canAccessTts(c.provider));
+  }, [isSuperAdmin, canAccessTts]);
+
+  const visibleLocalVoiceCatalog = useMemo(() => {
+    if (isSuperAdmin) return LOCAL_VOICE_CATALOG;
+    return LOCAL_VOICE_CATALOG.filter(c => canAccessTts(c.provider));
+  }, [isSuperAdmin, canAccessTts]);
+
+  const visibleCloudSttCatalog = useMemo(() => {
+    if (isSuperAdmin) return CLOUD_STT_CATALOG;
+    return CLOUD_STT_CATALOG.filter(c => canAccessStt(c.provider));
+  }, [isSuperAdmin, canAccessStt]);
+
+  const visibleLocalSttCatalog = useMemo(() => {
+    if (isSuperAdmin) return LOCAL_STT_CATALOG;
+    return LOCAL_STT_CATALOG.filter(c => canAccessStt(c.provider));
+  }, [isSuperAdmin, canAccessStt]);
+
+  const visibleEmbeddingsCatalog = useMemo(() => {
+    if (isSuperAdmin) return EMBEDDINGS_CATALOG;
+    return EMBEDDINGS_CATALOG.filter(c => {
+      const p = c.provider.toLowerCase();
+      if (c.category === 'local') return canAccessLlm('ollama') || canAccessLlm('local');
+      if (p.includes('openai')) return canAccessLlm('openai');
+      if (p.includes('cohere')) return canAccessLlm('cohere');
+      if (p.includes('gemini') || p.includes('google')) return canAccessLlm('google');
+      if (p.includes('groq')) return canAccessLlm('groq');
+      if (p.includes('mistral')) return canAccessLlm('mistral');
+      if (p.includes('bedrock')) return canAccessLlm('aws_bedrock');
+      if (p.includes('together')) return canAccessLlm('together');
+      if (p.includes('fireworks')) return canAccessLlm('fireworks');
+      return canAccessLlm('google') || canAccessLlm('groq');
+    });
+  }, [isSuperAdmin, canAccessLlm]);
+
+  const visibleVisionDocCatalog = useMemo(() => {
+    if (isSuperAdmin) return VISION_DOC_CATALOG;
+    return VISION_DOC_CATALOG.filter(c => {
+      const p = c.provider.toLowerCase();
+      if (c.category === 'local') return canAccessLlm('ollama') || canAccessLlm('local');
+      if (p.includes('gpt4o') || p.includes('openai')) return canAccessLlm('openai');
+      if (p.includes('claude') || p.includes('anthropic')) return canAccessLlm('anthropic');
+      if (p.includes('gemini') || p.includes('google')) return canAccessLlm('google');
+      if (p.includes('groq')) return canAccessLlm('groq');
+      if (p.includes('mistral') || p.includes('pixtral')) return canAccessLlm('mistral');
+      if (p.includes('together')) return canAccessLlm('together');
+      return canAccessLlm('google') || canAccessLlm('groq');
+    });
+  }, [isSuperAdmin, canAccessLlm]);
+
 
 const getAuthToken = (): string => {
   return (
@@ -2600,6 +1678,55 @@ const getAuthToken = (): string => {
     sessionStorage.getItem('access_token') ||
     ''
   );
+};
+
+const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  let token = getAuthToken();
+  const targetOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id');
+  const headers = new Headers(options.headers || {});
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type') && options.method && options.method !== 'GET') {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (targetOrgId && !headers.has('X-Target-Organization-Id')) {
+    headers.set('X-Target-Organization-Id', targetOrgId);
+  }
+
+  let response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem('nexus_refresh_token') || sessionStorage.getItem('nexus_refresh_token');
+    if (refreshToken) {
+      try {
+        const refreshRes = await fetch('/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          if (refreshData.access_token) {
+            token = refreshData.access_token;
+            if (localStorage.getItem('nexus_access_token')) {
+              localStorage.setItem('nexus_access_token', token as string);
+              if (refreshData.refresh_token) localStorage.setItem('nexus_refresh_token', refreshData.refresh_token);
+            } else {
+              sessionStorage.setItem('nexus_access_token', token as string);
+              if (refreshData.refresh_token) sessionStorage.setItem('nexus_refresh_token', refreshData.refresh_token);
+            }
+            headers.set('Authorization', `Bearer ${token}`);
+            response = await fetch(url, { ...options, headers });
+          }
+        }
+      } catch (err) {
+        console.warn('Silent token refresh failed:', err);
+      }
+    }
+  }
+
+  return response;
 };
 
   // Helper to safely extract string primitives for React JSX rendering
@@ -2627,9 +1754,41 @@ const getAuthToken = (): string => {
   const [globalConfigData, setGlobalConfigData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Group & Tab State (Always defaults to 1. AI & Voice on view load)
-  const [activeGroup, setActiveGroup] = useState<ConfigCategoryGroup>('ai');
-  const [activeTab, setActiveTab] = useState<ConfigCategoryTab>('llm');
+  // Group & Tab State - Read from handoff context or localStorage if navigated from Campaign / other views
+  const [activeGroup, setActiveGroup] = useState<ConfigCategoryGroup>(() => {
+    try {
+      const savedGroup = localStorage.getItem('nexus_integrations_active_group') as ConfigCategoryGroup;
+      if (savedGroup && ['ai', 'business', 'telephony', 'data'].includes(savedGroup)) {
+        return savedGroup;
+      }
+    } catch {}
+    return 'ai';
+  });
+
+  const [activeTab, setActiveTab] = useState<ConfigCategoryTab>(() => {
+    try {
+      const savedTab = localStorage.getItem('nexus_integrations_active_tab') as ConfigCategoryTab;
+      if (savedTab) {
+        return savedTab;
+      }
+    } catch {}
+    return 'llm';
+  });
+
+  useEffect(() => {
+    try {
+      const savedGroup = localStorage.getItem('nexus_integrations_active_group') as ConfigCategoryGroup;
+      const savedTab = localStorage.getItem('nexus_integrations_active_tab') as ConfigCategoryTab;
+      if (savedGroup && ['ai', 'business', 'telephony', 'data'].includes(savedGroup)) {
+        setActiveGroup(savedGroup);
+      }
+      if (savedTab) {
+        setActiveTab(savedTab);
+      }
+      localStorage.removeItem('nexus_integrations_active_group');
+      localStorage.removeItem('nexus_integrations_active_tab');
+    } catch {}
+  }, []);
 
   // View Layout: 'grid' | 'list' | 'compact' (PRESERVED ACROSS ALL TABS!)
   const [viewLayout, setViewLayout] = useState<'grid' | 'list' | 'compact'>('grid');
@@ -2637,12 +1796,37 @@ const getAuthToken = (): string => {
   // Canonical Item Collections for 22 categories
   const [customItems, setCustomItems] = useState<Record<string, any[]>>(() => {
     try {
-      const saved = localStorage.getItem('nexus_custom_items');
+      const activeEmail = (localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim();
+      const isSuperAdmin = activeEmail === 'admin@createcall.ai';
+      const saved = localStorage.getItem(`nexus_custom_items_${activeEmail}`);
       const parsed = saved ? JSON.parse(saved) : {};
-      const merged: Record<string, any[]> = { ...DEFAULT_BUSINESS_RULES_ITEMS };
+      const merged: Record<string, any[]> = isSuperAdmin ? {
+        ...DEFAULT_BUSINESS_RULES_ITEMS,
+        llm: [],
+        stt: [],
+        voice: [],
+        embeddings: [],
+        vision_doc: [],
+      } : {
+        business_types: [],
+        departments: [],
+        business_policies: [],
+        working_hours: [],
+        dispositions: [],
+        webhooks: [],
+        llm: [],
+        stt: [],
+        voice: [],
+        embeddings: [],
+        vision_doc: [],
+        telephony_providers: [],
+        sip_providers: [],
+        gsm_gateways: [],
+        call_routing: [],
+        country_codes: [],
+      };
       Object.keys(parsed).forEach(k => {
         if (Array.isArray(parsed[k]) && parsed[k].length > 0) {
-          // If cached category contains stale duplicates (> canonical length), discard cache and use clean defaults
           if (k === 'sip_providers' && (parsed[k].length > 12 || parsed[k].some((i: any) => i.id === 'sip_direct_01' || i.id === 'sip-twilio-elastic-01'))) {
             return;
           }
@@ -2677,7 +1861,14 @@ const getAuthToken = (): string => {
       });
       return merged;
     } catch (e) {
-      return DEFAULT_BUSINESS_RULES_ITEMS;
+      return {
+        ...DEFAULT_BUSINESS_RULES_ITEMS,
+        llm: [],
+        stt: [],
+        voice: [],
+        embeddings: [],
+        vision_doc: [],
+      };
     }
   });
 
@@ -3597,10 +2788,6 @@ const getAuthToken = (): string => {
 
     setFetchingModelsState(prev => ({ ...prev, [pKey]: true }));
     try {
-      const token = getAuthToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const queryParams = new URLSearchParams();
       queryParams.set('provider', providerName);
       if (endpointUrl) queryParams.set('endpoint', endpointUrl);
@@ -3608,7 +2795,7 @@ const getAuthToken = (): string => {
       const effectiveKey = (keySecret && keySecret.trim()) ? keySecret.trim() : (llmApiKey || sttApiKey).trim();
       if (effectiveKey && effectiveKey !== 'local-endpoint') queryParams.set('api_key', effectiveKey);
 
-      const res = await fetch(`/api/providers/models?${queryParams.toString()}`, { headers });
+      const res = await fetchWithAuth(`/api/providers/models?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
         const models = data.models || [];
@@ -3654,25 +2841,32 @@ const getAuthToken = (): string => {
   const openSttModalForCreate = () => {
     setEditingSttId(null);
     setSttModalTab('cloud');
-    setSelectedSttCloudProvider('deepgram');
-    setSelectedSttLocalProvider('faster_whisper');
+    const defaultCloud = visibleCloudSttCatalog[0]?.provider || 'deepgram';
+    const defaultLocal = visibleLocalSttCatalog[0]?.provider || 'faster_whisper';
+    const defaultItem = visibleCloudSttCatalog.find(c => c.provider === defaultCloud) || CLOUD_STT_CATALOG[0];
+    setSelectedSttCloudProvider(defaultCloud);
+    setSelectedSttLocalProvider(defaultLocal);
     setSttApiKey('');
-    setSttBaseUrl('https://api.deepgram.com/v1');
+    setSttBaseUrl(defaultItem.endpoint);
     setSttSelectedModelId('dynamic');
     setSttSelectionStrategy('dynamic');
     setFetchedSttModelsList([]);
     setIsSttModalOpen(true);
-    handleFetchDynamicModels('deepgram', 'https://api.deepgram.com/v1');
+    handleFetchDynamicModels(defaultCloud, defaultItem.endpoint);
   };
 
   const handleSaveSttEngine = async () => {
     try {
-      const token = getAuthToken();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const isCloud = sttModalTab === 'cloud';
       const providerKey = isCloud ? selectedSttCloudProvider : selectedSttLocalProvider;
+      if (!canAccessStt(providerKey)) {
+        triggerGuardrail(
+          'Speech-to-Text Restricted',
+          `Your active subscription plan (${entitlements.planName}) does not include access to ${providerKey.toUpperCase()}. Upgrade your plan to configure this STT engine.`,
+          'Growth Pro'
+        );
+        return;
+      }
       const catalogItem = STT_CATALOG.find(p => p.provider === providerKey) || (isCloud ? CLOUD_STT_CATALOG[0] : LOCAL_STT_CATALOG[0]);
 
       const strategy = sttSelectedModelId === 'dynamic' ? 'dynamic' : 'fixed';
@@ -3689,9 +2883,8 @@ const getAuthToken = (): string => {
       };
       if (editingSttId) payload.id = editingSttId;
 
-      const res = await fetch('/api/credentials/', {
+      const res = await fetchWithAuth('/api/credentials/', {
         method: 'POST',
-        headers,
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -3815,9 +3008,8 @@ const getAuthToken = (): string => {
     });
 
     try {
-      const res = await fetch('/api/providers/voices/preview', {
+      const res = await fetchWithAuth('/api/providers/voices/preview', {
         method: 'POST',
-        headers,
         body: JSON.stringify({
           provider: provKey,
           voice_id: effectiveVoiceId,
@@ -3880,10 +3072,6 @@ const getAuthToken = (): string => {
 
     setFetchingVoicesState(prev => ({ ...prev, [pKey]: true }));
     try {
-      const token = getAuthToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const queryParams = new URLSearchParams();
       queryParams.set('provider', providerName);
       if (endpointUrl) queryParams.set('endpoint', endpointUrl);
@@ -3891,7 +3079,7 @@ const getAuthToken = (): string => {
       const effectiveKey = (keySecret && keySecret.trim()) ? keySecret.trim() : voiceApiKey.trim();
       if (effectiveKey && effectiveKey !== 'local-endpoint') queryParams.set('api_key', effectiveKey);
 
-      const res = await fetch(`/api/providers/voices?${queryParams.toString()}`, { headers });
+      const res = await fetchWithAuth(`/api/providers/voices?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
         const voices = data.voices || [];
@@ -3949,16 +3137,19 @@ const getAuthToken = (): string => {
   const openVoiceModalForCreate = () => {
     setEditingVoiceEngineId(null);
     setVoiceModalTab('cloud');
-    setSelectedVoiceCloudProvider('elevenlabs');
-    setSelectedVoiceLocalProvider('piper');
+    const defaultCloud = visibleCloudVoiceCatalog[0]?.provider || 'elevenlabs';
+    const defaultLocal = visibleLocalVoiceCatalog[0]?.provider || 'piper';
+    const defaultItem = visibleCloudVoiceCatalog.find(c => c.provider === defaultCloud) || CLOUD_VOICE_CATALOG[0];
+    setSelectedVoiceCloudProvider(defaultCloud);
+    setSelectedVoiceLocalProvider(defaultLocal);
     setVoiceApiKey('');
-    setVoiceBaseUrl(CLOUD_VOICE_CATALOG[0].endpoint);
+    setVoiceBaseUrl(defaultItem.endpoint);
     setVoiceSelectedVoiceId('dynamic');
     setVoiceCustomVoiceId('');
     setVoiceSelectedModelId('');
     setVoiceSelectionStrategy('dynamic');
     setIsVoiceEngineModalOpen(true);
-    handleFetchDynamicVoices('elevenlabs', CLOUD_VOICE_CATALOG[0].endpoint);
+    handleFetchDynamicVoices(defaultCloud, defaultItem.endpoint);
   };
 
   // Open modal for Edit Voice Engine
@@ -3988,12 +3179,16 @@ const getAuthToken = (): string => {
   // Save Dynamic Voice Engine
   const handleSaveVoiceEngine = async () => {
     try {
-      const token = getAuthToken();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const isCloud = voiceModalTab === 'cloud';
       const providerKey = isCloud ? selectedVoiceCloudProvider : selectedVoiceLocalProvider;
+      if (!canAccessTts(providerKey)) {
+        triggerGuardrail(
+          'Voice Synthesizer Restricted',
+          `Your active subscription plan (${entitlements.planName}) does not include access to ${providerKey.toUpperCase()}. Upgrade your plan to configure this voice synthesizer.`,
+          'Growth Pro'
+        );
+        return;
+      }
       const catalogItem = VOICE_CATALOG.find(p => p.provider === providerKey) || (isCloud ? CLOUD_VOICE_CATALOG[0] : LOCAL_VOICE_CATALOG[0]);
 
       const effectiveVoiceId = (voiceCustomVoiceId && voiceCustomVoiceId.trim())
@@ -4013,9 +3208,8 @@ const getAuthToken = (): string => {
       };
       if (editingVoiceEngineId) payload.id = editingVoiceEngineId;
 
-      const res = await fetch('/api/credentials/', {
+      const res = await fetchWithAuth('/api/credentials/', {
         method: 'POST',
-        headers,
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -4149,13 +3343,13 @@ const getAuthToken = (): string => {
   // Group 2: Business & Rules Enterprise Form State
   const [bName, setBName] = useState('');
   const [bDisplayName, setBDisplayName] = useState('');
-  const [bCategory, setBCategory] = useState('Hospital');
+  const [bCategory, setBCategory] = useState(BUSINESS_TYPES_50_INDUSTRIES[0]);
   const [bInternalCode, setBInternalCode] = useState('');
   const [bDescription, setBDescription] = useState('');
   const [bDefaultLanguage, setBDefaultLanguage] = useState('Hindi (India)');
   const [bDefaultVoiceEngine, setBDefaultVoiceEngine] = useState('ElevenLabs Conversational');
-  const [bDefaultAiTone, setBDefaultAiTone] = useState('Professional');
-  const [bPrimaryBehaviour, setBPrimaryBehaviour] = useState('Appointment Based');
+  const [bDefaultAiTone, setBDefaultAiTone] = useState(AI_TONE_OPTIONS[0]);
+  const [bPrimaryBehaviour, setBPrimaryBehaviour] = useState(BUSINESS_BEHAVIOUR_OPTIONS[0]);
   const [bDefaultGreeting, setBDefaultGreeting] = useState('Hello! Thank you for calling. How can I assist you today?');
   const [bWorkingHoursProfile, setBWorkingHoursProfile] = useState('Standard Business Hours (9AM - 6PM IST)');
   const [bSelectedDepartments, setBSelectedDepartments] = useState<string[]>(['Inbound Sales & SDR']);
@@ -4168,15 +3362,15 @@ const getAuthToken = (): string => {
   const [bTagsInput, setBTagsInput] = useState('Healthcare, Appointment');
 
   // Department specific state:
-  const [bDeptType, setBDeptType] = useState('Sales');
+  const [bDeptType, setBDeptType] = useState(DEPARTMENT_TYPE_OPTIONS[0]);
   const [bExtension, setBExtension] = useState('#101');
   const [bQueuePriority, setBQueuePriority] = useState<number>(10);
-  const [bTransferStrategy, setBTransferStrategy] = useState('Round Robin');
+  const [bTransferStrategy, setBTransferStrategy] = useState(TRANSFER_STRATEGIES[0]);
   const [bOverflowDepartment, setBOverflowDepartment] = useState('Customer Support');
   const [bManager, setBManager] = useState('Sarah Jenkins');
 
   // Working Hours specific state:
-  const [bTimezone, setBTimezone] = useState('Asia/Kolkata (IST +05:30)');
+  const [bTimezone, setBTimezone] = useState(TIMEZONE_CATALOG_OPTIONS[0]);
   const [bCountry, setBCountry] = useState('India');
   const [bCity, setBCity] = useState('New Delhi');
   const [bWorkingDays, setBWorkingDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
@@ -4184,7 +3378,7 @@ const getAuthToken = (): string => {
   const [bEveningShift, setBEveningShift] = useState('02:00 PM - 06:00 PM');
   const [bBreakTiming, setBBreakTiming] = useState('01:00 PM - 02:00 PM');
   const [bIs247, setBIs247] = useState(false);
-  const [bAfterHoursAction, setBAfterHoursAction] = useState('Voicemail');
+  const [bAfterHoursAction, setBAfterHoursAction] = useState(AFTER_HOURS_ACTIONS[0]);
   const [bIsDstEnabled, setBIsDstEnabled] = useState(false);
 
   // Country Dial Codes specific state:
@@ -4198,21 +3392,21 @@ const getAuthToken = (): string => {
 
   // Languages specific state:
   const [bLocale, setBLocale] = useState('hi-IN');
-  const [bCurrency, setBCurrency] = useState('INR (₹)');
-  const [bNumberFormat, setBNumberFormat] = useState('Indian Lakhs/Crores (1,00,000.00)');
-  const [bDateFormat, setBDateFormat] = useState('DD/MM/YYYY');
-  const [bTimeFormat, setBTimeFormat] = useState('12-Hour (AM/PM)');
+  const [bCurrency, setBCurrency] = useState(CURRENCY_OPTIONS[0]);
+  const [bNumberFormat, setBNumberFormat] = useState(NUMBER_FORMAT_OPTIONS[0]);
+  const [bDateFormat, setBDateFormat] = useState(DATE_FORMAT_OPTIONS[0]);
+  const [bTimeFormat, setBTimeFormat] = useState(TIME_FORMAT_OPTIONS[0]);
   const [bIsRtl, setBIsRtl] = useState(false);
   const [bMeasurementUnit, setBMeasurementUnit] = useState('Metric');
   const [bTelephoneFormat, setBTelephoneFormat] = useState('+91 XXXXX XXXXX');
   const [bFallbackLanguage, setBFallbackLanguage] = useState('English (United States)');
 
   // Policies specific state:
-  const [bPolicyCategory, setBPolicyCategory] = useState('Privacy & Data Governance');
-  const [bPolicyType, setBPolicyType] = useState('Mandatory (Strict Block)');
-  const [bExecutionTime, setBExecutionTime] = useState('Before Call Connect');
-  const [bSeverity, setBSeverity] = useState('High (Critical Action)');
-  const [bViolationAction, setBViolationAction] = useState('Block Action Immediately');
+  const [bPolicyCategory, setBPolicyCategory] = useState(POLICY_CATEGORIES[0]);
+  const [bPolicyType, setBPolicyType] = useState(POLICY_TYPES[0]);
+  const [bExecutionTime, setBExecutionTime] = useState(EXECUTION_TIMES[0]);
+  const [bSeverity, setBSeverity] = useState(SEVERITIES[0]);
+  const [bViolationAction, setBViolationAction] = useState(VIOLATION_ACTIONS[0]);
 
   // Group 2 Custom Input Text State
   const [bCustomCategory, setBCustomCategory] = useState('');
@@ -4247,15 +3441,15 @@ const getAuthToken = (): string => {
       return;
     }
 
-    const finalCategory = bCategory === 'Custom' ? (bCustomCategory.trim() || 'Custom Business Vertical') : bCategory;
-    const finalAiTone = bDefaultAiTone === 'Custom' ? (bCustomAiTone.trim() || 'Custom Tone') : bDefaultAiTone;
-    const finalBehaviour = bPrimaryBehaviour === 'Custom' ? (bCustomBehaviour.trim() || 'Custom Behaviour') : bPrimaryBehaviour;
-    const finalDeptType = bDeptType === 'Custom' ? (bCustomDeptType.trim() || 'Custom Department') : bDeptType;
-    const finalTransferStrategy = bTransferStrategy === 'Custom' ? (bCustomTransferStrategy.trim() || 'Custom Strategy') : bTransferStrategy;
-    const finalAfterHoursAction = bAfterHoursAction === 'Custom' ? (bCustomAfterHoursAction.trim() || 'Custom Action') : bAfterHoursAction;
-    const finalCurrency = bCurrency === 'Custom' ? (bCustomCurrency.trim() || 'Custom Currency') : bCurrency;
-    const finalPolicyCategory = bPolicyCategory === 'Custom' ? (bCustomPolicyCategory.trim() || 'Custom Policy') : bPolicyCategory;
-    const finalViolationAction = bViolationAction === 'Custom' ? (bCustomViolationAction.trim() || 'Custom Action') : bViolationAction;
+    const finalCategory = bCategory === 'Custom' ? (bCustomCategory.trim() || 'Custom Business Vertical') : (bCategory || BUSINESS_TYPES_50_INDUSTRIES[0]);
+    const finalAiTone = bDefaultAiTone === 'Custom' ? (bCustomAiTone.trim() || 'Custom Tone') : (bDefaultAiTone || AI_TONE_OPTIONS[0]);
+    const finalBehaviour = bPrimaryBehaviour === 'Custom' ? (bCustomBehaviour.trim() || 'Custom Behaviour') : (bPrimaryBehaviour || BUSINESS_BEHAVIOUR_OPTIONS[0]);
+    const finalDeptType = bDeptType === 'Custom' ? (bCustomDeptType.trim() || 'Custom Department') : (bDeptType || DEPARTMENT_TYPE_OPTIONS[0]);
+    const finalTransferStrategy = bTransferStrategy === 'Custom' ? (bCustomTransferStrategy.trim() || 'Custom Strategy') : (bTransferStrategy || TRANSFER_STRATEGIES[0]);
+    const finalAfterHoursAction = bAfterHoursAction === 'Custom' ? (bCustomAfterHoursAction.trim() || 'Custom Action') : (bAfterHoursAction || AFTER_HOURS_ACTIONS[0]);
+    const finalCurrency = bCurrency === 'Custom' ? (bCustomCurrency.trim() || 'Custom Currency') : (bCurrency || CURRENCY_OPTIONS[0]);
+    const finalPolicyCategory = bPolicyCategory === 'Custom' ? (bCustomPolicyCategory.trim() || 'Custom Policy') : (bPolicyCategory || POLICY_CATEGORIES[0]);
+    const finalViolationAction = bViolationAction === 'Custom' ? (bCustomViolationAction.trim() || 'Custom Action') : (bViolationAction || VIOLATION_ACTIONS[0]);
 
     const newRecord = {
       id: editingGenericId || `rule_${Date.now()}`,
@@ -4324,7 +3518,7 @@ const getAuthToken = (): string => {
         : [newRecord, ...existingList];
       const nextState = { ...prev, [activeTab]: updated };
       try {
-        localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+        localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState));
       } catch (e) {}
       return nextState;
     });
@@ -4597,22 +3791,19 @@ const getAuthToken = (): string => {
     const opts: SelectOption[] = [
       {
         value: 'auto',
-        label: '⚡ Auto (Active Workspace Agent: Nikita)',
+        label: '⚡ Auto (Active Workspace Persona)',
         description: 'Primary active telephony persona (hi-IN / Female • CwhRBWXzGAHq8TQ4Fs17)',
         group: 'Default Workspace Agent'
       }
     ];
 
     (ptWorkspaceAgentsList || []).forEach((ag: any) => {
-      const aName = (ag.name || '').toLowerCase();
-      const isFemale = ['nikita', 'maya', 'priya', 'rachel', 'sarah', 'bella', 'sneha'].some(n => aName.includes(n));
-      const isMale = ['mukesh', 'alex', 'rahul', 'amit', 'rohan'].some(n => aName.includes(n));
-      const genderLabel = isFemale ? '👩 Female' : isMale ? '👨 Male' : 'Voice Persona';
+      const genderLabel = ag.gender ? (ag.gender === 'female' ? '👩 Female' : '👨 Male') : 'Voice Persona';
 
       opts.push({
         value: ag.id || ag.name,
-        label: `${ag.name} (${genderLabel} • ${ag.language || 'hi-IN'})`,
-        description: `Voice: ${ag.voice_id || 'Default Voice'} • Model: ${ag.llm_model || 'Gemini'}`,
+        label: `${ag.name} (${genderLabel} • ${ag.language || 'Configured'})`,
+        description: `Voice: ${ag.voice_id || 'Configured Voice'} • Model: ${ag.llm_model || 'Configured Model'}`,
         group: 'Configured Workspace Agents'
       });
     });
@@ -7402,7 +6593,7 @@ const getAuthToken = (): string => {
     },
     {
       id: 'preset_inbound_vip',
-      icon: '🤖',
+      icon: '🎙️',
       label: 'Inbound VIP AI Agent Dispatch',
       desc: 'Sub-100ms HD Opus Voice Routing to AI Agents',
       badge: 'HD Opus',
@@ -7598,7 +6789,7 @@ const getAuthToken = (): string => {
     // 5. Special Fallback & AI Targets
     opts.push({
       value: 'AI Voice Agent Direct Dispatch (Nexus Realtime)',
-      label: '🤖 AI Voice Agent Direct Dispatch (Nexus Realtime)',
+      label: '🎙️ AI Voice Agent Direct Dispatch (Nexus Realtime)',
       description: 'Ultra-low latency direct WebRTC dispatch into AI voice persona',
       group: '⚡ Autonomous AI & Automated Actions'
     });
@@ -7958,7 +7149,7 @@ const getAuthToken = (): string => {
     },
     {
       id: 'disp_preset_voicemail',
-      icon: '🤖',
+      icon: '📼',
       label: 'Voicemail Left (AMD)',
       desc: 'Answering machine audio drop',
       badge: 'Machine',
@@ -8058,7 +7249,7 @@ const getAuthToken = (): string => {
     { value: 'Connected (Sales Qualified)', label: '🎯 Connected (Sales Qualified / Hot Lead)', description: 'Qualified sales prospect ready for purchase or SDR', group: 'Connected Outcomes' },
     { value: 'Callback / Follow-Up', label: '📅 Callback / Follow-Up Scheduled', description: 'Customer requested a callback at a specific date/time', group: 'Follow-Up Outcomes' },
     { value: 'Connected (Live Transfer)', label: '🎧 Connected (Live Agent Transfer)', description: 'Call escalated to human representative or SIP deskphone', group: 'Connected Outcomes' },
-    { value: 'Unreached / Machine', label: '🤖 Unreached / Machine (AMD Voicemail)', description: 'Answering machine detected; voicemail message dropped', group: 'Unreached Outcomes' },
+    { value: 'Unreached / Machine', label: '📟 Unreached / Machine (AMD Voicemail)', description: 'Answering machine detected; voicemail message dropped', group: 'Unreached Outcomes' },
     { value: 'Unreached (Retry Required)', label: '🔴 Unreached (Busy / No Answer / Redial)', description: 'Line busy, network congestion, or unanswered call', group: 'Unreached Outcomes' },
     { value: 'Compliance & Blacklist', label: '🛡️ Compliance & Do-Not-Call (DNC)', description: 'Opted-out contact permanently suppressed from dialer', group: 'Compliance & Safety' },
     { value: 'Invalid / Disconnected', label: '⚠️ Invalid / Disconnected Number', description: 'Dead number or unallocated carrier telecom line', group: 'Compliance & Safety' },
@@ -8070,7 +7261,7 @@ const getAuthToken = (): string => {
     { value: 'Positive (Warm Prospect)', label: '🙂 Positive (Warm Prospect / Interested)', description: 'Caller showed positive interest with questions', group: 'Sentiment' },
     { value: 'Positive / Escalated', label: '🤝 Positive / Escalated (Agent Transfer)', description: 'Satisfied caller handed off to live specialist', group: 'Sentiment' },
     { value: 'Neutral (Needs Follow-Up)', label: '😐 Neutral (Needs Follow-Up / Scheduled)', description: 'Neutral conversation with callback scheduled', group: 'Sentiment' },
-    { value: 'Neutral (Answering Machine)', label: '🤖 Neutral (Answering Machine / AMD)', description: 'Voicemail detected and handled autonomously', group: 'Sentiment' },
+    { value: 'Neutral (Answering Machine)', label: '📼 Neutral (Answering Machine / AMD)', description: 'Voicemail detected and handled autonomously', group: 'Sentiment' },
     { value: 'Neutral (Line Engaged)', label: '📵 Neutral (Line Engaged / No Answer)', description: 'Telecom line busy or unanswered', group: 'Sentiment' },
     { value: 'Negative (Not Interested)', label: '🙁 Negative (Not Interested / Objection)', description: 'Prospect declined proposal or offer', group: 'Sentiment' },
     { value: 'Negative / Opt-Out', label: '🚫 Negative / Opt-Out (DNC Request)', description: 'Contact requested permanent removal from call lists', group: 'Sentiment' },
@@ -8093,7 +7284,7 @@ const getAuthToken = (): string => {
     { value: 'Converted / Booked', label: '🎉 Converted / Meeting Booked', description: 'Pipeline stage: Deal Won / Appointment Scheduled' },
     { value: 'Sales Qualified Lead (SQL)', label: '🔥 Sales Qualified Lead (SQL)', description: 'Pipeline stage: High-Value Prospect for Sales Team' },
     { value: 'Follow-Up Scheduled', label: '📅 Follow-Up Scheduled', description: 'Pipeline stage: Callback Enqueued' },
-    { value: 'Unreached / Machine', label: '🤖 Unreached (Answering Machine)', description: 'Pipeline stage: Attempt 1/3 Machine Detected' },
+    { value: 'Unreached / Machine', label: '📼 Unreached (Answering Machine)', description: 'Pipeline stage: Attempt 1/3 Machine Detected' },
     { value: 'Line Busy (Retry)', label: '🔁 Line Busy (Pending Redial)', description: 'Pipeline stage: Temporary Retry' },
     { value: 'Live Agent Handoff', label: '🤝 Live Agent Escalated', description: 'Pipeline stage: SDR Handling' },
     { value: 'DNC Suppressed', label: '🛡️ DNC Blacklist / Opt-Out', description: 'Pipeline stage: Permanently Suppressed' },
@@ -8353,7 +7544,6 @@ const getAuthToken = (): string => {
     { tab: 'dispositions', label: 'Call Dispositions', group: 'telephony', icon: <Tag className="h-3.5 w-3.5" />, description: 'Standardized post-call resolution outcomes and disposition codes.' },
 
     // Group 4: Data & Webhooks (Centralized SSOT)
-    { tab: 'knowledge_collections', label: 'Knowledge & RAG', group: 'data', icon: <Database className="h-3.5 w-3.5" />, description: 'Vector RAG knowledge stores, chunking strategies, and document indexing.' },
     { tab: 'public_apis', label: 'Public APIs', group: 'data', icon: <Globe className="h-3.5 w-3.5" />, description: 'Universal Public APIs catalog across 50 categories with live background execution, key registration, and ground-truth simulation.' },
     { tab: 'prompt_templates', label: 'Prompt Templates', group: 'data', icon: <BookOpen className="h-3.5 w-3.5" />, description: 'Reusable system personas, template variables, versioning, and guardrails.' },
     { tab: 'webhooks', label: 'Webhooks & Events', group: 'data', icon: <Webhook className="h-3.5 w-3.5" />, description: 'Realtime event dispatch endpoints, authentication secrets, and delivery logs.' },
@@ -8391,14 +7581,9 @@ const getAuthToken = (): string => {
   };
 
   const persistRecordToBackend = async (newItem: any, categoryKey: string) => {
-    const token = getAuthToken();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
     if (categoryKey === 'webhooks') {
-      const whRes = await fetch('/api/webhooks', {
+      const whRes = await fetchWithAuth('/api/webhooks', {
         method: 'POST',
-        headers,
         body: JSON.stringify({
           name: newItem.name || 'webhook_endpoint',
           display_name: newItem.display_name || newItem.name,
@@ -8424,9 +7609,8 @@ const getAuthToken = (): string => {
       return true;
     }
 
-    const res = await fetch('/api/credentials/', {
+    const res = await fetchWithAuth('/api/credentials/', {
       method: 'POST',
-      headers,
       body: JSON.stringify({
         id: newItem.id,
         provider: (newItem.name || newItem.display_name || categoryKey).toLowerCase().replace(/\s+/g, '_'),
@@ -8450,30 +7634,29 @@ const getAuthToken = (): string => {
     const isReallySilent = typeof isSilent === 'boolean' ? isSilent : true;
     try {
       if (!isReallySilent) setIsLoading(true);
-      const token = getAuthToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const [allCatsRes, credRes, regRes, demoRes, agentsRes, campaignsRes] = await Promise.all([
-        fetch('/api/credentials/all-categories', { headers }).catch(() => null),
-        fetch('/api/credentials/', { headers }).catch(() => null),
-        fetch('/api/providers/', { headers }).catch(() => null),
-        fetch('/api/demo/config-options', { headers }).catch(() => null),
-        fetch('/api/agents', { headers }).catch(() => null),
-        fetch('/api/campaigns', { headers }).catch(() => null)
+        fetchWithAuth('/api/credentials/all-categories').catch(() => null),
+        fetchWithAuth('/api/credentials/').catch(() => null),
+        fetchWithAuth('/api/providers/').catch(() => null),
+        fetchWithAuth('/api/demo/config-options').catch(() => null),
+        fetchWithAuth('/api/agents').catch(() => null),
+        fetchWithAuth('/api/campaigns').catch(() => null)
       ]);
+
+      const activeEmail = (localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim();
 
       if (allCatsRes && allCatsRes.ok) {
         const allCatsData = await allCatsRes.json();
         if (allCatsData && typeof allCatsData === 'object') {
-          if (allCatsData.llm) setLlmProviders(allCatsData.llm);
-          setCustomItems(prev => {
+          setLlmProviders(Array.isArray(allCatsData.llm) ? allCatsData.llm : []);
+          setCustomItems(() => {
             const newState: Record<string, any[]> = {};
             Object.keys(allCatsData).forEach(cat => {
               newState[cat] = Array.isArray(allCatsData[cat]) ? allCatsData[cat] : [];
             });
             try {
-              localStorage.setItem('nexus_custom_items', JSON.stringify(newState));
+              localStorage.setItem(`nexus_custom_items_${activeEmail}`, JSON.stringify(newState));
             } catch (e) {}
             return newState;
           });
@@ -8482,7 +7665,7 @@ const getAuthToken = (): string => {
 
       if (credRes && credRes.ok) {
         const data = await credRes.json();
-        const loadedCreds = data.credentials || [];
+        const loadedCreds = Array.isArray(data.credentials) ? data.credentials : [];
         setCredentials(loadedCreds);
 
         // Synchronize all DB credentials to customItems so cards immediately reflect accurate clean DB state
@@ -8507,14 +7690,21 @@ const getAuthToken = (): string => {
             }
           });
 
-          Object.keys(byCat).forEach(cat => {
-            if (byCat[cat].length > 0) {
+          // Reset AI engine categories to match loaded DB credentials exactly
+          ['llm', 'stt', 'voice', 'embeddings', 'vision_doc'].forEach(cat => {
+            if (byCat[cat]) {
               nextState[cat] = byCat[cat];
+            } else if (!allCatsRes?.ok) {
+              nextState[cat] = [];
             }
           });
 
+          Object.keys(byCat).forEach(cat => {
+            nextState[cat] = byCat[cat];
+          });
+
           try {
-            localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+            localStorage.setItem(`nexus_custom_items_${activeEmail}`, JSON.stringify(nextState));
           } catch (e) {}
           return nextState;
         });
@@ -8566,6 +7756,15 @@ const getAuthToken = (): string => {
 
   useEffect(() => {
     fetchData();
+
+    const handleTargetChange = () => {
+      fetchData(true);
+    };
+
+    window.addEventListener('createcall:sovereign_target_changed', handleTargetChange);
+    return () => {
+      window.removeEventListener('createcall:sovereign_target_changed', handleTargetChange);
+    };
   }, []);
 
   const llmCreds = useMemo(() => {
@@ -8833,6 +8032,145 @@ const getAuthToken = (): string => {
       return 0;
     });
   }, [llmCreds, llmSearchQuery, llmStatusFilter, llmCategoryFilter, llmSortBy, testResults]);
+
+  // Master LLM Category counts & Scoped Status counts
+  const llmCategoryCounts = useMemo(() => {
+    const cloud = llmCreds.filter((c) => {
+      const cat = CLOUD_LLM_CATALOG.find((p) => p.provider === c.provider) || LOCAL_LLM_CATALOG.find((p) => p.provider === c.provider);
+      return (cat?.category || 'cloud') === 'cloud';
+    }).length;
+    const local = llmCreds.filter((c) => {
+      const cat = CLOUD_LLM_CATALOG.find((p) => p.provider === c.provider) || LOCAL_LLM_CATALOG.find((p) => p.provider === c.provider);
+      return (cat?.category || 'cloud') === 'local';
+    }).length;
+    return { all: llmCreds.length, cloud, local };
+  }, [llmCreds]);
+
+  const scopedLlmStatusCounts = useMemo(() => {
+    const scoped = llmCreds.filter((c) => {
+      const cat = CLOUD_LLM_CATALOG.find((p) => p.provider === c.provider) || LOCAL_LLM_CATALOG.find((p) => p.provider === c.provider);
+      if (llmCategoryFilter === 'cloud') return (cat?.category || 'cloud') === 'cloud';
+      if (llmCategoryFilter === 'local') return (cat?.category || 'cloud') === 'local';
+      return true;
+    });
+    const connected = scoped.filter((c) => {
+      const testRes = testResults[c.id] || testResults[c.provider];
+      return testRes?.status === 'Connected' || !!c.raw_key || !!c.base_url;
+    }).length;
+    const untested = scoped.length - connected;
+    return { all: scoped.length, connected, untested };
+  }, [llmCreds, llmCategoryFilter, testResults]);
+
+  const handleLlmCategoryChange = (newCat: 'all' | 'cloud' | 'local') => {
+    setLlmCategoryFilter(newCat);
+    if (llmStatusFilter !== 'all') {
+      const scoped = llmCreds.filter((c) => {
+        const cat = CLOUD_LLM_CATALOG.find((p) => p.provider === c.provider) || LOCAL_LLM_CATALOG.find((p) => p.provider === c.provider);
+        if (newCat === 'cloud') return (cat?.category || 'cloud') === 'cloud';
+        if (newCat === 'local') return (cat?.category || 'cloud') === 'local';
+        return true;
+      });
+      const matchingCount = scoped.filter((c) => {
+        const testRes = testResults[c.id] || testResults[c.provider];
+        const isConn = testRes?.status === 'Connected' || !!c.raw_key || !!c.base_url;
+        return llmStatusFilter === 'connected' ? isConn : !isConn;
+      }).length;
+      if (matchingCount === 0) setLlmStatusFilter('all');
+    }
+  };
+
+  // Master Voice Category counts & Scoped Status counts
+  const voiceCategoryCounts = useMemo(() => {
+    const cloud = voiceCreds.filter((c) => {
+      const cat = VOICE_CATALOG.find((p) => p.provider === c.provider);
+      return (cat?.category || 'cloud') === 'cloud';
+    }).length;
+    const local = voiceCreds.filter((c) => {
+      const cat = VOICE_CATALOG.find((p) => p.provider === c.provider);
+      return (cat?.category || 'cloud') === 'local';
+    }).length;
+    return { all: voiceCreds.length, cloud, local };
+  }, [voiceCreds]);
+
+  const scopedVoiceStatusCounts = useMemo(() => {
+    const scoped = voiceCreds.filter((c) => {
+      const cat = VOICE_CATALOG.find((p) => p.provider === c.provider);
+      if (voiceCategoryFilter === 'cloud') return (cat?.category || 'cloud') === 'cloud';
+      if (voiceCategoryFilter === 'local') return (cat?.category || 'cloud') === 'local';
+      return true;
+    });
+    const connected = scoped.filter((c) => {
+      const testRes = testResults[c.id] || testResults[c.provider];
+      return testRes?.status === 'Connected' || !!c.raw_key || !!c.base_url;
+    }).length;
+    const untested = scoped.length - connected;
+    return { all: scoped.length, connected, untested };
+  }, [voiceCreds, voiceCategoryFilter, testResults]);
+
+  const handleVoiceCategoryChange = (newCat: 'all' | 'cloud' | 'local') => {
+    setVoiceCategoryFilter(newCat);
+    if (voiceStatusFilter !== 'all') {
+      const scoped = voiceCreds.filter((c) => {
+        const cat = VOICE_CATALOG.find((p) => p.provider === c.provider);
+        if (newCat === 'cloud') return (cat?.category || 'cloud') === 'cloud';
+        if (newCat === 'local') return (cat?.category || 'cloud') === 'local';
+        return true;
+      });
+      const matchingCount = scoped.filter((c) => {
+        const testRes = testResults[c.id] || testResults[c.provider];
+        const isConn = testRes?.status === 'Connected' || !!c.raw_key || !!c.base_url;
+        return voiceStatusFilter === 'connected' ? isConn : !isConn;
+      }).length;
+      if (matchingCount === 0) setVoiceStatusFilter('all');
+    }
+  };
+
+  // Master STT Category counts & Scoped Status counts
+  const sttCategoryCounts = useMemo(() => {
+    const cloud = sttCreds.filter((c) => {
+      const cat = STT_CATALOG.find((p) => p.provider === c.provider);
+      return (cat?.category || 'cloud') === 'cloud';
+    }).length;
+    const local = sttCreds.filter((c) => {
+      const cat = STT_CATALOG.find((p) => p.provider === c.provider);
+      return (cat?.category || 'cloud') === 'local';
+    }).length;
+    return { all: sttCreds.length, cloud, local };
+  }, [sttCreds]);
+
+  const scopedSttStatusCounts = useMemo(() => {
+    const scoped = sttCreds.filter((c) => {
+      const cat = STT_CATALOG.find((p) => p.provider === c.provider);
+      if (sttCategoryFilter === 'cloud') return (cat?.category || 'cloud') === 'cloud';
+      if (sttCategoryFilter === 'local') return (cat?.category || 'cloud') === 'local';
+      return true;
+    });
+    const connected = scoped.filter((c) => {
+      const testRes = testResults[c.id] || testResults[c.provider];
+      return testRes?.status === 'Connected' || !!c.raw_key || !!c.base_url;
+    }).length;
+    const untested = scoped.length - connected;
+    return { all: scoped.length, connected, untested };
+  }, [sttCreds, sttCategoryFilter, testResults]);
+
+  const handleSttCategoryChange = (newCat: 'all' | 'cloud' | 'local') => {
+    setSttCategoryFilter(newCat);
+    if (sttStatusFilter !== 'all') {
+      const scoped = sttCreds.filter((c) => {
+        const cat = STT_CATALOG.find((p) => p.provider === c.provider);
+        if (newCat === 'cloud') return (cat?.category || 'cloud') === 'cloud';
+        if (newCat === 'local') return (cat?.category || 'cloud') === 'local';
+        return true;
+      });
+      const matchingCount = scoped.filter((c) => {
+        const testRes = testResults[c.id] || testResults[c.provider];
+        const isConn = testRes?.status === 'Connected' || !!c.raw_key || !!c.base_url;
+        return sttStatusFilter === 'connected' ? isConn : !isConn;
+      }).length;
+      if (matchingCount === 0) setSttStatusFilter('all');
+    }
+  };
+
   const getInitialCategoryItems = (_categoryKey: ConfigCategoryTab): any[] => {
     return [];
   };
@@ -8852,7 +8190,11 @@ const getAuthToken = (): string => {
     categories.forEach(c => {
       if (c.tab !== 'llm' && c.tab !== 'stt' && c.tab !== 'voice' && c.tab !== 'embeddings' && c.tab !== 'vision_doc' && c.tab !== 'public_apis') {
         const items = Array.isArray(customItems[c.tab]) ? customItems[c.tab] : [];
-        counts[c.tab] = items.length;
+        if (c.tab === 'country_codes') {
+          counts[c.tab] = items.length > 0 ? items.length : GLOBAL_COUNTRY_CODES_CATALOG.length;
+        } else {
+          counts[c.tab] = items.length;
+        }
       }
     });
 
@@ -8880,15 +8222,18 @@ const getAuthToken = (): string => {
   const openLlmModalForCreate = () => {
     setEditingLlmId(null);
     setModalTab('cloud');
-    setSelectedCloudProvider('google');
-    setSelectedLocalProvider('ollama');
+    const defaultCloud = visibleCloudLlmCatalog[0]?.provider || 'google';
+    const defaultLocal = visibleLocalLlmCatalog[0]?.provider || 'ollama';
+    const defaultItem = visibleCloudLlmCatalog.find(c => c.provider === defaultCloud) || CLOUD_LLM_CATALOG[0];
+    setSelectedCloudProvider(defaultCloud);
+    setSelectedLocalProvider(defaultLocal);
     setLlmApiKey('');
-    setLlmBaseUrl('https://generativelanguage.googleapis.com/v1beta');
+    setLlmBaseUrl(defaultItem.endpoint);
     setLlmSelectedModelId('dynamic');
     setLlmSelectionStrategy('dynamic');
     setFetchedModelsList([]);
     setIsLlmModalOpen(true);
-    handleFetchDynamicModels('google', 'https://generativelanguage.googleapis.com/v1beta');
+    handleFetchDynamicModels(defaultCloud, defaultItem.endpoint);
   };
 
   // Open LLM Modal for Edit
@@ -8914,16 +8259,17 @@ const getAuthToken = (): string => {
 
   // Save Dynamic LLM Provider Credential
   const handleSaveLlmProvider = async () => {
-    console.warn('[REAL-SAVE] handler entered (handleSaveLlmProvider)');
     try {
-      console.warn('[REAL-SAVE] getAuthToken about to execute');
-      const token = getAuthToken();
-      console.warn('[REAL-SAVE] token lookup completed');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const isCloud = modalTab === 'cloud';
       const providerKey = isCloud ? selectedCloudProvider : selectedLocalProvider;
+      if (!canAccessLlm(providerKey)) {
+        triggerGuardrail(
+          'Frontier Model Restricted',
+          `Your active subscription plan (${entitlements.planName}) does not include access to ${providerKey.toUpperCase()}. Upgrade your plan to configure this provider.`,
+          'Growth Pro'
+        );
+        return;
+      }
       const catalogItem = LLM_CATALOG.find(p => p.provider === providerKey) || (isCloud ? CLOUD_LLM_CATALOG[0] : LOCAL_LLM_CATALOG[0]);
 
       const strategy = llmSelectedModelId === 'dynamic' ? 'dynamic' : 'fixed';
@@ -8940,9 +8286,8 @@ const getAuthToken = (): string => {
       };
       if (editingLlmId) payload.id = editingLlmId;
 
-      const res = await fetch('/api/credentials/', {
+      const res = await fetchWithAuth('/api/credentials/', {
         method: 'POST',
-        headers,
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -8967,18 +8312,15 @@ const getAuthToken = (): string => {
     setIsTesting(true);
     if (credId) setTestingCredId(credId);
     try {
-      const token = getAuthToken();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const matchedCred = (credentials || []).find((c: any) => c.id === credId || c.provider === testProvider);
       const effectiveEndpoint = customEndpoint || (modalTab === 'local' ? llmBaseUrl : undefined) || matchedCred?.base_url;
+      const pKey = (testProvider || '').toLowerCase();
 
-      const res = await fetch('/api/credentials/test/', {
+      const res = await fetchWithAuth('/api/credentials/test', {
         method: 'POST',
-        headers,
         body: JSON.stringify({
           provider: testProvider,
+          category: activeTab || undefined,
           api_key: testKey || undefined,
           credential_id: credId,
           endpoint: effectiveEndpoint
@@ -8988,17 +8330,37 @@ const getAuthToken = (): string => {
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       if (res.ok) {
         addToast({ type: 'success', title: 'Connection Verified', description: data.message || 'Provider responded successfully.' });
+
+        if (Array.isArray(data.models) && data.models.length > 0) {
+          setModelsCache(prev => ({
+            ...prev,
+            [pKey]: data.models
+          }));
+          setFetchedModelsList(data.models);
+        }
+
+        if (Array.isArray(data.voices) && data.voices.length > 0) {
+          setVoicesCache(prev => ({
+            ...prev,
+            [pKey]: data.voices
+          }));
+        }
+
         setTestResults(prev => ({
           ...prev,
           [credId || testProvider]: {
             latency_ms: data.latency_ms || 38,
-            models_count: data.models_count || 12,
+            models_count: data.models_count || (data.models?.length || data.voices?.length || 12),
             status: 'Connected',
             lastTested: nowStr
           }
         }));
-        // Auto-fetch live models from provider API using tested API Key and effective endpoint
-        handleFetchDynamicModels(testProvider, effectiveEndpoint, testKey, true);
+
+        // Also trigger dynamic model and voice discovery to ensure fresh synchronization
+        handleFetchDynamicModels(testProvider, effectiveEndpoint, testKey, false);
+        if (activeTab === 'voice' || (data.voices && data.voices.length > 0)) {
+          handleFetchDynamicVoices(testProvider, effectiveEndpoint, testKey, false);
+        }
       } else {
         addToast({ type: 'error', title: 'Connection Failed', description: data.detail || 'Invalid key or provider endpoint.' });
         setTestResults(prev => ({
@@ -9030,21 +8392,17 @@ const getAuthToken = (): string => {
       );
       const nextState = { ...prev, [catKey]: filtered };
       try {
-        localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+        localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState));
       } catch (e) {}
       return nextState;
     });
 
     try {
-      const token = getAuthToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const deleteId = deleteTarget.id || deleteTarget.provider || deleteTarget.name;
       if (deleteId) {
         await Promise.all([
-          fetch(`/api/credentials/${encodeURIComponent(deleteId)}`, { method: 'DELETE', headers }).catch(() => null),
-          fetch(`/api/webhooks/${encodeURIComponent(deleteId)}`, { method: 'DELETE', headers }).catch(() => null)
+          fetchWithAuth(`/api/credentials/${encodeURIComponent(deleteId)}`, { method: 'DELETE' }).catch(() => null),
+          fetchWithAuth(`/api/webhooks/${encodeURIComponent(deleteId)}`, { method: 'DELETE' }).catch(() => null)
         ]);
       }
       addToast({ type: 'success', title: 'Card Deleted', description: `Removed configuration card.` });
@@ -9064,7 +8422,7 @@ const getAuthToken = (): string => {
         });
         const nextState = { ...prev, [catKey]: filtered };
         try {
-          localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+          localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState));
         } catch (e) {}
         return nextState;
       });
@@ -9208,13 +8566,13 @@ const getAuthToken = (): string => {
       setBCarrierRoute('Direct PSTN / GSM Route');
       setBName('');
       setBDisplayName('');
-      setBCategory('General Healthcare / Hospital');
+      setBCategory(BUSINESS_TYPES_50_INDUSTRIES[0]);
       setBCustomCategory('');
       setBInternalCode(`BUS-${Math.floor(1000 + Math.random() * 9000)}`);
       setBDescription('');
-      setBDefaultAiTone('Professional & Polite');
+      setBDefaultAiTone(AI_TONE_OPTIONS[0]);
       setBCustomAiTone('');
-      setBPrimaryBehaviour('Inbound Patient Support & FAQ');
+      setBPrimaryBehaviour(BUSINESS_BEHAVIOUR_OPTIONS[0]);
       setBCustomBehaviour('');
       setBDefaultGreeting('Thank you for calling! I am your AI assistant. How may I help you today?');
       setBWorkingHoursProfile('Standard Working Shift (9 AM - 6 PM)');
@@ -9226,39 +8584,39 @@ const getAuthToken = (): string => {
       setBCustomTarget('');
       setBTargetSearch('');
       setBTagsInput('Enterprise, Production');
-      setBDeptType('General Inquiries');
+      setBDeptType(DEPARTMENT_TYPE_OPTIONS[0]);
       setBCustomDeptType('');
       setBExtension('101');
       setBQueuePriority(10);
-      setBTransferStrategy('Round Robin');
+      setBTransferStrategy(TRANSFER_STRATEGIES[0]);
       setBCustomTransferStrategy('');
       setBOverflowDepartment('Escalations Tier 2');
       setBManager('Operations Team Lead');
-      setBTimezone('Asia/Kolkata (IST +05:30)');
+      setBTimezone(TIMEZONE_CATALOG_OPTIONS[0]);
       setBCountry('India');
       setBWorkingDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
       setBMorningShift('09:00 AM - 01:00 PM');
       setBEveningShift('02:00 PM - 06:00 PM');
       setBBreakTiming('01:00 PM - 02:00 PM');
       setBIs247(false);
-      setBAfterHoursAction('Voicemail Recording');
+      setBAfterHoursAction(AFTER_HOURS_ACTIONS[0]);
       setBCustomAfterHoursAction('');
       setBIsDstEnabled(false);
       setBLocale('en-US');
-      setBCurrency('INR (₹)');
+      setBCurrency(CURRENCY_OPTIONS[0]);
       setBCustomCurrency('');
-      setBNumberFormat('1,23,456.78 (Indian)');
-      setBDateFormat('DD/MM/YYYY');
-      setBTimeFormat('12-hour (AM/PM)');
+      setBNumberFormat(NUMBER_FORMAT_OPTIONS[0]);
+      setBDateFormat(DATE_FORMAT_OPTIONS[0]);
+      setBTimeFormat(TIME_FORMAT_OPTIONS[0]);
       setBIsRtl(false);
       setBTelephoneFormat('+91 (India PSTN)');
       setBFallbackLanguage('English (US)');
-      setBPolicyCategory('Regulatory & Compliance');
+      setBPolicyCategory(POLICY_CATEGORIES[0]);
       setBCustomPolicyCategory('');
-      setBPolicyType('Call Recording Disclosure');
-      setBExecutionTime('Call Initiation');
-      setBSeverity('High (Warning)');
-      setBViolationAction('Block Action Immediately');
+      setBPolicyType(POLICY_TYPES[0]);
+      setBExecutionTime(EXECUTION_TIMES[0]);
+      setBSeverity(SEVERITIES[0]);
+      setBViolationAction(VIOLATION_ACTIONS[0]);
       setBCustomViolationAction('');
     } else {
       setGenericConfigName('');
@@ -9269,6 +8627,49 @@ const getAuthToken = (): string => {
   const openGenericAddModal = (cred?: any) => {
     const isEdit = !!cred && (typeof cred === 'object' || typeof cred === 'string');
     const targetId = isEdit ? (typeof cred === 'string' ? cred : (cred.id || cred.name || cred.provider)) : null;
+    
+    // Plan Guardrail Checks for New Creations
+    if (!isEdit) {
+      if (activeTab === 'webhooks' && !canAccessWebhooks()) {
+        triggerGuardrail(
+          'Realtime Webhooks Locked',
+          `Your active plan (${entitlements.planName}) does not include Webhook triggers. Upgrade to Growth Pro or Enterprise for instant telemetry callbacks.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      if (activeTab === 'voice_profiles' && !canAccessVoiceCloning()) {
+        triggerGuardrail(
+          'Instant Voice Cloning Locked',
+          `Custom Voice Profile Cloning is exclusive to Growth Pro and Enterprise tiers. Upgrade to clone custom studio audio.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      if (activeTab === 'gsm_gateways' || activeTab === 'android_devices') {
+        if (!canAccessGsm()) {
+          triggerGuardrail(
+            'GSM Gateway & Android Pairing Locked',
+            `Direct GSM Box and Android Companion SIM hardware gateway pairing requires Growth Pro or Enterprise.`,
+            'Growth Pro'
+          );
+          return;
+        }
+      }
+      // Check quota limits for business collections
+      const currentList = customItems[activeTab] || [];
+      const quotaCheck = checkResourceQuota(activeTab, currentList.length);
+      if (!quotaCheck.allowed) {
+        triggerGuardrail(
+          `${activeTab.replace('_', ' ').toUpperCase()} Limit Reached`,
+          `You have reached the maximum allowed ${activeTab.replace('_', ' ')} items (${quotaCheck.limit}) for the ${entitlements.planName} tier. Upgrade to add more.`,
+          'Growth Pro',
+          `${currentList.length} / ${quotaCheck.limit} used`
+        );
+        return;
+      }
+    }
+    
     setEditingGenericId(targetId);
 
     if (activeTab === 'knowledge_collections') {
@@ -9451,13 +8852,13 @@ const getAuthToken = (): string => {
         setBCarrierRoute(cred.carrier_route || cred.carrierRoute || 'Direct PSTN / GSM Route');
         setBName(cred.name || cred.display_name || '');
         setBDisplayName(cred.display_name || cred.name || '');
-        setBCategory(cred.category || 'General Healthcare / Hospital');
+        setBCategory(cred.category || BUSINESS_TYPES_50_INDUSTRIES[0]);
         setBCustomCategory(cred.custom_category || '');
         setBInternalCode(cred.internal_code || `BUS-${Math.floor(1000 + Math.random() * 9000)}`);
         setBDescription(cred.description || '');
-        setBDefaultAiTone(cred.default_ai_tone || 'Professional & Polite');
+        setBDefaultAiTone(cred.default_ai_tone || AI_TONE_OPTIONS[0]);
         setBCustomAiTone(cred.custom_ai_tone || '');
-        setBPrimaryBehaviour(cred.primary_behaviour || 'Inbound Patient Support & FAQ');
+        setBPrimaryBehaviour(cred.primary_behaviour || BUSINESS_BEHAVIOUR_OPTIONS[0]);
         setBCustomBehaviour(cred.custom_behaviour || '');
         setBDefaultGreeting(cred.default_greeting || 'Thank you for calling! I am your AI assistant. How may I help you today?');
         setBWorkingHoursProfile(cred.working_hours_profile || 'Standard Working Shift (9 AM - 6 PM)');
@@ -9469,39 +8870,39 @@ const getAuthToken = (): string => {
         setBCustomTarget(cred.custom_target || '');
         setBTargetSearch('');
         setBTagsInput(Array.isArray(cred.tags) ? cred.tags.join(', ') : (cred.tags || 'Enterprise, Production'));
-        setBDeptType(cred.dept_type || 'General Inquiries');
+        setBDeptType(cred.dept_type || DEPARTMENT_TYPE_OPTIONS[0]);
         setBCustomDeptType(cred.custom_dept_type || '');
         setBExtension(cred.extension || '101');
         setBQueuePriority(typeof cred.queue_priority === 'number' ? cred.queue_priority : (Number(cred.queue_priority) || 10));
-        setBTransferStrategy(cred.transfer_strategy || 'Round Robin');
+        setBTransferStrategy(cred.transfer_strategy || TRANSFER_STRATEGIES[0]);
         setBCustomTransferStrategy(cred.custom_transfer_strategy || '');
         setBOverflowDepartment(cred.overflow_department || 'Escalations Tier 2');
         setBManager(cred.manager || 'Operations Team Lead');
-        setBTimezone(cred.timezone || 'Asia/Kolkata (IST +05:30)');
+        setBTimezone(cred.timezone || TIMEZONE_CATALOG_OPTIONS[0]);
         setBCountry(cred.country || 'India');
         setBWorkingDays(Array.isArray(cred.working_days) ? cred.working_days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
         setBMorningShift(cred.morning_shift || '09:00 AM - 01:00 PM');
         setBEveningShift(cred.evening_shift || '02:00 PM - 06:00 PM');
         setBBreakTiming(cred.break_timing || '01:00 PM - 02:00 PM');
         setBIs247(!!cred.is_247);
-        setBAfterHoursAction(cred.after_hours_action || 'Voicemail Recording');
+        setBAfterHoursAction(cred.after_hours_action || AFTER_HOURS_ACTIONS[0]);
         setBCustomAfterHoursAction(cred.custom_after_hours_action || '');
         setBIsDstEnabled(!!cred.is_dst_enabled);
         setBLocale(cred.locale || 'en-US');
-        setBCurrency(cred.currency || 'INR (₹)');
+        setBCurrency(cred.currency || CURRENCY_OPTIONS[0]);
         setBCustomCurrency(cred.custom_currency || '');
-        setBNumberFormat(cred.number_format || '1,23,456.78 (Indian)');
-        setBDateFormat(cred.date_format || 'DD/MM/YYYY');
-        setBTimeFormat(cred.time_format || '12-hour (AM/PM)');
+        setBNumberFormat(cred.number_format || NUMBER_FORMAT_OPTIONS[0]);
+        setBDateFormat(cred.date_format || DATE_FORMAT_OPTIONS[0]);
+        setBTimeFormat(cred.time_format || TIME_FORMAT_OPTIONS[0]);
         setBIsRtl(!!cred.is_rtl);
         setBTelephoneFormat(cred.telephone_format || '+91 (India PSTN)');
         setBFallbackLanguage(cred.fallback_language || 'English (US)');
-        setBPolicyCategory(cred.policy_category || 'Regulatory & Compliance');
+        setBPolicyCategory(cred.policy_category || POLICY_CATEGORIES[0]);
         setBCustomPolicyCategory(cred.custom_policy_category || '');
-        setBPolicyType(cred.policy_type || 'Call Recording Disclosure');
-        setBExecutionTime(cred.execution_time || 'Call Initiation');
-        setBSeverity(cred.severity || 'High (Warning)');
-        setBViolationAction(cred.violation_action || 'Block Action Immediately');
+        setBPolicyType(cred.policy_type || POLICY_TYPES[0]);
+        setBExecutionTime(cred.execution_time || EXECUTION_TIMES[0]);
+        setBSeverity(cred.severity || SEVERITIES[0]);
+        setBViolationAction(cred.violation_action || VIOLATION_ACTIONS[0]);
         setBCustomViolationAction(cred.custom_violation_action || '');
       } else {
         resetCategoryFormStates(activeTab);
@@ -9895,12 +9296,6 @@ const getAuthToken = (): string => {
         : (VISION_DOC_CATALOG.find(c => c.provider === providerKey) || VISION_DOC_CATALOG[0]);
 
       try {
-        console.warn('[REAL-SAVE] getAuthToken about to execute');
-        const token = getAuthToken();
-        console.warn('[REAL-SAVE] token lookup completed');
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
         const payload: any = {
           provider: providerKey,
           category: categoryKey,
@@ -9915,9 +9310,8 @@ const getAuthToken = (): string => {
           payload.id = editingGenericId;
         }
 
-        const res = await fetch('/api/credentials/', {
+        const res = await fetchWithAuth('/api/credentials/', {
           method: 'POST',
-          headers,
           body: JSON.stringify(payload)
         });
 
@@ -9973,7 +9367,7 @@ const getAuthToken = (): string => {
       const updated = [newItem, ...filtered];
       const nextState = { ...prev, [categoryKey]: updated };
       try {
-        localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+        localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState));
       } catch (e) {}
       return nextState;
     });
@@ -10000,6 +9394,7 @@ const getAuthToken = (): string => {
     const setShowKey = (val: boolean) => setRevealedCardKeys(prev => ({ ...prev, [cardKey]: val }));
 
     const catalogItem = LLM_CATALOG.find(p => p.provider === cred.provider) || CLOUD_LLM_CATALOG[0];
+    const isPlanAllowed = canAccessLlm(cred.provider);
     const testResult = testResults[cred.id] || testResults[cred.provider];
     const isThisCardTesting = isTesting && testingCredId === cred.id;
     const isEnabled = enabledToggles[cred.id] !== false;
@@ -10033,7 +9428,39 @@ const getAuthToken = (): string => {
       setTimeout(() => setCopiedCardKeys(prev => ({ ...prev, [cardKey]: false })), 2000);
     };
 
+    const handleSafeTest = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Frontier Model Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts access to ${safeStr(catalogItem?.name, 'this model')}. Upgrade to Growth Pro or Enterprise to test and connect this engine.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      handleTestConnection(cred.provider, cred.raw_key, cred.id);
+    };
+
+    const handleSafeEdit = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Frontier Model Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts configuring ${safeStr(catalogItem?.name, 'this model')}. Upgrade to Growth Pro or Enterprise to activate this provider.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      openLlmModalForEdit(cred);
+    };
+
     const handleCardRefreshModels = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Frontier Model Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts querying models from ${safeStr(catalogItem?.name, 'this provider')}. Upgrade to Growth Pro to unlock.`,
+          'Growth Pro'
+        );
+        return;
+      }
       handleFetchDynamicModels(cred.provider, cred.base_url || catalogItem.endpoint, cred.raw_key, true);
     };
 
@@ -10103,7 +9530,7 @@ const getAuthToken = (): string => {
           {/* 2-LINE ACTION BUTTONS IN COMPACT VIEW */}
           <div className="space-y-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800">
             <div className="grid grid-cols-3 gap-1">
-              <Button variant="outline" size="sm" onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3 text-blue-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
+              <Button variant="outline" size="sm" onClick={handleSafeTest} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3 text-blue-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
                 Test
               </Button>
               <Button variant="outline" size="sm" onClick={handleCardRefreshModels} disabled={isFetchingThisCard} leftIcon={<RefreshCw className={`h-3 w-3 ${isFetchingThisCard ? 'animate-spin text-blue-500' : 'text-zinc-500'}`} />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
@@ -10114,7 +9541,7 @@ const getAuthToken = (): string => {
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-1">
-              <Button variant="outline" size="sm" onClick={() => openLlmModalForEdit(cred)} leftIcon={<Edit2 className="h-3 w-3 text-zinc-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
+              <Button variant="outline" size="sm" onClick={handleSafeEdit} leftIcon={<Edit2 className="h-3 w-3 text-zinc-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
                 Replace
               </Button>
               <Button variant="danger" size="sm" onClick={() => setDeleteTarget(cred)} leftIcon={<Trash2 className="h-3 w-3" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
@@ -10205,7 +9632,7 @@ const getAuthToken = (): string => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)}
+                onClick={handleSafeTest}
                 disabled={isThisCardTesting}
                 leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
                 className="py-1.5 px-1 text-xs font-semibold justify-center min-w-0 w-full cursor-pointer"
@@ -10237,7 +9664,7 @@ const getAuthToken = (): string => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => openLlmModalForEdit(cred)}
+                onClick={handleSafeEdit}
                 leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500 shrink-0" />}
                 className="py-1.5 px-2 text-xs font-semibold justify-center cursor-pointer w-full"
               >
@@ -10328,7 +9755,7 @@ const getAuthToken = (): string => {
         <div className="space-y-1.5 pt-1 w-full">
           {/* Line 1: Core Actions (3 buttons) */}
           <div className="grid grid-cols-3 gap-1">
-            <Button variant="outline" size="sm" onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500" />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
+            <Button variant="outline" size="sm" onClick={handleSafeTest} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500" />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
               Test
             </Button>
             <Button variant="outline" size="sm" onClick={handleCardRefreshModels} disabled={isFetchingThisCard} leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetchingThisCard ? 'animate-spin text-blue-500' : 'text-zinc-500'}`} />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
@@ -10341,7 +9768,7 @@ const getAuthToken = (): string => {
 
           {/* Line 2: Management Actions (2 buttons) */}
           <div className="grid grid-cols-2 gap-1">
-            <Button variant="outline" size="sm" onClick={() => openLlmModalForEdit(cred)} leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
+            <Button variant="outline" size="sm" onClick={handleSafeEdit} leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
               Replace Key
             </Button>
             <Button variant="danger" size="sm" onClick={() => setDeleteTarget(cred)} leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
@@ -10360,6 +9787,7 @@ const getAuthToken = (): string => {
     const setShowKey = (val: boolean) => setRevealedCardKeys(prev => ({ ...prev, [cardKey]: val }));
 
     const catalogItem = VOICE_CATALOG.find((p) => p.provider === cred.provider) || VOICE_CATALOG[0];
+    const isPlanAllowed = canAccessTts(cred.provider);
     const testResult = testResults[cred.id] || testResults[cred.provider];
     const isThisCardTesting = isTesting && testingCredId === cred.id;
     const isEnabled = enabledToggles[cred.id] !== false;
@@ -10393,7 +9821,39 @@ const getAuthToken = (): string => {
       setTimeout(() => setCopiedCardKeys(prev => ({ ...prev, [cardKey]: false })), 2000);
     };
 
+    const handleSafeTest = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Voice Synthesizer Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts access to ${safeStr(catalogItem?.name, 'this engine')}. Upgrade to Growth Pro or Enterprise to test and connect this synthesizer.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      handleTestConnection(cred.provider, cred.raw_key, cred.id);
+    };
+
+    const handleSafeEdit = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Voice Synthesizer Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts configuring ${safeStr(catalogItem?.name, 'this engine')}. Upgrade to Growth Pro or Enterprise to activate this provider.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      openVoiceModalForEdit(cred);
+    };
+
     const handleCardRefreshVoices = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Voice Synthesizer Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts querying voices from ${safeStr(catalogItem?.name, 'this provider')}. Upgrade to Growth Pro to unlock.`,
+          'Growth Pro'
+        );
+        return;
+      }
       handleFetchDynamicVoices(cred.provider, cred.base_url || catalogItem.endpoint, cred.raw_key, true);
     };
 
@@ -10451,7 +9911,7 @@ const getAuthToken = (): string => {
           {/* 2-LINE ACTION BUTTONS IN COMPACT VIEW */}
           <div className="space-y-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800">
             <div className="grid grid-cols-3 gap-1">
-              <Button variant="outline" size="sm" onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3 text-blue-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
+              <Button variant="outline" size="sm" onClick={handleSafeTest} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3 text-blue-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
                 Test
               </Button>
               <Button variant="outline" size="sm" onClick={handleCardRefreshVoices} disabled={isFetchingThisCard} leftIcon={<RefreshCw className={`h-3 w-3 ${isFetchingThisCard ? 'animate-spin text-blue-500' : 'text-zinc-500'}`} />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
@@ -10462,7 +9922,7 @@ const getAuthToken = (): string => {
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-1">
-              <Button variant="outline" size="sm" onClick={() => openVoiceModalForEdit(cred)} leftIcon={<Edit2 className="h-3 w-3 text-zinc-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
+              <Button variant="outline" size="sm" onClick={handleSafeEdit} leftIcon={<Edit2 className="h-3 w-3 text-zinc-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
                 Replace
               </Button>
               <Button variant="danger" size="sm" onClick={() => setDeleteTarget(cred)} leftIcon={<Trash2 className="h-3 w-3" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
@@ -10550,7 +10010,7 @@ const getAuthToken = (): string => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)}
+                onClick={handleSafeTest}
                 disabled={isThisCardTesting}
                 leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
                 className="py-1.5 px-1 text-xs font-semibold justify-center min-w-0 w-full cursor-pointer"
@@ -10582,7 +10042,7 @@ const getAuthToken = (): string => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => openVoiceModalForEdit(cred)}
+                onClick={handleSafeEdit}
                 leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500 shrink-0" />}
                 className="py-1.5 px-2 text-xs font-semibold justify-center cursor-pointer w-full"
               >
@@ -10667,7 +10127,7 @@ const getAuthToken = (): string => {
 
         <div className="space-y-1.5 pt-1 w-full">
           <div className="grid grid-cols-3 gap-1">
-            <Button variant="outline" size="sm" onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500" />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
+            <Button variant="outline" size="sm" onClick={handleSafeTest} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500" />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
               Test
             </Button>
             <Button variant="outline" size="sm" onClick={handleCardRefreshVoices} disabled={isFetchingThisCard} leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetchingThisCard ? 'animate-spin text-blue-500' : 'text-zinc-500'}`} />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
@@ -10679,7 +10139,7 @@ const getAuthToken = (): string => {
           </div>
 
           <div className="grid grid-cols-2 gap-1">
-            <Button variant="outline" size="sm" onClick={() => openVoiceModalForEdit(cred)} leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
+            <Button variant="outline" size="sm" onClick={handleSafeEdit} leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
               Replace Key
             </Button>
             <Button variant="danger" size="sm" onClick={() => setDeleteTarget(cred)} leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
@@ -10698,6 +10158,7 @@ const getAuthToken = (): string => {
     const setShowKey = (val: boolean) => setRevealedCardKeys(prev => ({ ...prev, [cardKey]: val }));
 
     const catalogItem = STT_CATALOG.find((p) => p.provider === cred.provider) || STT_CATALOG[0];
+    const isPlanAllowed = canAccessStt(cred.provider);
     const testResult = testResults[cred.id] || testResults[cred.provider];
     const isThisCardTesting = isTesting && testingCredId === cred.id;
     const isEnabled = enabledToggles[cred.id] !== false;
@@ -10728,7 +10189,39 @@ const getAuthToken = (): string => {
       setTimeout(() => setCopiedCardKeys(prev => ({ ...prev, [cardKey]: false })), 2000);
     };
 
+    const handleSafeTest = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Speech-to-Text Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts access to ${safeStr(catalogItem?.name, 'this STT engine')}. Upgrade to Growth Pro or Enterprise to test and connect this transcriber.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      handleTestConnection(cred.provider, cred.raw_key, cred.id);
+    };
+
+    const handleSafeEdit = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Speech-to-Text Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts configuring ${safeStr(catalogItem?.name, 'this STT engine')}. Upgrade to Growth Pro or Enterprise to activate this provider.`,
+          'Growth Pro'
+        );
+        return;
+      }
+      openSttModalForEdit(cred);
+    };
+
     const handleCardRefreshModels = () => {
+      if (!isPlanAllowed) {
+        triggerGuardrail(
+          'Speech-to-Text Restricted',
+          `Your subscription tier (${entitlements.planName}) restricts querying STT models from ${safeStr(catalogItem?.name, 'this provider')}. Upgrade to Growth Pro to unlock.`,
+          'Growth Pro'
+        );
+        return;
+      }
       handleFetchDynamicModels(cred.provider, cred.base_url || catalogItem.endpoint, cred.raw_key, true);
     };
 
@@ -10798,7 +10291,7 @@ const getAuthToken = (): string => {
 
           <div className="space-y-1.5 pt-1">
             <div className="grid grid-cols-3 gap-1">
-              <Button variant="outline" size="sm" onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3 text-blue-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
+              <Button variant="outline" size="sm" onClick={handleSafeTest} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3 text-blue-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
                 Test
               </Button>
               <Button variant="outline" size="sm" onClick={handleCardRefreshModels} disabled={isFetchingThisCard} leftIcon={<RefreshCw className={`h-3 w-3 ${isFetchingThisCard ? 'animate-spin text-blue-500' : 'text-zinc-500'}`} />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
@@ -10809,7 +10302,7 @@ const getAuthToken = (): string => {
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-1">
-              <Button variant="outline" size="sm" onClick={() => openSttModalForEdit(cred)} leftIcon={<Edit2 className="h-3 w-3 text-zinc-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
+              <Button variant="outline" size="sm" onClick={handleSafeEdit} leftIcon={<Edit2 className="h-3 w-3 text-zinc-500" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
                 Replace
               </Button>
               <Button variant="danger" size="sm" onClick={() => setDeleteTarget(cred)} leftIcon={<Trash2 className="h-3 w-3" />} className="py-1 px-1 text-[10px] justify-center truncate cursor-pointer">
@@ -10899,7 +10392,7 @@ const getAuthToken = (): string => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)}
+                onClick={handleSafeTest}
                 disabled={isThisCardTesting}
                 leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
                 className="py-1.5 px-1 text-xs font-semibold justify-center min-w-0 w-full cursor-pointer"
@@ -10931,7 +10424,7 @@ const getAuthToken = (): string => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => openSttModalForEdit(cred)}
+                onClick={handleSafeEdit}
                 leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500 shrink-0" />}
                 className="py-1.5 px-2 text-xs font-semibold justify-center cursor-pointer w-full"
               >
@@ -11029,7 +10522,7 @@ const getAuthToken = (): string => {
 
         <div className="space-y-1.5 pt-1 w-full">
           <div className="grid grid-cols-3 gap-1">
-            <Button variant="outline" size="sm" onClick={() => handleTestConnection(cred.provider, cred.raw_key, cred.id)} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500" />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
+            <Button variant="outline" size="sm" onClick={handleSafeTest} disabled={isThisCardTesting} leftIcon={isThisCardTesting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-500" />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
               Test
             </Button>
             <Button variant="outline" size="sm" onClick={handleCardRefreshModels} disabled={isFetchingThisCard} leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetchingThisCard ? 'animate-spin text-blue-500' : 'text-zinc-500'}`} />} className="py-1 px-1.5 text-xs font-semibold justify-center truncate cursor-pointer">
@@ -11041,7 +10534,7 @@ const getAuthToken = (): string => {
           </div>
 
           <div className="grid grid-cols-2 gap-1">
-            <Button variant="outline" size="sm" onClick={() => openSttModalForEdit(cred)} leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
+            <Button variant="outline" size="sm" onClick={handleSafeEdit} leftIcon={<Edit2 className="h-3.5 w-3.5 text-zinc-500" />} className="py-1 px-2 text-xs font-semibold justify-center truncate cursor-pointer">
               Replace Key
             </Button>
             <Button variant="danger" size="sm" onClick={() => setDeleteTarget(cred)} leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="py-1 px-2 text-xs font-semibold justify-center cursor-pointer">
@@ -12039,7 +11532,7 @@ const getAuthToken = (): string => {
         const nextState = { ...prev, [activeTab]: updated };
         if (activeTab !== 'knowledge_collections') {
           try {
-            localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+            localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState));
           } catch (e) {}
         }
         return nextState;
@@ -12569,7 +12062,7 @@ const getAuthToken = (): string => {
       const lower = entityName.toLowerCase();
       if (lower.includes('contact') || lower.includes('lead')) return '👤';
       if (lower.includes('call')) return '📞';
-      if (lower.includes('agent')) return '🤖';
+      if (lower.includes('agent')) return '🎙️';
       if (lower.includes('campaign')) return '📢';
       if (lower.includes('workflow')) return '🔀';
       return '⚡';
@@ -12706,7 +12199,7 @@ const getAuthToken = (): string => {
               <option value="all">All Entities ({rawItems.length})</option>
               <option value="Contact / Lead Profile">👤 Contact Leads ({contactCount})</option>
               <option value="Call Session Entity">📞 Call Sessions ({callCount})</option>
-              <option value="AI Voice Agent">🤖 AI Agents ({agentCount})</option>
+              <option value="AI Voice Agent">🎙️ AI Agents ({agentCount})</option>
               <option value="Campaign Entity">📢 Campaigns ({campaignCount})</option>
               <option value="Voice Workflow Node">🔀 Workflows ({workflowCount})</option>
               {customEntities.map(ce => (
@@ -13144,7 +12637,7 @@ const getAuthToken = (): string => {
     setCustomItems(prev => {
       const nextState = { ...prev, country_codes: all243 };
       try {
-        localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+        localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState));
       } catch (e) {}
       return nextState;
     });
@@ -13176,7 +12669,7 @@ const getAuthToken = (): string => {
     setCustomItems(prev => {
       const nextState = { ...prev, country_codes: [] };
       try {
-        localStorage.setItem('nexus_custom_items', JSON.stringify(nextState));
+        localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState));
       } catch (e) {}
       return nextState;
     });
@@ -13210,7 +12703,28 @@ const getAuthToken = (): string => {
     if (categoryKey === 'custom_fields') {
       return renderDataFieldsCategoryTab(title, description);
     }
-    const rawItems = Array.isArray(customItems[categoryKey]) ? customItems[categoryKey] : [];
+    const rawItems = (Array.isArray(customItems[categoryKey]) && customItems[categoryKey].length > 0)
+      ? customItems[categoryKey]
+      : (categoryKey === 'country_codes'
+          ? GLOBAL_COUNTRY_CODES_CATALOG.map((c: any, idx: number) => ({
+              id: c.id || `country_${c.iso2.toLowerCase()}`,
+              s_no: idx + 1,
+              name: `${c.name} (${c.dialCode})`,
+              display_name: `${c.flag} ${c.name} (${c.dialCode})`,
+              country_name: c.name,
+              country: c.name,
+              dial_code: c.dialCode,
+              dialCode: c.dialCode,
+              iso2: c.iso2,
+              iso3: c.iso3,
+              flag: c.flag,
+              region: c.region,
+              carrier_route: c.carrierRoute || 'Direct PSTN / GSM Route',
+              description: `Official sovereign dial code for ${c.name} (${c.iso2}/${c.iso3}). Outbound E.164 cellular and PSTN trunk route.`,
+              status: 'Active',
+              scope: 'Global Workspace'
+            }))
+          : (Array.isArray(customItems[categoryKey]) ? customItems[categoryKey] : []));
 
     // 1. Base pool matching Search Query
     const searchMatchedItems = rawItems.filter((item: any) => {
@@ -13352,6 +12866,38 @@ const getAuthToken = (): string => {
             </Button>
           </div>
         </div>
+
+        {/* Plan Restriction Banner for Locked Subtabs */}
+        {!isSuperAdmin && (
+          (categoryKey === 'webhooks' && !canAccessWebhooks()) ||
+          (categoryKey === 'gsm_gateways' && !canAccessGsm()) ||
+          (categoryKey === 'android_devices' && !canAccessGsm()) ||
+          (categoryKey === 'voice_profiles' && !canAccessVoiceCloning())
+        ) && (
+          <div className="p-3.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-xl flex items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 shrink-0">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="font-bold text-amber-900 dark:text-amber-100">
+                  {title} is restricted on your {entitlements.planName} plan
+                </p>
+                <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                  Upgrade your subscription tier to unlock full configuration, event dispatching, and hardware routing. Super Admin has sovereign access.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => triggerGuardrail(title, `${title} requires a higher subscription tier. Upgrade your plan to configure this feature.`, 'Growth Pro')}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-2xs"
+            >
+              Upgrade Plan
+            </Button>
+          </div>
+        )}
 
         {/* Universal Search, Filter & Sorting Bar for All Categories */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 bg-zinc-50/60 dark:bg-zinc-950 p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 text-xs">
@@ -14650,22 +14196,86 @@ const getAuthToken = (): string => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+    <div className="max-w-6xl mx-auto space-y-4 pb-12">
       {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Settings2 className="h-5 w-5 text-blue-600" />
-            API &amp; Centralized Configuration Registry
-          </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0">
+        {/* ROW 1: Heading on Left + Badges on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-lg bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
+              <Settings2 className="h-3.5 w-3.5" />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
+              API &amp; Centralized Configuration Registry
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {isSuperAdmin ? (
+              <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1 whitespace-nowrap shadow-2xs">
+                <span>👑</span> Super Admin (Sovereign Unlimited)
+              </span>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-xs font-semibold px-2.5 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer hover:bg-amber-500/20 transition-all"
+                onClick={() =>
+                  triggerGuardrail(
+                    'Subscription Upgrade',
+                    'Unlock unlimited enterprise models, voice synthesizers, SIM gateways, and webhooks.',
+                    'Growth Pro'
+                  )
+                }
+                title="Click to view subscription plan entitlements"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-500" />
+                <span>Plan: {entitlements.planName}</span>
+              </Badge>
+            )}
+            {!isSuperAdmin && entitlements.planKey === 'starter_pilot' && (
+              <button
+                type="button"
+                onClick={() =>
+                  triggerGuardrail(
+                    'Subscription Upgrade',
+                    'Unlock unlimited enterprise models, voice synthesizers, SIM gateways, and webhooks.',
+                    'Growth Pro'
+                  )
+                }
+                className="h-7 px-2.5 rounded-lg text-xs font-bold bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white cursor-pointer shadow-2xs flex items-center gap-1"
+              >
+                <Crown className="w-3 h-3" />
+                <span>Upgrade</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ROW 2: Description on Left + Action Buttons on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Single Source of Truth (SSOT) configuration registry for 15+ LLM models, voice engines, business rules, and workspace metadata.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => fetchData(false)} leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />}>
-            Refresh Sync
-          </Button>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchData(false);
+                refreshEntitlements();
+                addToast({
+                  type: 'success',
+                  title: 'Workspace Synchronized',
+                  description: 'SSOT Centralized Registry & Plan Entitlements refreshed from database.',
+                });
+              }}
+              leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />}
+              className="h-7.5 text-xs font-semibold px-2.5 shrink-0 cursor-pointer shadow-2xs"
+            >
+              Refresh Sync
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -14721,6 +14331,12 @@ const getAuthToken = (): string => {
         {activeGroupCategories.map((cat) => {
           const count = categoryCounts[cat.tab] ?? 0;
           const isSelected = activeTab === cat.tab;
+          const isRestricted = !isSuperAdmin && (
+            (cat.tab === 'webhooks' && !canAccessWebhooks()) ||
+            (cat.tab === 'gsm_gateways' && !canAccessGsm()) ||
+            (cat.tab === 'android_devices' && !canAccessGsm()) ||
+            (cat.tab === 'voice_profiles' && !canAccessVoiceCloning())
+          );
 
           return (
             <button
@@ -14733,6 +14349,9 @@ const getAuthToken = (): string => {
             >
               {cat.icon}
               <span>{cat.label}</span>
+              {isRestricted && (
+                <span className="text-[10px]" title="Feature restricted on your subscription plan">🔒</span>
+              )}
               <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${isSelected
                 ? 'bg-blue-600 text-white dark:bg-blue-500 dark:text-zinc-950'
                 : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
@@ -14797,12 +14416,12 @@ const getAuthToken = (): string => {
               {/* Category Filter */}
               <select
                 value={llmCategoryFilter}
-                onChange={(e) => setLlmCategoryFilter(e.target.value as any)}
+                onChange={(e) => handleLlmCategoryChange(e.target.value as any)}
                 className="px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer"
               >
-                <option value="all">All Categories</option>
-                <option value="cloud">Cloud LLM Providers</option>
-                <option value="local">Local Hardware Engines</option>
+                <option value="all">All Categories ({llmCategoryCounts.all})</option>
+                <option value="cloud">Cloud LLM Providers ({llmCategoryCounts.cloud})</option>
+                <option value="local">Local Hardware Engines ({llmCategoryCounts.local})</option>
               </select>
 
               {/* Status Filter */}
@@ -14811,9 +14430,9 @@ const getAuthToken = (): string => {
                 onChange={(e) => setLlmStatusFilter(e.target.value as any)}
                 className="px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer"
               >
-                <option value="all">All Statuses</option>
-                <option value="connected">Connected</option>
-                <option value="untested">Untested</option>
+                <option value="all">All Statuses ({scopedLlmStatusCounts.all})</option>
+                <option value="connected">Connected ({scopedLlmStatusCounts.connected})</option>
+                <option value="untested">Untested ({scopedLlmStatusCounts.untested})</option>
               </select>
 
               {/* Sort By */}
@@ -14908,12 +14527,12 @@ const getAuthToken = (): string => {
               {/* Category Filter */}
               <select
                 value={voiceCategoryFilter}
-                onChange={(e) => setVoiceCategoryFilter(e.target.value as any)}
+                onChange={(e) => handleVoiceCategoryChange(e.target.value as any)}
                 className="px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer"
               >
-                <option value="all">All Categories</option>
-                <option value="cloud">Cloud TTS Providers</option>
-                <option value="local">Local Hardware Engines</option>
+                <option value="all">All Categories ({voiceCategoryCounts.all})</option>
+                <option value="cloud">Cloud TTS Providers ({voiceCategoryCounts.cloud})</option>
+                <option value="local">Local Hardware Engines ({voiceCategoryCounts.local})</option>
               </select>
 
               {/* Status Filter */}
@@ -14922,9 +14541,9 @@ const getAuthToken = (): string => {
                 onChange={(e) => setVoiceStatusFilter(e.target.value as any)}
                 className="px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer"
               >
-                <option value="all">All Statuses</option>
-                <option value="connected">Connected</option>
-                <option value="untested">Untested</option>
+                <option value="all">All Statuses ({scopedVoiceStatusCounts.all})</option>
+                <option value="connected">Connected ({scopedVoiceStatusCounts.connected})</option>
+                <option value="untested">Untested ({scopedVoiceStatusCounts.untested})</option>
               </select>
 
               {/* Sort By */}
@@ -15020,12 +14639,12 @@ const getAuthToken = (): string => {
               {/* Category Filter */}
               <select
                 value={sttCategoryFilter}
-                onChange={(e) => setSttCategoryFilter(e.target.value as any)}
+                onChange={(e) => handleSttCategoryChange(e.target.value as any)}
                 className="px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer"
               >
-                <option value="all">All Categories</option>
-                <option value="cloud">Cloud STT Providers</option>
-                <option value="local">Local Hardware Engines</option>
+                <option value="all">All Categories ({sttCategoryCounts.all})</option>
+                <option value="cloud">Cloud STT Providers ({sttCategoryCounts.cloud})</option>
+                <option value="local">Local Hardware Engines ({sttCategoryCounts.local})</option>
               </select>
 
               {/* Status Filter */}
@@ -15034,9 +14653,9 @@ const getAuthToken = (): string => {
                 onChange={(e) => setSttStatusFilter(e.target.value as any)}
                 className="px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer"
               >
-                <option value="all">All Statuses</option>
-                <option value="connected">Connected</option>
-                <option value="untested">Untested</option>
+                <option value="all">All Statuses ({scopedSttStatusCounts.all})</option>
+                <option value="connected">Connected ({scopedSttStatusCounts.connected})</option>
+                <option value="untested">Untested ({scopedSttStatusCounts.untested})</option>
               </select>
 
               {/* Sort By */}
@@ -15327,7 +14946,7 @@ const getAuthToken = (): string => {
         onClose={() => setIsLlmModalOpen(false)}
         title={editingLlmId ? "Edit LLM Provider Configuration" : "Configure LLM Provider"}
         description="Connect Cloud LLM Providers or Local Hardware Engines with automatic live model fetching."
-        maxWidth="md"
+        size="2xl"
         footer={
           <div className="flex items-center justify-between w-full">
             <button
@@ -15348,14 +14967,35 @@ const getAuthToken = (): string => {
           </div>
         }
       >
-        <div className="space-y-2.5 text-xs">
+        <div className="space-y-3 text-xs">
+          {/* Plan Entitlement Banner */}
+          {!isSuperAdmin ? (
+            <div className="flex items-center justify-between p-2.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-xl text-xs text-blue-700 dark:text-blue-300">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>Showing <strong>{visibleCloudLlmCatalog.length + visibleLocalLlmCatalog.length} AI Engines</strong> enabled for your <strong>{entitlements.planName}</strong> plan.</span>
+              </div>
+              <Badge variant="outline" className="text-[10px] bg-white dark:bg-zinc-900 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold">
+                Tier Allowed
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 rounded-xl text-xs text-amber-800 dark:text-amber-300">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>Super Admin Sovereign Access &bull; Full Frontier Catalog (60+ Engines Unlocked)</span>
+              </div>
+              <Badge variant="warning" className="text-[10px] font-bold">Super Admin</Badge>
+            </div>
+          )}
+
           {/* EXACTLY 2 TABS CONTROL */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-xs font-semibold">
             <button
               type="button"
               onClick={() => {
                 setModalTab('cloud');
-                const cat = CLOUD_LLM_CATALOG.find(c => c.provider === selectedCloudProvider) || CLOUD_LLM_CATALOG[0];
+                const cat = visibleCloudLlmCatalog.find(c => c.provider === selectedCloudProvider) || visibleCloudLlmCatalog[0] || CLOUD_LLM_CATALOG[0];
                 setLlmBaseUrl(cat.endpoint);
                 setFetchedModelsList([]);
               }}
@@ -15365,13 +15005,13 @@ const getAuthToken = (): string => {
                 }`}
             >
               <Globe className="h-4 w-4" />
-              <span>Cloud LLM Engine</span>
+              <span>Cloud LLM Engine ({visibleCloudLlmCatalog.length})</span>
             </button>
             <button
               type="button"
               onClick={() => {
                 setModalTab('local');
-                const cat = LOCAL_LLM_CATALOG.find(c => c.provider === selectedLocalProvider) || LOCAL_LLM_CATALOG[0];
+                const cat = visibleLocalLlmCatalog.find(c => c.provider === selectedLocalProvider) || visibleLocalLlmCatalog[0] || LOCAL_LLM_CATALOG[0];
                 const endpoint = (llmBaseUrl && llmBaseUrl.includes('http')) ? llmBaseUrl : cat.endpoint;
                 setLlmBaseUrl(endpoint);
                 handleFetchDynamicModels(selectedLocalProvider, endpoint);
@@ -15382,7 +15022,7 @@ const getAuthToken = (): string => {
                 }`}
             >
               <HardDrive className="h-4 w-4" />
-              <span>Local Hardware Engine</span>
+              <span>Local Hardware Engine ({visibleLocalLlmCatalog.length})</span>
             </button>
           </div>
 
@@ -15397,23 +15037,22 @@ const getAuthToken = (): string => {
                   value={selectedCloudProvider}
                   onChange={(p) => {
                     setSelectedCloudProvider(p);
-                    const cat = CLOUD_LLM_CATALOG.find(c => c.provider === p);
+                    const cat = visibleCloudLlmCatalog.find(c => c.provider === p) || CLOUD_LLM_CATALOG.find(c => c.provider === p);
                     if (cat) {
                       setLlmBaseUrl(cat.endpoint);
                       setFetchedModelsList([]);
                     }
                   }}
-                  options={CLOUD_LLM_CATALOG.map((catItem) => ({
+                  options={visibleCloudLlmCatalog.map((catItem) => ({
                     value: catItem.provider,
                     label: catItem.name,
-                    description: `${catItem.pricingType || 'Pay-per-token API'} • Context: ${catItem.contextWindow || '128k Tokens'}`,
                     group: catItem.group === 'free_tier'
-                      ? '🟢 Free / Free-Tier Friendly (100% Free & Generous)'
+                      ? 'Free / Free-Tier Friendly'
                       : catItem.group === 'credits_low_cost'
-                      ? '🟡 Trial Credits / Low-Cost / High-Speed Engines'
-                      : '🔵 Major Frontier & Enterprise AI Labs'
+                      ? 'Trial Credits / Low-Cost Engines'
+                      : 'Major Frontier & Enterprise AI Labs'
                   }))}
-                  placeholder="Search 60+ Cloud LLM Providers..."
+                  placeholder={isSuperAdmin ? "Search 60+ Cloud LLM Providers..." : `Search ${visibleCloudLlmCatalog.length} Plan-Enabled Cloud LLM Providers...`}
                   allowCustom={false}
                 />
               </div>
@@ -15534,7 +15173,7 @@ const getAuthToken = (): string => {
                   size="sm"
                   onClick={() => {
                     const cat = CLOUD_LLM_CATALOG.find(c => c.provider === selectedCloudProvider);
-                    handleFetchDynamicModels(selectedCloudProvider, cat?.endpoint || llmBaseUrl, llmApiKey);
+                    handleFetchDynamicModels(selectedCloudProvider, cat?.endpoint || llmBaseUrl, llmApiKey, true);
                   }}
                   disabled={isFetchingModels}
                   leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetchingModels ? 'animate-spin' : ''}`} />}
@@ -15597,17 +15236,16 @@ const getAuthToken = (): string => {
                   value={selectedLocalProvider}
                   onChange={(p) => {
                     setSelectedLocalProvider(p);
-                    const cat = LOCAL_LLM_CATALOG.find(c => c.provider === p);
+                    const cat = visibleLocalLlmCatalog.find(c => c.provider === p) || LOCAL_LLM_CATALOG.find(c => c.provider === p);
                     if (cat) {
                       setLlmBaseUrl(cat.endpoint);
                       handleFetchDynamicModels(p, cat.endpoint);
                     }
                   }}
-                  options={LOCAL_LLM_CATALOG.map((catItem) => ({
+                  options={visibleLocalLlmCatalog.map((catItem) => ({
                     value: catItem.provider,
                     label: catItem.name,
-                    description: `${catItem.pricingType || '100% Free & Local'} • ${catItem.endpoint}`,
-                    group: '🖥️ Local Hardware & Self-Hosted Engines'
+                    group: 'Local Hardware & Self-Hosted Engines'
                   }))}
                   placeholder="Search Local Hardware Engines..."
                   allowCustom={false}
@@ -16139,7 +15777,7 @@ const getAuthToken = (): string => {
         onClose={() => setIsSttModalOpen(false)}
         title={editingSttId ? "Edit Speech-to-Text (STT) Engine" : "Configure Speech-to-Text (STT) Engine"}
         description="Connect Cloud STT Providers or Local Hardware Speech Engines with dynamic model discovery."
-        maxWidth="lg"
+        size="2xl"
         footer={
           <div className="flex items-center justify-between w-full">
             <button
@@ -16161,15 +15799,37 @@ const getAuthToken = (): string => {
         }
       >
         <div className="space-y-4 text-xs">
+          {/* Plan Entitlement Banner */}
+          {!isSuperAdmin ? (
+            <div className="flex items-center justify-between p-2.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-xl text-xs text-blue-700 dark:text-blue-300">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>Showing <strong>{visibleCloudSttCatalog.length + visibleLocalSttCatalog.length} STT Engines</strong> enabled for your <strong>{entitlements.planName}</strong> plan.</span>
+              </div>
+              <Badge variant="outline" className="text-[10px] bg-white dark:bg-zinc-900 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold">
+                Tier Allowed
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 rounded-xl text-xs text-amber-800 dark:text-amber-300">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>Super Admin Sovereign Access &bull; Full Speech-to-Text Engines Unlocked</span>
+              </div>
+              <Badge variant="warning" className="text-[10px] font-bold">Super Admin</Badge>
+            </div>
+          )}
+
           {/* Tab Switcher: Cloud vs Local */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-xs font-semibold">
             <button
               type="button"
               onClick={() => {
                 setSttModalTab('cloud');
-                setSttBaseUrl(CLOUD_STT_CATALOG[0].endpoint);
+                const firstCloud = visibleCloudSttCatalog[0] || CLOUD_STT_CATALOG[0];
+                setSttBaseUrl(firstCloud.endpoint);
                 setFetchedSttModelsList([]);
-                handleFetchDynamicModels(selectedSttCloudProvider, CLOUD_STT_CATALOG[0].endpoint);
+                handleFetchDynamicModels(selectedSttCloudProvider, firstCloud.endpoint);
               }}
               className={`py-2 px-3 rounded-lg text-center transition-all flex items-center justify-center gap-2 cursor-pointer ${sttModalTab === 'cloud'
                 ? 'bg-white dark:bg-zinc-900 text-blue-600 shadow-2xs font-bold'
@@ -16177,15 +15837,16 @@ const getAuthToken = (): string => {
                 }`}
             >
               <Globe className="h-4 w-4" />
-              <span>Cloud STT Providers</span>
+              <span>Cloud STT Providers ({visibleCloudSttCatalog.length})</span>
             </button>
             <button
               type="button"
               onClick={() => {
                 setSttModalTab('local');
-                setSttBaseUrl(LOCAL_STT_CATALOG[0].endpoint);
+                const firstLocal = visibleLocalSttCatalog[0] || LOCAL_STT_CATALOG[0];
+                setSttBaseUrl(firstLocal.endpoint);
                 setFetchedSttModelsList([]);
-                handleFetchDynamicModels(selectedSttLocalProvider, LOCAL_STT_CATALOG[0].endpoint);
+                handleFetchDynamicModels(selectedSttLocalProvider, firstLocal.endpoint);
               }}
               className={`py-2 px-3 rounded-lg text-center transition-all flex items-center justify-center gap-2 cursor-pointer ${sttModalTab === 'local'
                 ? 'bg-white dark:bg-zinc-900 text-blue-600 shadow-2xs font-bold'
@@ -16193,39 +15854,38 @@ const getAuthToken = (): string => {
                 }`}
             >
               <HardDrive className="h-4 w-4" />
-              <span>Local Hardware Engines</span>
+              <span>Local Hardware Engines ({visibleLocalSttCatalog.length})</span>
             </button>
           </div>
 
           {/* Provider Selector */}
           <div>
             <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              Select {sttModalTab === 'cloud' ? 'Enterprise Cloud STT Provider' : 'Local Speech Engine'}
+              Select {sttModalTab === 'cloud' ? 'Enterprise Cloud STT Provider' : 'Local Speech Engine'} (Searchable)
             </label>
-            <select
+            <CommandPaletteSelect
               value={sttModalTab === 'cloud' ? selectedSttCloudProvider : selectedSttLocalProvider}
-              onChange={(e) => {
-                const val = e.target.value;
+              onChange={(val) => {
                 if (sttModalTab === 'cloud') {
                   setSelectedSttCloudProvider(val);
-                  const item = CLOUD_STT_CATALOG.find(p => p.provider === val);
+                  const item = visibleCloudSttCatalog.find(p => p.provider === val) || CLOUD_STT_CATALOG.find(p => p.provider === val);
                   if (item) setSttBaseUrl(item.endpoint);
                   handleFetchDynamicModels(val, item?.endpoint, sttApiKey);
                 } else {
                   setSelectedSttLocalProvider(val);
-                  const item = LOCAL_STT_CATALOG.find(p => p.provider === val);
+                  const item = visibleLocalSttCatalog.find(p => p.provider === val) || LOCAL_STT_CATALOG.find(p => p.provider === val);
                   if (item) setSttBaseUrl(item.endpoint);
                   handleFetchDynamicModels(val, item?.endpoint, sttApiKey);
                 }
               }}
-              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:border-blue-500 cursor-pointer"
-            >
-              {(sttModalTab === 'cloud' ? CLOUD_STT_CATALOG : LOCAL_STT_CATALOG).map((item) => (
-                <option key={item.provider} value={item.provider}>
-                  {item.name} ({item.provider})
-                </option>
-              ))}
-            </select>
+              options={(sttModalTab === 'cloud' ? visibleCloudSttCatalog : visibleLocalSttCatalog).map((item) => ({
+                value: item.provider,
+                label: item.name,
+                group: sttModalTab === 'cloud' ? 'Cloud Speech (STT) Providers' : 'Local Speech Recognition Engines'
+              }))}
+              placeholder={sttModalTab === 'cloud' ? "Search Cloud STT Providers..." : "Search Local Speech Engines..."}
+              allowCustom={false}
+            />
           </div>
 
           {/* RICH STT PROVIDER INFORMATION SECTION */}
@@ -16352,7 +16012,7 @@ const getAuthToken = (): string => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleFetchDynamicModels(sttModalTab === 'cloud' ? selectedSttCloudProvider : selectedSttLocalProvider, sttBaseUrl, sttApiKey)}
+              onClick={() => handleFetchDynamicModels(sttModalTab === 'cloud' ? selectedSttCloudProvider : selectedSttLocalProvider, sttBaseUrl, sttApiKey, true)}
               disabled={isFetchingModels}
               leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetchingModels ? 'animate-spin' : ''}`} />}
               className="w-full justify-center py-2 text-xs font-semibold cursor-pointer"
@@ -16409,7 +16069,7 @@ const getAuthToken = (): string => {
         onClose={() => setIsVoiceEngineModalOpen(false)}
         title="Configure Realtime Voice Synthesizer (TTS)"
         description="Connect Cloud TTS Providers or Local GPU Voice Engines with dynamic voice discovery."
-        maxWidth="lg"
+        size="2xl"
         footer={
           <div className="flex items-center justify-between w-full">
             <button
@@ -16431,14 +16091,36 @@ const getAuthToken = (): string => {
         }
       >
         <div className="space-y-4 text-xs">
+          {/* Plan Entitlement Banner */}
+          {!isSuperAdmin ? (
+            <div className="flex items-center justify-between p-2.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-xl text-xs text-blue-700 dark:text-blue-300">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>Showing <strong>{visibleCloudVoiceCatalog.length + visibleLocalVoiceCatalog.length} Voice Synthesizers</strong> enabled for your <strong>{entitlements.planName}</strong> plan.</span>
+              </div>
+              <Badge variant="outline" className="text-[10px] bg-white dark:bg-zinc-900 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold">
+                Tier Allowed
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 rounded-xl text-xs text-amber-800 dark:text-amber-300">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>Super Admin Sovereign Access &bull; Full Voice Engines &amp; Neural TTS Unlocked</span>
+              </div>
+              <Badge variant="warning" className="text-[10px] font-bold">Super Admin</Badge>
+            </div>
+          )}
+
           {/* Tab Switcher: Cloud vs Local */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-xs font-semibold">
             <button
               type="button"
               onClick={() => {
                 setVoiceModalTab('cloud');
-                setVoiceBaseUrl(CLOUD_VOICE_CATALOG[0].endpoint);
-                handleFetchDynamicVoices(selectedVoiceCloudProvider, CLOUD_VOICE_CATALOG[0].endpoint);
+                const firstCloud = visibleCloudVoiceCatalog[0] || CLOUD_VOICE_CATALOG[0];
+                setVoiceBaseUrl(firstCloud.endpoint);
+                handleFetchDynamicVoices(selectedVoiceCloudProvider, firstCloud.endpoint);
               }}
               className={`py-2 px-3 rounded-lg text-center transition-all flex items-center justify-center gap-2 cursor-pointer ${voiceModalTab === 'cloud'
                 ? 'bg-white dark:bg-zinc-900 text-blue-600 shadow-2xs font-bold'
@@ -16446,14 +16128,15 @@ const getAuthToken = (): string => {
                 }`}
             >
               <Globe className="h-4 w-4" />
-              <span>Cloud Voice Providers</span>
+              <span>Cloud Voice Providers ({visibleCloudVoiceCatalog.length})</span>
             </button>
             <button
               type="button"
               onClick={() => {
                 setVoiceModalTab('local');
-                setVoiceBaseUrl(LOCAL_VOICE_CATALOG[0].endpoint);
-                handleFetchDynamicVoices(selectedVoiceLocalProvider, LOCAL_VOICE_CATALOG[0].endpoint);
+                const firstLocal = visibleLocalVoiceCatalog[0] || LOCAL_VOICE_CATALOG[0];
+                setVoiceBaseUrl(firstLocal.endpoint);
+                handleFetchDynamicVoices(selectedVoiceLocalProvider, firstLocal.endpoint);
               }}
               className={`py-2 px-3 rounded-lg text-center transition-all flex items-center justify-center gap-2 cursor-pointer ${voiceModalTab === 'local'
                 ? 'bg-white dark:bg-zinc-900 text-blue-600 shadow-2xs font-bold'
@@ -16461,42 +16144,41 @@ const getAuthToken = (): string => {
                 }`}
             >
               <HardDrive className="h-4 w-4" />
-              <span>Local Hardware Engines</span>
+              <span>Local Hardware Engines ({visibleLocalVoiceCatalog.length})</span>
             </button>
           </div>
 
           {/* Provider Selector */}
           <div>
             <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              Select {voiceModalTab === 'cloud' ? 'Enterprise Cloud Provider' : 'Local Engine'}
+              Select {voiceModalTab === 'cloud' ? 'Enterprise Cloud Provider' : 'Local Engine'} (Searchable)
             </label>
-            <select
+            <CommandPaletteSelect
               value={voiceModalTab === 'cloud' ? selectedVoiceCloudProvider : selectedVoiceLocalProvider}
-              onChange={(e) => {
-                const val = e.target.value;
+              onChange={(val) => {
                 setVoiceSelectedVoiceId('dynamic');
                 setVoiceCustomVoiceId('');
                 setVoiceSelectedModelId('');
                 if (voiceModalTab === 'cloud') {
                   setSelectedVoiceCloudProvider(val);
-                  const item = CLOUD_VOICE_CATALOG.find(p => p.provider === val);
+                  const item = visibleCloudVoiceCatalog.find(p => p.provider === val) || CLOUD_VOICE_CATALOG.find(p => p.provider === val);
                   if (item) setVoiceBaseUrl(item.endpoint);
                   handleFetchDynamicVoices(val, item?.endpoint, voiceApiKey);
                 } else {
                   setSelectedVoiceLocalProvider(val);
-                  const item = LOCAL_VOICE_CATALOG.find(p => p.provider === val);
+                  const item = visibleLocalVoiceCatalog.find(p => p.provider === val) || LOCAL_VOICE_CATALOG.find(p => p.provider === val);
                   if (item) setVoiceBaseUrl(item.endpoint);
                   handleFetchDynamicVoices(val, item?.endpoint, voiceApiKey);
                 }
               }}
-              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:border-blue-500 cursor-pointer"
-            >
-              {(voiceModalTab === 'cloud' ? CLOUD_VOICE_CATALOG : LOCAL_VOICE_CATALOG).map((item) => (
-                <option key={item.provider} value={item.provider}>
-                  {item.name} ({item.provider})
-                </option>
-              ))}
-            </select>
+              options={(voiceModalTab === 'cloud' ? visibleCloudVoiceCatalog : visibleLocalVoiceCatalog).map((item) => ({
+                value: item.provider,
+                label: item.name,
+                group: voiceModalTab === 'cloud' ? 'Cloud Voice (TTS) Providers' : 'Local Hardware Voice Engines'
+              }))}
+              placeholder={voiceModalTab === 'cloud' ? "Search Voice Synthesizers..." : "Search Local Voice Engines..."}
+              allowCustom={false}
+            />
           </div>
 
           {/* Sleek Provider Voice Specification Notice Banner (Top Placement) */}
@@ -16632,7 +16314,7 @@ const getAuthToken = (): string => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleFetchDynamicVoices(voiceModalTab === 'cloud' ? selectedVoiceCloudProvider : selectedVoiceLocalProvider, voiceBaseUrl, voiceApiKey)}
+                  onClick={() => handleFetchDynamicVoices(voiceModalTab === 'cloud' ? selectedVoiceCloudProvider : selectedVoiceLocalProvider, voiceBaseUrl, voiceApiKey, true)}
                   disabled={isFetching}
                   leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />}
                   className="w-full justify-center py-2 text-xs font-semibold cursor-pointer"
@@ -17167,12 +16849,11 @@ const getAuthToken = (): string => {
               {/* Provider Selection Dropdown */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Supported {genericModalTab === 'cloud' ? 'Cloud API' : 'Local Engine'} Provider
+                  Supported {genericModalTab === 'cloud' ? 'Cloud API' : 'Local Engine'} Provider (Searchable)
                 </label>
-                <select
+                <CommandPaletteSelect
                   value={selectedEmbeddingProvider}
-                  onChange={(e) => {
-                    const p = e.target.value;
+                  onChange={(p) => {
                     setSelectedEmbeddingProvider(p);
                     const item = EMBEDDINGS_CATALOG.find(c => c.provider === p);
                     if (item) {
@@ -17180,14 +16861,14 @@ const getAuthToken = (): string => {
                     }
                     handleFetchDynamicModels(p, '', genericConfigValue);
                   }}
-                  className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100 cursor-pointer"
-                >
-                  {EMBEDDINGS_CATALOG.filter(item => item.category === genericModalTab).map((item) => (
-                    <option key={item.provider} value={item.provider}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
+                  options={visibleEmbeddingsCatalog.filter(item => item.category === genericModalTab).map((item) => ({
+                    value: item.provider,
+                    label: item.name,
+                    group: genericModalTab === 'cloud' ? 'Cloud Vector Embeddings' : 'Local Embedding Engines'
+                  }))}
+                  placeholder="Search embedding providers..."
+                  allowCustom={false}
+                />
               </div>
 
               {/* API Key Secret with Get API Key link */}
@@ -17245,7 +16926,7 @@ const getAuthToken = (): string => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleFetchDynamicModels(selectedEmbeddingProvider, '', genericConfigValue)}
+                  onClick={() => handleFetchDynamicModels(selectedEmbeddingProvider, '', genericConfigValue, true)}
                   disabled={isFetchingModels}
                   leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetchingModels ? 'animate-spin' : ''}`} />}
                   className="w-full justify-center text-xs py-1.5 font-semibold cursor-pointer"
@@ -17354,12 +17035,11 @@ const getAuthToken = (): string => {
               {/* Provider Selection Dropdown */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Supported {genericModalTab === 'cloud' ? 'Cloud Vision' : 'Local OCR'} Provider
+                  Supported {genericModalTab === 'cloud' ? 'Cloud Vision' : 'Local OCR'} Provider (Searchable)
                 </label>
-                <select
+                <CommandPaletteSelect
                   value={selectedVisionDocProvider}
-                  onChange={(e) => {
-                    const p = e.target.value;
+                  onChange={(p) => {
                     setSelectedVisionDocProvider(p);
                     const item = VISION_DOC_CATALOG.find(c => c.provider === p);
                     if (item) {
@@ -17367,14 +17047,14 @@ const getAuthToken = (): string => {
                     }
                     handleFetchDynamicModels(p, '', genericConfigValue);
                   }}
-                  className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100 cursor-pointer"
-                >
-                  {VISION_DOC_CATALOG.filter(item => item.category === genericModalTab).map((item) => (
-                    <option key={item.provider} value={item.provider}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
+                  options={visibleVisionDocCatalog.filter(item => item.category === genericModalTab).map((item) => ({
+                    value: item.provider,
+                    label: item.name,
+                    group: genericModalTab === 'cloud' ? 'Cloud Vision & Multimodal' : 'Local OCR & Document Engines'
+                  }))}
+                  placeholder="Search vision providers..."
+                  allowCustom={false}
+                />
               </div>
 
               {/* API Key Secret with Get API Key link */}
@@ -17432,7 +17112,7 @@ const getAuthToken = (): string => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleFetchDynamicModels(selectedVisionDocProvider, '', genericConfigValue)}
+                  onClick={() => handleFetchDynamicModels(selectedVisionDocProvider, '', genericConfigValue, true)}
                   disabled={isFetchingModels}
                   leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isFetchingModels ? 'animate-spin' : ''}`} />}
                   className="w-full justify-center text-xs py-1.5 font-semibold cursor-pointer"
@@ -17587,7 +17267,7 @@ const getAuthToken = (): string => {
               {activeTab === 'business_types' && (
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-3">
                   <h4 className="font-bold text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-1.5">
-                    🤖 2. AI Defaults &amp; Behavioral Strategy
+                    🎙️ 2. AI Defaults &amp; Behavioral Strategy
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -18578,7 +18258,7 @@ const getAuthToken = (): string => {
                         options={[
                           { value: 'Global Workspace', label: '🌐 Global Workspace', description: 'Accessible by all AI Voice agents' },
                           { value: 'Organization Level', label: '🏢 Organization Level', description: 'Restricted to org team' },
-                          { value: 'Agent Level', label: '🤖 Agent Specific', description: 'Bound to specific agent persona' },
+                          { value: 'Agent Level', label: '🎙️ Agent Specific', description: 'Bound to specific agent persona' },
                         ]}
                       />
                     </div>
@@ -18967,8 +18647,8 @@ const getAuthToken = (): string => {
                         <div className="p-3 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl space-y-2 shadow-sm">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
-                              <Bot className="h-4 w-4 text-blue-500 animate-pulse" />
-                              <span>🤖 AI Voice Agent Structured Direct Answer (Docs Style Format)</span>
+                              <Headphones className="h-4 w-4 text-blue-500 animate-pulse" />
+                              <span>🎙️ AI Voice Agent Structured Direct Answer (Docs Style Format)</span>
                             </span>
                             <Badge variant="success" size="sm">{kcTestResult.providerUsed ? `${kcTestResult.providerUsed} • ` : 'Grounded AI • '}Latency {kcTestResult.latency || '18ms'}</Badge>
                           </div>
@@ -19065,8 +18745,8 @@ const getAuthToken = (): string => {
                         onClick={() => setIsAiPromptBuilderModalOpen(true)}
                         className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-102 transition-transform"
                       >
-                        <Bot className="h-3.5 w-3.5 text-amber-300" />
-                        <span>✨ Open AI Prompt Chatbot</span>
+                        <SparklesIcon className="h-3.5 w-3.5 text-amber-300" />
+                        <span>✨ Open AI Prompt Architect</span>
                       </button>
 
                       <input
@@ -19287,11 +18967,8 @@ const getAuthToken = (): string => {
                               setPtTestGender('auto');
                             } else {
                               const matched = ptWorkspaceAgentsList.find((a: any) => a.id === newId || a.name === newId || `${a.name}`.toLowerCase() === newId.toLowerCase());
-                              const aName = (matched?.name || newId || '').toLowerCase();
-                              if (['nikita', 'maya', 'priya', 'rachel', 'sarah', 'bella', 'sneha'].some(n => aName.includes(n))) {
-                                setPtTestGender('female');
-                              } else if (['mukesh', 'alex', 'rahul', 'amit', 'rohan'].some(n => aName.includes(n))) {
-                                setPtTestGender('male');
+                              if (matched?.gender) {
+                                setPtTestGender(matched.gender);
                               }
                             }
                           }}
@@ -19362,7 +19039,7 @@ const getAuthToken = (): string => {
                                 ⚡ {ptTestMetadata.latency_ms}ms
                               </span>
                               <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-mono font-bold border border-blue-200 dark:border-blue-800">
-                                🤖 {ptTestMetadata.model_used}
+                                🎙️ {ptTestMetadata.model_used}
                               </span>
                             </div>
                           )}
@@ -20226,12 +19903,12 @@ const getAuthToken = (): string => {
                         >
                           <span className="truncate text-left flex-1 font-semibold">
                             {whSelectedAgentIds.includes('all')
-                              ? `🤖 All Agents (${whAvailableAgents.length || 'Dynamic'})`
+                              ? `🎙️ All Agents (${whAvailableAgents.length || 'Dynamic'})`
                               : whSelectedAgentIds.length === 0
-                              ? `🤖 Select Agent(s)...`
+                              ? `🎙️ Select Agent(s)...`
                               : whSelectedAgentIds.length === 1
                               ? `👤 ${whAvailableAgents.find(a => a.id === whSelectedAgentIds[0])?.name || '1 Agent Selected'}`
-                              : `🤖 ${whSelectedAgentIds.length} Agents Selected`}
+                              : `🎙️ ${whSelectedAgentIds.length} Agents Selected`}
                           </span>
                           <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 shrink-0 transition-transform duration-150 ${isAgentDropdownOpen ? 'rotate-180' : ''}`} />
                         </button>
@@ -20262,7 +19939,7 @@ const getAuthToken = (): string => {
                                     : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
                                 }`}
                               >
-                                🤖 Select All (Batch)
+                                🎙️ Select All (Batch)
                               </button>
                               <button
                                 type="button"
@@ -20598,7 +20275,7 @@ const getAuthToken = (): string => {
                       options={[
                         { value: 'Contact / Lead Profile', label: '👤 Contact / Lead Profile', description: 'CRM Lead & Contact attribute (e.g. alternate phone, insurance, doctor, appointment)', group: 'CRM Entities' },
                         { value: 'Call Session Entity', label: '📞 Call Session Entity', description: 'Active call telemetry & outcome metadata (e.g. disposition reason, duration)', group: 'Calling Telemetry' },
-                        { value: 'AI Voice Agent', label: '🤖 AI Voice Agent', description: 'Agent persona, prompt directives & context tokens', group: 'AI & Prompts' },
+                        { value: 'AI Voice Agent', label: '🎙️ AI Voice Agent', description: 'Agent persona, prompt directives & context tokens', group: 'AI & Prompts' },
                         { value: 'Campaign Entity', label: '📢 Campaign Entity', description: 'Outbound calling campaign parameters & blast tags', group: 'Campaigns' },
                         { value: 'Voice Workflow Node', label: '🔀 Voice Workflow Node', description: 'Branching condition variable for IVR & voice trees', group: 'Workflows' },
                         { value: 'Custom', label: '✨ Custom Entity Binding...', description: 'Specify your own custom business entity schema', group: 'Custom' },
@@ -22428,7 +22105,7 @@ const getAuthToken = (): string => {
                 return (
                   <div key={tName} className={`p-2 border font-bold rounded-lg flex items-center gap-1.5 shadow-2xs text-[11px] ${isLive ? 'bg-blue-50 dark:bg-blue-950/80 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
                     }`}>
-                    {tName === 'AI Voice Agents' && '🤖'}
+                    {tName === 'AI Voice Agents' && '🎧'}
                     {tName === 'AI Campaigns' && '📡'}
                     {tName === 'Phone Numbers' && '📱'}
                     {tName === 'Voice Workflows' && '🔀'}
@@ -22528,7 +22205,7 @@ const getAuthToken = (): string => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {[
                         { id: 'Live Call Studio', label: 'Live Call Studio', icon: '🎙️', desc: 'Realtime testing & demo call console' },
-                        { id: 'AI Voice Agents', label: 'AI Voice Agents', icon: '🤖', desc: 'Configured AI SDR & Support personas' },
+                        { id: 'AI Voice Agents', label: 'AI Voice Agents', icon: '🎧', desc: 'Configured AI SDR & Support personas' },
                         { id: 'Conversation Engine', label: 'Conversation Engine', icon: '🛡️', desc: 'Rules matrix & guardrail policies' },
                         { id: 'OS Settings', label: 'OS Settings', icon: '⚙️', desc: 'Workspace defaults & global policy' },
                         { id: 'AI Campaigns', label: 'AI Campaigns', icon: '📡', desc: 'Outbound campaign routing & schedules' },
@@ -22723,7 +22400,7 @@ const getAuthToken = (): string => {
                                 const tName = typeof tabObj === 'string' ? tabObj : tabObj.name;
                                 return (
                                   <span key={tName} className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-extrabold text-[10px] flex items-center gap-1.5 shadow-2xs">
-                                    {tName === 'AI Voice Agents' && '🤖'}
+                                    {tName === 'AI Voice Agents' && '🎧'}
                                     {tName === 'AI Campaigns' && '📡'}
                                     {tName === 'Phone Numbers' && '📱'}
                                     {tName === 'Voice Workflows' && '🔀'}
@@ -22838,7 +22515,7 @@ const getAuthToken = (): string => {
                   const filtered = currentList.filter((i: any) => i.id !== newItem.id && i.id !== editId && i.name !== editName && i.name !== newItem.name);
                   const updated = [newItem, ...filtered];
                   const nextState = { ...prev, telephony_providers: updated };
-                  try { localStorage.setItem('nexus_custom_items', JSON.stringify(nextState)); } catch (err) {}
+                  try { localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState)); } catch (err) {}
                   return nextState;
                 });
                 persistRecordToBackend(newItem, 'telephony_providers');
@@ -23613,7 +23290,7 @@ const getAuthToken = (): string => {
                   const filtered = currentList.filter((i: any) => i.id !== newItem.id && i.id !== editId && i.name !== editName && i.name !== newItem.name);
                   const updated = [newItem, ...filtered];
                   const nextState = { ...prev, sip_providers: updated };
-                  try { localStorage.setItem('nexus_custom_items', JSON.stringify(nextState)); } catch (err) {}
+                  try { localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState)); } catch (err) {}
                   return nextState;
                 });
                 persistRecordToBackend(newItem, 'sip_providers');
@@ -24065,7 +23742,7 @@ const getAuthToken = (): string => {
                   const filtered = currentList.filter((i: any) => i.id !== newItem.id && i.id !== editId && i.name !== editName && i.name !== newItem.name);
                   const updated = [newItem, ...filtered];
                   const nextState = { ...prev, gsm_gateways: updated };
-                  try { localStorage.setItem('nexus_custom_items', JSON.stringify(nextState)); } catch (err) {}
+                  try { localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState)); } catch (err) {}
                   return nextState;
                 });
                 persistRecordToBackend(newItem, 'gsm_gateways');
@@ -24719,7 +24396,7 @@ const getAuthToken = (): string => {
                   const filtered = currentList.filter((i: any) => i.id !== newItem.id && i.id !== editId && i.name !== editName && i.name !== newItem.name);
                   const updated = [newItem, ...filtered];
                   const nextState = { ...prev, call_routing: updated };
-                  try { localStorage.setItem('nexus_custom_items', JSON.stringify(nextState)); } catch (err) {}
+                  try { localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState)); } catch (err) {}
                   return nextState;
                 });
                 persistRecordToBackend(newItem, 'call_routing');
@@ -25291,7 +24968,7 @@ const getAuthToken = (): string => {
                   const filtered = currentList.filter((i: any) => i.id !== newItem.id && i.id !== editId && i.name !== editName && i.name !== newItem.name);
                   const updated = [newItem, ...filtered];
                   const nextState = { ...prev, dispositions: updated };
-                  try { localStorage.setItem('nexus_custom_items', JSON.stringify(nextState)); } catch (err) {}
+                  try { localStorage.setItem(`nexus_custom_items_${(localStorage.getItem('nexus_user_email') || 'default').toLowerCase().trim()}`, JSON.stringify(nextState)); } catch (err) {}
                   return nextState;
                 });
                 persistRecordToBackend(newItem, 'dispositions');
@@ -25592,7 +25269,7 @@ const getAuthToken = (): string => {
                   },
                   {
                     id: 'voicemail',
-                    icon: '🤖',
+                    icon: '📼',
                     label: 'Voicemail Detected (AMD)',
                     transcript: '"Hi, you have reached John. Please leave a message after the tone... [Beep]"'
                   },
@@ -26116,6 +25793,24 @@ const getAuthToken = (): string => {
           </div>
         </div>
       </Modal>
+    
+      {/* Dynamic Plan Guardrail Modal */}
+      <PlanGuardrailModal
+        isOpen={guardrailModal.isOpen}
+        onClose={closeGuardrail}
+        title={guardrailModal.title}
+        description={guardrailModal.description}
+        requiredTier={guardrailModal.requiredTier}
+        currentTier={guardrailModal.currentTier || entitlements.planName}
+        limitInfo={guardrailModal.limitInfo}
+        onUpgrade={() => {
+          closeGuardrail();
+          if (onNavigate) {
+            onNavigate('billing');
+          }
+        }}
+      />
+
     </div>
   );
 };

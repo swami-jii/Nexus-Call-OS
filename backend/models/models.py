@@ -46,8 +46,8 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     phone_number = Column(String(50), nullable=True)
     role = Column(
-        String(50), default="operator"
-    )  # super_admin, admin, operator, viewer
+        String(50), default="user"
+    )  # super_admin, user
     organization_id = Column(
         String(36), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
     )
@@ -58,6 +58,29 @@ class User(Base):
     profile_data = Column(Text, nullable=True)
     created_at = Column(DateTime, default=get_utc_now)
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+    @property
+    def avatar_url(self) -> Optional[str]:
+        if self.profile_data:
+            try:
+                import json
+                data = json.loads(self.profile_data)
+                return data.get("avatarUrl") or data.get("avatar_url")
+            except Exception:
+                pass
+        return None
+
+    @avatar_url.setter
+    def avatar_url(self, value: Optional[str]):
+        import json
+        data = {}
+        if self.profile_data:
+            try:
+                data = json.loads(self.profile_data) if isinstance(self.profile_data, str) else dict(self.profile_data)
+            except Exception:
+                data = {}
+        data["avatarUrl"] = value
+        self.profile_data = json.dumps(data)
 
 
 class DeviceSession(Base):
@@ -85,8 +108,8 @@ class Agent(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     system_prompt = Column(Text, nullable=True)
-    voice_id = Column(String(100), default="ElevenLabs Turbo v2.5")
-    llm_model = Column(String(100), default="Gemini 1.5 Pro")
+    voice_id = Column(String(100), default="")
+    llm_model = Column(String(100), default="")
     language = Column(String(50), default="en-US")
     temperature = Column(Float, default=0.7)
     status = Column(String(50), default="active")
@@ -284,11 +307,179 @@ class Subscription(Base):
     current_period_start = Column(DateTime, default=get_utc_now)
     current_period_end = Column(DateTime, default=get_utc_now)
     cancel_at_period_end = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
     details_json = Column(JSON, default=dict)
+
+
+
+class SubscriptionPlanConfig(Base):
+    """
+    Super Admin Master Subscription Plan Definitions.
+    Stores strict entitlements, voice minutes, concurrency trunks, storage, custom code, HTML/CSS, and feature access.
+    """
+    __tablename__ = "subscription_plan_configs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    plan_key = Column(String(50), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    tagline = Column(String(255), nullable=True)
+    monthly_price_usd = Column(Float, default=199.0)
+    yearly_price_usd = Column(Float, default=159.0)
+    lifetime_price_usd = Column(Float, default=1499.0)
+    
+    # Strict Entitlement Limits
+    included_minutes = Column(Integer, default=3000)
+    concurrency_limit = Column(Integer, default=10)
+    rag_storage_mb = Column(Integer, default=500)
+    max_agents_count = Column(Integer, default=10)
+    gsm_sim_enabled = Column(Boolean, default=True)
+    voice_cloning_enabled = Column(Boolean, default=True)
+    webhook_api_enabled = Column(Boolean, default=True)
+    priority_sla_enabled = Column(Boolean, default=True)
+    features_list = Column(JSON, default=list)
+    
+    # Visual Theme & Badge Customization
+    badge_text = Column(String(100), nullable=True)
+    badge_color = Column(String(50), nullable=True)
+    accent_color = Column(String(50), nullable=True)
+    cta_text = Column(String(100), nullable=True, default="Select Plan")
+    cta_link = Column(String(255), nullable=True)
+
+    # Custom Code / HTML / CSS Designer injection
+    custom_css = Column(Text, nullable=True)
+    custom_html = Column(Text, nullable=True)
+    details_json = Column(JSON, default=dict)
+    
+    popular = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class PaymentGatewayConfig(Base):
+    __tablename__ = "payment_gateway_configs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    gateway_key = Column(String(50), unique=True, nullable=False)  # stripe, razorpay, cashfree, paypal, phonepe, bank_transfer
+    display_name = Column(String(100), nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    environment = Column(String(20), default="live")  # live, test
+    public_key = Column(String(255), nullable=True)
+    secret_key = Column(String(255), nullable=True)
+    webhook_secret = Column(String(255), nullable=True)
+    merchant_id = Column(String(100), nullable=True)
+    vpa_address = Column(String(100), nullable=True)
+    bank_name = Column(String(100), nullable=True)
+    bank_account_no = Column(String(50), nullable=True)
+    bank_ifsc_swift = Column(String(50), nullable=True)
+    bank_beneficiary = Column(String(100), nullable=True)
+    details_json = Column(JSON, default=dict)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
+    gateway = Column(String(50), nullable=False)  # stripe, razorpay, cashfree, paypal, phonepe, bank_transfer
+    gateway_order_id = Column(String(100), nullable=True)
+    gateway_payment_id = Column(String(100), nullable=True)
+    amount_usd = Column(Float, default=0.0)
+    amount_local = Column(Float, default=0.0)
+    currency = Column(String(10), default="USD")
+    plan_id = Column(String(50), nullable=True)
+    billing_cycle = Column(String(20), default="monthly")
+    status = Column(String(30), default="pending")  # pending, completed, failed, refunded, pending_approval
+    security_hash = Column(String(255), nullable=True)
+    tax_id = Column(String(50), nullable=True)
+    billing_name = Column(String(150), nullable=True)
+    billing_email = Column(String(150), nullable=True)
+    billing_country = Column(String(50), nullable=True)
+    invoice_number = Column(String(50), nullable=True)
+    details_json = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=get_utc_now)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class TenantPlanOverride(Base):
+    __tablename__ = "tenant_plan_overrides"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
+    custom_plan_name = Column(String(100), default="Pro Scale Plan")
+    allocated_minutes = Column(Integer, default=500)
+    used_minutes = Column(Integer, default=0)
+    allocated_concurrency = Column(Integer, default=2)
+    active_calls = Column(Integer, default=0)
+    allocated_rag_storage_mb = Column(Integer, default=200)
+    discount_percent = Column(Float, default=0.0)
+    is_custom_override = Column(Boolean, default=False)
+    notes = Column(Text, nullable=True)
+    granted_by_admin_id = Column(String(36), nullable=True)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class InvoiceRecord(Base):
+    __tablename__ = "invoice_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    invoice_number = Column(String(50), unique=True, nullable=False)
+    transaction_id = Column(String(36), nullable=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
+    customer_name = Column(String(150), nullable=False)
+    customer_email = Column(String(150), nullable=False)
+    customer_address = Column(Text, nullable=True)
+    tax_id = Column(String(50), nullable=True)
+    plan_name = Column(String(100), nullable=False)
+    billing_cycle = Column(String(50), default="Monthly")
+    currency = Column(String(10), default="USD")
+    subtotal = Column(Float, default=0.0)
+    discount_amount = Column(Float, default=0.0)
+    tax_amount = Column(Float, default=0.0)
+    total_amount = Column(Float, default=0.0)
+    status = Column(String(30), default="Paid")
+    details_json = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=get_utc_now)
+
+
+class SavedPaymentMethod(Base):
+    """
+    Tenant tokenized payment method (Card, Mandate, or Bank Profile).
+    Stores only safe non-sensitive metadata (zero raw PAN/CVV).
+    """
+    __tablename__ = "saved_payment_methods"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
+    gateway = Column(String(50), nullable=False)  # stripe, razorpay, cashfree, etc.
+    method_type = Column(String(50), default="card")  # card, upi_mandate, bank_debit
+    brand = Column(String(50), nullable=True)  # visa, mastercard, amex, etc.
+    last4 = Column(String(10), nullable=True)  # e.g. 4242
+    exp_month = Column(Integer, nullable=True)  # e.g. 12
+    exp_year = Column(Integer, nullable=True)  # e.g. 2029
+    gateway_customer_id = Column(String(100), nullable=True)
+    gateway_payment_method_id = Column(String(100), nullable=True)
+    is_default = Column(Boolean, default=False)
+    status = Column(String(50), default="verified")  # verified, pending_verification, expired, disabled
+    billing_name = Column(String(100), nullable=True)
+    billing_email = Column(String(100), nullable=True)
+    details_json = Column(JSON, default=dict)
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
 
 
 class Notification(Base):
     __tablename__ = "notifications"
+
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     user_id = Column(
@@ -300,6 +491,8 @@ class Notification(Base):
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     type = Column(String(50), default="info")  # info, warning, success, error
+    sender_role = Column(String(50), nullable=True)  # super_admin, system, user
+    is_broadcast = Column(Boolean, default=False)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=get_utc_now)
 
@@ -584,4 +777,67 @@ class GatewayTunnelConfig(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=get_utc_now)
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class AgentSessionMemory(Base):
+    """
+    Permanent database persistence for Agent Session Memories.
+    Provides strict agent-level isolation, date-wise timeline organization,
+    and two-tier soft delete / Recycle Bin support.
+    """
+    __tablename__ = "agent_session_memories"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    session_id = Column(String(100), unique=True, index=True, nullable=False)
+    agent_id = Column(
+        String(36), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    agent_name = Column(String(255), nullable=True)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    device_id = Column(String(100), nullable=True, default="web-studio")
+    device_name = Column(String(255), nullable=True, default="Web Live Studio")
+    phone_number = Column(String(50), nullable=True, index=True)
+    caller_name = Column(String(255), nullable=True)
+    status = Column(String(50), default="completed", index=True)  # active, completed, paused
+    started_at = Column(DateTime, default=get_utc_now, index=True)
+    ended_at = Column(DateTime, nullable=True)
+    duration_sec = Column(Integer, default=0)
+    turn_count = Column(Integer, default=0)
+    sentiment = Column(String(50), default="neutral")  # positive, neutral, negative
+    summary = Column(Text, nullable=True)
+    recording_url = Column(Text, nullable=True)
+    entities = Column(JSON, default=list)
+    key_points = Column(JSON, default=list)
+    turns = Column(JSON, default=list)
+    is_deleted = Column(Boolean, default=False, index=True)  # Soft delete flag for Recycle Bin
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
+
+class AgentMemoryFact(Base):
+    """
+    Permanent database persistence for Agent Extracted Cognitive Facts.
+    Stores customer preferences, commitments, business rules, and profiles per agent.
+    """
+    __tablename__ = "agent_memory_facts"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    agent_id = Column(
+        String(36), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    category = Column(String(50), default="caller_profile")  # caller_profile, preference, commitment, objection, business_rule
+    fact = Column(Text, nullable=False)
+    source_session_id = Column(String(100), nullable=True)
+    confidence = Column(Float, default=0.95)
+    is_deleted = Column(Boolean, default=False, index=True)  # Soft delete flag for Recycle Bin
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=get_utc_now)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
+
 

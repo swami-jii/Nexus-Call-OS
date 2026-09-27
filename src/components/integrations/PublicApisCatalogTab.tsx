@@ -1172,7 +1172,7 @@ export const PublicApisCatalogTab: React.FC<PublicApisCatalogTabProps> = ({ onAd
                           key={mIdx}
                           className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[9.5px] font-semibold flex items-center gap-1"
                         >
-                          {mod === 'AI Voice Agents' && '🤖 Agents'}
+                          {mod === 'AI Voice Agents' && '🎧 Agents'}
                           {mod === 'Live Call Studio' && '🎙️ Studio'}
                           {mod === 'AI Campaigns' && '📡 Campaigns'}
                           {mod === 'Knowledge Base (RAG)' && '📚 RAG'}
@@ -1390,7 +1390,7 @@ export const PublicApisCatalogTab: React.FC<PublicApisCatalogTabProps> = ({ onAd
                           key={mIdx}
                           className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[9.5px] font-semibold flex items-center gap-1"
                         >
-                          {mod === 'AI Voice Agents' && '🤖 Agents'}
+                          {mod === 'AI Voice Agents' && '🎧 Agents'}
                           {mod === 'Live Call Studio' && '🎙️ Studio'}
                           {mod === 'AI Campaigns' && '📡 Campaigns'}
                           {mod === 'Knowledge Base (RAG)' && '📚 RAG'}
@@ -2038,7 +2038,7 @@ export const PublicApisCatalogTab: React.FC<PublicApisCatalogTabProps> = ({ onAd
                   statusText: '🟢 LIVE (100% BOUND)',
                   desc: 'Provides silent real-time ground truth for caller queries across 104+ global languages without exposing technical URLs or tokens.',
                   icon: <SparklesIcon className="h-4 w-4 text-purple-500" />,
-                  tag: '🤖 AI Voice Agents',
+                  tag: '🎧 AI Voice Agents',
                   tagColor: 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                 },
                 {
@@ -2140,7 +2140,7 @@ export const PublicApisCatalogTab: React.FC<PublicApisCatalogTabProps> = ({ onAd
                       <div className="flex items-center gap-1 flex-wrap shrink-0">
                         {targetModules.slice(0, 3).map((m: string, mIdx: number) => (
                           <span key={mIdx} className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[9px] font-semibold">
-                            {m === 'AI Voice Agents' && '🤖 Agents'}
+                            {m === 'AI Voice Agents' && '🎧 Agents'}
                             {m === 'Live Call Studio' && '🎙️ Studio'}
                             {m === 'AI Campaigns' && '📡 Campaigns'}
                             {m === 'Knowledge Base (RAG)' && '📚 RAG'}

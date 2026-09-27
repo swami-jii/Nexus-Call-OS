@@ -25,6 +25,14 @@ from backend.database.session import SessionLocal
 from backend.models.models import Agent as AgentModel
 from backend.routers.providers import resolve_provider_credential
 from backend.routers.knowledge_base import DynamicLLMInvoker
+from backend.services.session_memory_service import (
+    SessionMemoryManager,
+    append_call_turn,
+    complete_call_session,
+    generate_structured_session_id,
+    get_historical_caller_context,
+    init_call_session,
+)
 
 logger = logging.getLogger("NexusAndroidVoiceSession")
 
@@ -51,12 +59,17 @@ class AndroidVoiceSession:
         device_id: str,
         caller_number: str = "Unknown",
         agent_id: Optional[str] = None,
+        device_name: str = "Android GSM Companion Gateway",
     ):
         self.device_id = device_id
+        self.device_name = device_name
         self.caller_number = caller_number
         self.agent_id = agent_id
         self.created_at = time.time()
         self.is_active = True
+        self.session_id = f"CreateCallOS_Agent_{uuid.uuid4().hex[:6]}"
+        self.historical_context = ""
+        self.memory_mgr: Optional[SessionMemoryManager] = None
 
         # Resolved Agent Details
         self.agent_name = "Nexus AI Voice Assistant"
@@ -90,6 +103,7 @@ class AndroidVoiceSession:
                     agent = db.query(AgentModel).filter(AgentModel.status == "active").first()
 
                 if agent:
+                    self.agent_id = str(agent.id)
                     self.agent_name = agent.name or "Nexus AI Voice Assistant"
                     self.agent_language = agent.language or "hi-IN"
                     if agent.voice_id:
@@ -102,10 +116,57 @@ class AndroidVoiceSession:
                         self.greeting_text = f"नमस्ते! मैं {self.agent_name} बोल रहा हूँ Nexus Call OS से। मैं आपकी क्या मदद कर सकता हूँ?"
                     else:
                         self.greeting_text = f"Hello! Thank you for calling. I am {self.agent_name} from Nexus Call OS. How may I help you today?"
+
+                # Structured Session ID generation
+                self.session_id = generate_structured_session_id(self.agent_name)
+
+                # Initialize active session memory engine
+                self.memory_mgr = SessionMemoryManager(
+                    session_id=self.session_id,
+                    phone_number=self.caller_number,
+                    agent_id=self.agent_id or "agent_gsm",
+                    agent_name=self.agent_name,
+                )
+
+                # Initialize active session memory record in database
+                init_call_session(
+                    db=db,
+                    agent_id=self.agent_id or "agent_gsm",
+                    agent_name=self.agent_name,
+                    device_id=self.device_id,
+                    device_name=self.device_name,
+                    phone_number=self.caller_number,
+                    session_id=self.session_id,
+                )
+
+                # Record greeting turn in DB
+                append_call_turn(db=db, session_id=self.session_id, speaker="assistant", text=self.greeting_text)
+
+                # Fetch historical context for repeat caller
+                self.historical_context = get_historical_caller_context(
+                    db=db,
+                    agent_id=self.agent_id,
+                    phone_number=self.caller_number,
+                )
+
         except Exception as e:
             logger.warning(f"Could not load agent config for voice session: {e}")
 
         self.conversation_history.append({"role": "assistant", "content": self.greeting_text})
+
+    def finalize_call(self, duration_sec: int = 0) -> None:
+        """Finalizes the call session in the database and auto-extracts lifetime facts."""
+        try:
+            with SessionLocal() as db:
+                complete_call_session(
+                    db=db,
+                    session_id=self.session_id,
+                    duration_sec=duration_sec,
+                    transcript=[{"speaker": h.get("role", "user"), "text": h.get("content", "")} for h in self.conversation_history],
+                )
+                logger.info(f"[AndroidVoiceSession] Finalized session memory {self.session_id}")
+        except Exception as e:
+            logger.warning(f"[AndroidVoiceSession] Error finalizing session {self.session_id}: {e}")
 
     async def get_greeting_pcm(self) -> bytes:
         """Synthesizes and returns opening greeting 16kHz PCM audio."""
@@ -324,11 +385,25 @@ class AndroidVoiceSession:
                     if transcript:
                         logger.info(f"[VoiceSession] User said: '{transcript}'. Generating AI response...")
                         self.conversation_history.append({"role": "user", "content": transcript})
+                        
+                        # Record user turn in DB session memory
+                        try:
+                            with SessionLocal() as db:
+                                append_call_turn(db=db, session_id=self.session_id, speaker="user", text=transcript)
+                        except Exception as e:
+                            logger.warning(f"Error appending user turn to DB: {e}")
 
                         # Invoke LLM
                         ai_reply_text = await self._generate_llm_response(transcript)
                         self.conversation_history.append({"role": "assistant", "content": ai_reply_text})
                         logger.info(f"[VoiceSession] AI Response: '{ai_reply_text}'. Synthesizing PCM audio...")
+
+                        # Record AI turn in DB session memory
+                        try:
+                            with SessionLocal() as db:
+                                append_call_turn(db=db, session_id=self.session_id, speaker="assistant", text=ai_reply_text)
+                        except Exception as e:
+                            logger.warning(f"Error appending AI turn to DB: {e}")
 
                         # Synthesize speech
                         pcm_response = await self.synthesize_speech_pcm(ai_reply_text)
@@ -341,18 +416,27 @@ class AndroidVoiceSession:
         return None
 
     async def _generate_llm_response(self, user_input: str) -> str:
-        """Executes LLM call using centralized DynamicLLMInvoker."""
+        """Executes LLM call using centralized DynamicLLMInvoker with memory grounding."""
+        system_prompt_to_use = self.system_prompt
+        if self.memory_mgr:
+            self.memory_mgr.extract_and_update(user_text=user_input, ai_text="")
+            mem_prompt = self.memory_mgr.get_memory_prompt_block(historical_context=self.historical_context)
+            system_prompt_to_use = f"{self.system_prompt}\n\n{mem_prompt}"
+
         try:
             with SessionLocal() as db:
                 res = await DynamicLLMInvoker.call_conversation_llm_async(
                     db=db,
                     user_input=user_input,
                     conversation_history=self.conversation_history,
-                    system_prompt=self.system_prompt,
+                    system_prompt=system_prompt_to_use,
                     preferred_language=self.agent_language,
                 )
                 if res and res.get("text"):
-                    return res["text"].strip()
+                    reply = res["text"].strip()
+                    if self.memory_mgr:
+                        self.memory_mgr.extract_and_update(user_text="", ai_text=reply)
+                    return reply
         except Exception as e:
             logger.warning(f"[VoiceSession] DynamicLLMInvoker error: {e}")
 
@@ -368,16 +452,28 @@ class AndroidVoiceSessionManager:
     def __init__(self):
         self._sessions: Dict[str, AndroidVoiceSession] = {}
 
-    async def start_session(self, device_id: str, caller_number: str = "Unknown", agent_id: Optional[str] = None) -> AndroidVoiceSession:
-        session = AndroidVoiceSession(device_id=device_id, caller_number=caller_number, agent_id=agent_id)
+    async def start_session(
+        self,
+        device_id: str,
+        caller_number: str = "Unknown",
+        agent_id: Optional[str] = None,
+        device_name: str = "Android GSM Companion Gateway",
+    ) -> AndroidVoiceSession:
+        session = AndroidVoiceSession(
+            device_id=device_id,
+            caller_number=caller_number,
+            agent_id=agent_id,
+            device_name=device_name,
+        )
         self._sessions[device_id] = session
         return session
 
     def get_session(self, device_id: str) -> Optional[AndroidVoiceSession]:
         return self._sessions.get(device_id)
 
-    def end_session(self, device_id: str) -> None:
+    def end_session(self, device_id: str, duration_sec: int = 0) -> None:
         session = self._sessions.pop(device_id, None)
         if session:
             session.is_active = False
-            logger.info(f"[VoiceSessionManager] Ended voice session for device {device_id}")
+            session.finalize_call(duration_sec=duration_sec)
+            logger.info(f"[VoiceSessionManager] Ended and finalized voice session for device {device_id}")

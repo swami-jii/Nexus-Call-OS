@@ -26,7 +26,9 @@ import {
   ExternalLink,
   Play,
   CheckCircle,
+  Crown,
   PhoneForwarded,
+  PhoneOutgoing,
   PhoneCall,
   Cpu,
   Signal,
@@ -36,7 +38,7 @@ import {
   EyeOff,
   Clock,
   Loader2,
-  Bot,
+  Headphones,
   Search,
   ChevronDown,
   Volume2,
@@ -53,7 +55,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../co
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
+import { CampaignReturnBanner } from '../components/campaigns/CampaignReturnBanner';
 import { fetchAPI } from '../lib/api';
+import { triggerNavigationHandoff } from '../lib/handoffNavigation';
+import { usePlanEntitlements } from '../hooks/usePlanEntitlements';
+import { PlanGuardrailModal } from '../components/ui/PlanGuardrailModal';
 
 interface AndroidDevice {
   device_id: string;
@@ -119,7 +125,7 @@ const SearchableAgentSelector: React.FC<{
         className="h-8 inline-flex items-center justify-between gap-1.5 px-2.5 rounded-lg text-xs font-semibold bg-zinc-100 hover:bg-zinc-200/90 dark:bg-zinc-800 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 transition-all cursor-pointer shadow-2xs"
         title="Assign AI Voice Agent to handle this SIM line"
       >
-        <Bot className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <Headphones className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
         <span className="truncate max-w-[80px] sm:max-w-[105px] text-left">{displayName}</span>
         <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
       </button>
@@ -155,7 +161,7 @@ const SearchableAgentSelector: React.FC<{
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <Bot className="h-3 w-3 text-emerald-500 shrink-0" />
+                <Headphones className="h-3 w-3 text-emerald-500 shrink-0" />
                 <div>
                   <p className="font-semibold text-xs leading-none">Default Voice Agent</p>
                   <p className="text-[10px] text-zinc-400 mt-0.5 font-mono">System Telephony Gateway</p>
@@ -229,8 +235,20 @@ const WebBrandIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5 w-3
   </svg>
 );
 
-export const AndroidGatewayView: React.FC = () => {
+interface AndroidGatewayViewProps {
+  onNavigate?: (screen: any) => void;
+}
+
+export const AndroidGatewayView: React.FC<AndroidGatewayViewProps> = ({ onNavigate }) => {
   const { addToast } = useToast();
+  // Plan Entitlements & Guardrail Engine
+  const {
+    entitlements,
+    guardrailModal,
+    triggerGuardrail,
+    closeGuardrail,
+  } = usePlanEntitlements();
+
   const [devices, setDevices] = useState<AndroidDevice[]>([]);
   const [healthData, setHealthData] = useState<any | null>(null);
   const [lanInfo, setLanInfo] = useState<any | null>(null);
@@ -242,6 +260,7 @@ export const AndroidGatewayView: React.FC = () => {
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [platformTab, setPlatformTab] = useState<'android' | 'ios' | 'mac' | 'windows' | 'web'>('android');
+
   const [urlMode, setUrlMode] = useState<'lan' | 'tunnel'>(() => {
     try {
       const saved = localStorage.getItem('nexus_gateway_url_mode');
@@ -617,17 +636,29 @@ export const AndroidGatewayView: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchLanInfo();
-    fetchTunnelConfig();
-    fetchDevices();
-    fetchAPI('/api/agents?page_size=50')
-      .then((data) => {
-        if (data && Array.isArray(data.items)) setBackendAgents(data.items);
-        else if (data && Array.isArray(data)) setBackendAgents(data);
-      })
-      .catch(() => {});
+    const refreshAll = () => {
+      fetchLanInfo();
+      fetchTunnelConfig();
+      fetchDevices();
+      fetchAPI('/api/agents?page_size=50')
+        .then((data) => {
+          if (data && Array.isArray(data.items)) setBackendAgents(data.items);
+          else if (data && Array.isArray(data)) setBackendAgents(data);
+        })
+        .catch(() => {});
+    };
+
+    refreshAll();
     const interval = setInterval(fetchDevices, 3000);
-    return () => clearInterval(interval);
+
+    window.addEventListener('createcall:sovereign_target_changed', refreshAll);
+    window.addEventListener('createcall:tenant_data_updated', refreshAll);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('createcall:sovereign_target_changed', refreshAll);
+      window.removeEventListener('createcall:tenant_data_updated', refreshAll);
+    };
   }, []);
 
   // Filter genuine native GSM hardware devices vs web browser client test nodes
@@ -750,7 +781,7 @@ export const AndroidGatewayView: React.FC = () => {
       qrSubtext: 'Opens Android Voice Station & Direct APK installer',
       url: getPlatformUrl('android'),
       downloadUrl: activeApkUrl,
-      downloadFilename: lanInfo?.apk_filename || 'Nexus-GSM-Gateway.apk',
+      downloadFilename: lanInfo?.apk_filename || 'Create-Call-GSM-Gateway.apk',
       downloadButtonLabel: lanInfo?.apk_size_formatted
         ? `Download APK (v${lanInfo.version_name || '2.6.0'} • ${lanInfo.apk_size_formatted})`
         : 'Download APK (v2.6.0 • 7.72 MB)',
@@ -768,7 +799,7 @@ export const AndroidGatewayView: React.FC = () => {
       qrSubtext: 'Opens iOS Mobile Companion & CallKit bridge',
       url: getPlatformUrl('ios'),
       downloadUrl: getPlatformDownloadUrl('ios'),
-      downloadFilename: 'Nexus-iOS-Companion-Xcode.zip',
+      downloadFilename: 'Create-Call-iOS-Companion-Xcode.zip',
       downloadButtonLabel: lanInfo?.ios_size_formatted
         ? `Download Xcode.zip (${lanInfo.ios_size_formatted})`
         : 'Download Xcode.zip',
@@ -784,7 +815,7 @@ export const AndroidGatewayView: React.FC = () => {
       qrSubtext: 'Mac gateway with iPhone Continuity & Web Audio relay',
       url: getPlatformUrl('mac'),
       downloadUrl: getPlatformDownloadUrl('mac'),
-      downloadFilename: 'Nexus-macOS-Companion.zip',
+      downloadFilename: 'Create-Call-macOS-Companion.zip',
       downloadButtonLabel: lanInfo?.mac_size_formatted
         ? `Download Helper.zip (${lanInfo.mac_size_formatted})`
         : 'Download Helper.zip',
@@ -800,7 +831,7 @@ export const AndroidGatewayView: React.FC = () => {
       qrSubtext: 'Windows cellular modem & USB GSM dongle node',
       url: getPlatformUrl('windows'),
       downloadUrl: getPlatformDownloadUrl('windows'),
-      downloadFilename: 'Nexus-Windows-Companion.zip',
+      downloadFilename: 'Create-Call-Windows-Companion.zip',
       downloadButtonLabel: lanInfo?.win_size_formatted
         ? `Download Bridge.zip (${lanInfo.win_size_formatted})`
         : 'Download Bridge.zip',
@@ -868,6 +899,14 @@ export const AndroidGatewayView: React.FC = () => {
 
   // 1-Click Quick Connect Phone for Testing on Localhost
   const handleQuickConnect = async () => {
+    if (!entitlements.gsmSimEnabled) {
+      triggerGuardrail(
+        'gsm_sim_gateway',
+        'Physical GSM hardware SIM gateway and zero-cost calling are available on Pro and Sovereign tiers.',
+        'GSM Hardware SIM Gateway'
+      );
+      return;
+    }
     try {
       await fetchAPI('/api/android-gateway/devices/quick-connect', {
         method: 'POST',
@@ -959,7 +998,7 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Strict Background Audio Policy',
       ratingColor: 'amber',
       steps: [
-        'Open Settings > Safari (or Nexus Companion) > Background App Refresh > Toggle ON.',
+        'Open Settings > Safari (or Create Call Companion) > Background App Refresh > Toggle ON.',
         'Disable "Low Power Mode" in Battery settings to prevent background WebSocket suspension.',
         'Allow Microphone and Audio permissions on first prompt for uninterrupted 24/7 GSM bridge.',
         'Tap Safari Share icon > "Add to Home Screen" to enable standalone PWA background audio execution.'
@@ -987,10 +1026,10 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Extremely Aggressive Kill Policy',
       ratingColor: 'rose',
       steps: [
-        'Open Security app > Manage apps > Permissions > Autostart > Enable for Nexus Companion.',
+        'Open Security app > Manage apps > Permissions > Autostart > Enable for Create Call Companion.',
         'In App Info > Battery Saver > Select "No restrictions".',
         'In App Info > Other permissions > Enable "Show on Lock screen" and "Display pop-up windows".',
-        'In Recent Apps tray, long-press Nexus Companion and tap the Padlock icon to lock in RAM.'
+        'In Recent Apps tray, long-press Create Call Companion and tap the Padlock icon to lock in RAM.'
       ],
       tip: 'MIUI terminates background audio connections within 2 minutes unless Autostart & No Restrictions are enabled.'
     },
@@ -1001,8 +1040,8 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Moderate Background Kill',
       ratingColor: 'amber',
       steps: [
-        'Open Settings > Apps > App management > Nexus Companion > Battery usage > Enable "Allow background activity" and "Allow auto-launch".',
-        'Open Settings > Battery > More settings > App battery management > Nexus Companion > Disable "Optimize battery use".',
+        'Open Settings > Apps > App management > Create Call Companion > Battery usage > Enable "Allow background activity" and "Allow auto-launch".',
+        'Open Settings > Battery > More settings > App battery management > Create Call Companion > Disable "Optimize battery use".',
         'Lock app in the Multitasking app tray.'
       ],
       tip: 'Ensure "Sleep standby optimization" is excluded for 24/7 GSM telephony gateway stability.'
@@ -1014,10 +1053,10 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Aggressive App Freeze',
       ratingColor: 'rose',
       steps: [
-        'Open Settings > Battery > More settings > App battery management > Nexus Companion > Allow foreground & background activity.',
-        'Open Settings > Apps > Auto-launch > Enable Nexus Companion.',
+        'Open Settings > Battery > More settings > App battery management > Create Call Companion > Allow foreground & background activity.',
+        'Open Settings > Apps > Auto-launch > Enable Create Call Companion.',
         'Open Phone Manager > Privacy permissions > Floating window & lock screen display > Enable.',
-        'In Recent Apps overview, tap the 3 dots on Nexus Companion > Select "Lock".'
+        'In Recent Apps overview, tap the 3 dots on Create Call Companion > Select "Lock".'
       ],
       tip: 'ColorOS freezes background TCP sockets during screen sleep unless Auto-launch and Unrestricted battery are enabled.'
     },
@@ -1028,8 +1067,8 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'High Background Consumption Alert',
       ratingColor: 'amber',
       steps: [
-        'Open i Manager > App Manager > Autostart manager > Enable Nexus Companion.',
-        'Open Settings > Battery > High background power consumption > Enable Nexus Companion.',
+        'Open i Manager > App Manager > Autostart manager > Enable Create Call Companion.',
+        'Open Settings > Battery > High background power consumption > Enable Create Call Companion.',
         'In App Info > Single permission management > Allow all telephony & microphone permissions.'
       ],
       tip: 'FuntouchOS requires "High background power consumption" permission for continuous GSM audio streaming.'
@@ -1041,7 +1080,7 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Clean Doze Management',
       ratingColor: 'emerald',
       steps: [
-        'Open Settings > Apps > Nexus Companion > App battery usage > Select "Unrestricted".',
+        'Open Settings > Apps > Create Call Companion > App battery usage > Select "Unrestricted".',
         'Ensure "Pause app activity if unused" is toggled OFF.',
         'Allow Foreground Service and Audio Recording permissions.'
       ],
@@ -1054,9 +1093,9 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Strict Manual Launch Required',
       ratingColor: 'rose',
       steps: [
-        'Open Settings > Battery > App launch > Nexus Companion > Switch from "Manage automatically" to "Manage manually".',
+        'Open Settings > Battery > App launch > Create Call Companion > Switch from "Manage automatically" to "Manage manually".',
         'Enable all 3 toggles: "Auto-launch", "Secondary launch", and "Run in background".',
-        'Open Settings > Apps > Special access > Battery optimization > Set Nexus Companion to "Don\'t allow".',
+        'Open Settings > Apps > Special access > Battery optimization > Set Create Call Companion to "Don\'t allow".',
         'Lock the app card in the Multi-window app switcher.'
       ],
       tip: 'HarmonyOS strictly terminates background daemons unless all 3 Manual Launch toggles are ON.'
@@ -1068,8 +1107,8 @@ export const AndroidGatewayView: React.FC = () => {
       rating: 'Minimal Interference',
       ratingColor: 'emerald',
       steps: [
-        'Open Settings > Apps > Nexus Companion > Battery > Set to "Unrestricted".',
-        'Disable Adaptive Battery for Nexus Gateway companion.',
+        'Open Settings > Apps > Create Call Companion > Battery > Set to "Unrestricted".',
+        'Disable Adaptive Battery for Create Call Gateway companion.',
         'Verify Wi-Fi is set to stay connected during screen sleep.'
       ],
       tip: 'Near-stock Android builds only require Unrestricted battery mode for 24/7 uptime.'
@@ -1147,6 +1186,14 @@ export const AndroidGatewayView: React.FC = () => {
 
   // Generate QR & Token
   const handleGeneratePairingToken = async () => {
+    if (!entitlements.gsmSimEnabled) {
+      triggerGuardrail(
+        'gsm_sim_gateway',
+        'Physical GSM hardware SIM gateway and zero-cost calling are available on Pro and Sovereign tiers.',
+        'GSM Hardware SIM Gateway'
+      );
+      return;
+    }
     try {
       const data = await fetchAPI('/api/android-gateway/pair/generate-token', {
         method: 'POST',
@@ -1264,21 +1311,78 @@ export const AndroidGatewayView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-12">
       {/* 1. Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
-        <div>
-          <div className="flex items-center space-x-2">
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-              Pair & Apps GSM Gateway & Device Manager
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0">
+        {/* ROW 1: Heading on Left + Badges on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
+              Pair &amp; Apps GSM Gateway &amp; Device Manager
             </h1>
-            <Badge variant="emerald" className="text-xs">
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Badge variant="emerald" className="text-xs shadow-2xs whitespace-nowrap">
               Free-First Telephony
             </Badge>
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 text-[11px] font-bold shadow-2xs whitespace-nowrap cursor-pointer hover:bg-amber-500/20 transition-all"
+              onClick={() =>
+                triggerGuardrail(
+                  'custom',
+                  'Plan Governance & GSM Gateway',
+                  `Active plan "${entitlements.planName}" gives your workspace unlimited paired devices and free local GSM calling routing.`
+                )
+              }
+              title="Click to view subscription plan entitlements"
+            >
+              <Crown className="h-3 w-3 text-amber-500" />
+              <span>Plan: {entitlements.planName}</span>
+            </span>
           </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+        </div>
+
+        {/* ROW 2: Description on Left + Action Buttons on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Connect your mobile SIM cards, browser companions, or native apps as automatic AI voice gateways.
           </p>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<PhoneOutgoing className="h-3.5 w-3.5 text-blue-500" />}
+              onClick={() => {
+                triggerNavigationHandoff(onNavigate, {
+                  sourceScreen: 'android-gateway',
+                  targetScreen: 'phone-numbers',
+                  contextTitle: 'Phone Numbers & Telephony Workspaces',
+                  contextBadge: 'Telephony Hub',
+                });
+              }}
+              className="h-7.5 text-xs font-semibold px-2.5 cursor-pointer shadow-2xs hover:bg-zinc-100 dark:hover:bg-zinc-800 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/80"
+            >
+              Phone Numbers Hub
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Zap className="h-3.5 w-3.5 text-purple-500" />}
+              onClick={() => {
+                triggerNavigationHandoff(onNavigate, {
+                  sourceScreen: 'android-gateway',
+                  targetScreen: 'campaigns',
+                  contextTitle: 'AI Calling Campaigns',
+                  contextBadge: 'GSM Outbound Engine',
+                });
+              }}
+              className="h-7.5 text-xs font-semibold px-2.5 cursor-pointer shadow-2xs hover:bg-zinc-100 dark:hover:bg-zinc-800 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800/80"
+            >
+              AI Campaigns
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1785,7 +1889,7 @@ export const AndroidGatewayView: React.FC = () => {
                 No Native GSM SIM Gateways Connected
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
-                Scan the QR code above with your Android phone camera to download and install the native Nexus GSM Gateway APK. Once the app is opened on your phone and granted telephony permissions, your physical SIM card will connect and appear here live.
+                Scan the QR code above with your Android phone camera to download and install the native Create Call GSM Gateway APK. Once the app is opened on your phone and granted telephony permissions, your physical SIM card will connect and appear here live.
               </p>
               <div className="pt-2">
                 <Button
@@ -1996,13 +2100,13 @@ export const AndroidGatewayView: React.FC = () => {
                       />
                     </div>
 
-                    {/* Controls Row 2: Divider + Expanded Outbound AI Button (Left) & Full Details Link (Right) */}
-                    <div className="flex items-center gap-2 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 w-full">
-                      {/* Expanded Outbound AI Toggle */}
+                    {/* Controls Row 2: Action Buttons Bar */}
+                    <div className="flex items-center gap-1.5 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 w-full flex-wrap">
+                      {/* Outbound AI Toggle */}
                       <button
                         type="button"
                         onClick={() => handleToggleOutboundAI(dev.device_id, dev.outbound_ai_enabled ?? true)}
-                        className={`flex-1 h-8 px-3 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer ${
+                        className={`flex-1 min-w-[120px] h-8 px-2.5 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer ${
                           (dev.outbound_ai_enabled ?? true)
                             ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/20'
                             : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200'
@@ -2013,15 +2117,62 @@ export const AndroidGatewayView: React.FC = () => {
                         <span>Outbound AI: {(dev.outbound_ai_enabled ?? true) ? 'ON' : 'OFF'}</span>
                       </button>
 
+                      {/* View in Phone Numbers Hub */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerNavigationHandoff(onNavigate, {
+                            sourceScreen: 'android-gateway',
+                            targetScreen: 'phone-numbers',
+                            contextTitle: `GSM Hardware Line: ${dev.sim_number || dev.name}`,
+                            contextBadge: dev.carrier_name || 'Cellular GSM',
+                            customData: { deviceId: dev.device_id, simNumber: dev.sim_number },
+                          });
+                        }}
+                        className="h-8 px-2.5 rounded-lg text-xs font-bold shrink-0 bg-blue-50 hover:bg-blue-100/80 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                        title="View and configure in Phone Numbers Hub"
+                      >
+                        <PhoneForwarded className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Numbers Hub</span>
+                      </button>
+
+                      {/* Launch AI Campaign with SIM */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.setItem(
+                            'nexus_campaign_wizard_draft',
+                            JSON.stringify({
+                              isWizardOpen: true,
+                              wizardStep: 1,
+                              newCampaignCallerId: dev.sim_number || '',
+                            })
+                          );
+                          localStorage.setItem('nexus_campaign_resume_wizard', 'true');
+                          triggerNavigationHandoff(onNavigate, {
+                            sourceScreen: 'android-gateway',
+                            targetScreen: 'campaigns',
+                            contextTitle: `Launch AI Campaign with SIM: ${dev.sim_number || dev.name}`,
+                            contextBadge: 'GSM Cellular Caller ID',
+                            customData: { callerId: dev.sim_number, deviceId: dev.device_id },
+                          });
+                        }}
+                        className="h-8 px-2.5 rounded-lg text-xs font-bold shrink-0 bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                        title="Launch Outbound AI Campaign using this SIM"
+                      >
+                        <PhoneOutgoing className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Campaign</span>
+                      </button>
+
                       {/* Full Details button */}
                       <button
                         type="button"
                         onClick={() => setSelectedDeviceDetails(dev)}
-                        className="h-8 px-3 rounded-lg text-xs font-bold shrink-0 bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                        className="h-8 px-2.5 rounded-lg text-xs font-bold shrink-0 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 inline-flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
                         title="View Full Device Details & Telemetry"
                       >
-                        <Info className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                        <span>Full Details</span>
+                        <Info className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+                        <span>Details</span>
                       </button>
                     </div>
                   </div>
@@ -2295,12 +2446,12 @@ export const AndroidGatewayView: React.FC = () => {
               <div className="flex items-center space-x-3">
                 <img
                   src="/app-icon.png"
-                  alt="Nexus Logo"
+                  alt="Create Call Logo"
                   className="w-9 h-9 rounded-xl shadow-md border border-emerald-500/40 object-cover"
                 />
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Nexus Mobile Gateway Hub</h3>
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Create Call Mobile Gateway Hub</h3>
                     <Badge variant="emerald" className="text-[9px] font-mono py-0">
                       {lanInfo?.version_name ? `v${lanInfo.version_name}` : 'v2.4'}
                     </Badge>
@@ -2444,7 +2595,7 @@ export const AndroidGatewayView: React.FC = () => {
                   {/* 1. Android Phone App */}
                   <a
                     href="/download"
-                    download={lanInfo?.apk_filename || 'Nexus-GSM-Gateway.apk'}
+                    download={lanInfo?.apk_filename || 'Create-Call-GSM-Gateway.apk'}
                     className="p-3 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between hover:border-emerald-500 transition-all group"
                   >
                     <div className="flex items-center space-x-3">
@@ -2470,7 +2621,7 @@ export const AndroidGatewayView: React.FC = () => {
                   {/* 2. Apple iPhone & iPad App */}
                   <a
                     href="/api/android-gateway/download/ios"
-                    download="Nexus-iOS-Companion-Xcode.zip"
+                    download="Create-Call-iOS-Companion-Xcode.zip"
                     className="p-3 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between hover:border-blue-500 transition-all group"
                   >
                     <div className="flex items-center space-x-3">
@@ -2496,7 +2647,7 @@ export const AndroidGatewayView: React.FC = () => {
                   {/* 3. Apple macOS Desktop App */}
                   <a
                     href="/api/android-gateway/download/mac"
-                    download="Nexus-macOS-Companion.zip"
+                    download="Create-Call-macOS-Companion.zip"
                     className="p-3 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between hover:border-purple-500 transition-all group"
                   >
                     <div className="flex items-center space-x-3">
@@ -2522,7 +2673,7 @@ export const AndroidGatewayView: React.FC = () => {
                   {/* 4. Windows PC Desktop App */}
                   <a
                     href="/api/android-gateway/download/win"
-                    download="Nexus-Windows-Companion.zip"
+                    download="Create-Call-Windows-Companion.zip"
                     className="p-3 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between hover:border-teal-500 transition-all group"
                   >
                     <div className="flex items-center space-x-3">
@@ -2727,7 +2878,7 @@ export const AndroidGatewayView: React.FC = () => {
                 <div>
                   <span className="text-zinc-400 block text-[10px]">Client Daemon Version</span>
                   <span className="font-semibold text-zinc-800 dark:text-zinc-200 mt-0.5 block">
-                    {lanInfo?.version_name ? `Nexus Companion v${lanInfo.version_name} (Native)` : 'Nexus Companion (Native)'}
+                    {lanInfo?.version_name ? `Create Call Companion v${lanInfo.version_name} (Native)` : 'Create Call Companion (Native)'}
                   </span>
                 </div>
                 <div>
@@ -3234,6 +3385,20 @@ export const AndroidGatewayView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── PLAN GUARDRAIL MODAL ─────────────────────────────────────── */}
+      <PlanGuardrailModal
+        isOpen={guardrailModal.isOpen}
+        title={guardrailModal.title}
+        message={guardrailModal.message}
+        featureKey={guardrailModal.featureKey}
+        requiredTier={guardrailModal.requiredTier}
+        currentUsage={guardrailModal.currentUsage}
+        maxQuota={guardrailModal.maxQuota}
+        upgradeBenefit={guardrailModal.upgradeBenefit}
+        onClose={closeGuardrail}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 };

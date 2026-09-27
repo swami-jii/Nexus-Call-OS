@@ -23,7 +23,7 @@ from backend.models.models import (
     WebhookSubscription,
 )
 
-logger = logging.getLogger("nexus.webhook_dispatcher")
+logger = logging.getLogger("create_call_os.webhook_dispatcher")
 
 # Status codes that warrant exponential retry
 RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
@@ -47,7 +47,7 @@ def build_event_envelope(
     organization_id: Optional[str] = None,
     attempt: int = 1,
 ) -> Dict[str, Any]:
-    """Constructs the standard Nexus Call OS webhook event envelope."""
+    """Constructs the standard Create Call OS webhook event envelope."""
     event_id = f"evt_{uuid.uuid4().hex}"
     timestamp_iso = get_utc_now().isoformat()
 
@@ -509,7 +509,7 @@ def build_dynamic_project_event_data(
             duration_sec = 118
         call_direction = (getattr(real_call, "direction", None) if real_call else None) or "outbound"
         disposition = (getattr(real_call, "disposition", None) if real_call else None) or (getattr(disp_cred, "display_name", None) or getattr(disp_cred, "provider_name", None) if disp_cred else "Completed / Interested")
-        recording_url = (getattr(real_call, "recording_url", None) if real_call else None) or f"https://api.nexuscalling.com/recordings/{cid}.mp3"
+        recording_url = (getattr(real_call, "recording_url", None) if real_call else None) or f"https://api.createcallos.com/recordings/{cid}.mp3"
         sentiment = (getattr(real_call, "sentiment", None) if real_call else None) or "Positive"
         cost_val = round(getattr(real_call, "cost", None) if (real_call and getattr(real_call, "cost", None)) else 0.035, 4)
         org_id = organization_id or (str(real_org.id) if real_org else "global")

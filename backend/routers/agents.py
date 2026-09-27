@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import (
+    get_current_user,
+    get_current_user_optional,
+    ensure_super_admin_exists,
+    get_effective_org_id,
+)
 from backend.database.session import get_db
 from backend.models.models import User
 from backend.repositories.repositories import agent_repo
@@ -22,14 +27,19 @@ def list_agents(
     search: str | None = None,
     status_filter: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id)
     skip = (page - 1) * page_size
     filters = {}
     if status_filter:
         filters["status"] = status_filter
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
+    elif effective_user.organization_id:
+        filters["organization_id"] = effective_user.organization_id
 
     items = agent_repo.get_multi(
         db,
@@ -60,21 +70,27 @@ def list_agents(
 def create_agent(
     agent_in: AgentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
     data = agent_in.model_dump()
-    data["organization_id"] = current_user.organization_id
+    data["organization_id"] = effective_org_id
     return agent_repo.create(db, data)
+
 
 
 @router.get("/{agent_id}", response_model=AgentOut)
 def get_agent(
     agent_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
     agent = agent_repo.get_by_id(db, agent_id)
-    if not agent:
+    is_super_admin = (effective_user.role == "super_admin" or effective_user.email == "admin@createcall.ai")
+    if not agent or (not is_super_admin and effective_user.organization_id and agent.organization_id != effective_user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
         )
@@ -87,10 +103,12 @@ def update_agent(
     agent_id: str,
     agent_in: AgentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
     agent = agent_repo.get_by_id(db, agent_id)
-    if not agent:
+    is_super_admin = (effective_user.role == "super_admin" or effective_user.email == "admin@createcall.ai")
+    if not agent or (not is_super_admin and effective_user.organization_id and agent.organization_id != effective_user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
         )
@@ -101,10 +119,12 @@ def update_agent(
 def delete_agent(
     agent_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
     agent = agent_repo.get_by_id(db, agent_id)
-    if not agent:
+    is_super_admin = (effective_user.role == "super_admin" or effective_user.email == "admin@createcall.ai")
+    if not agent or (not is_super_admin and effective_user.organization_id and agent.organization_id != effective_user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
         )

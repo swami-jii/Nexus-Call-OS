@@ -1,5 +1,9 @@
+from datetime import datetime, timezone
+
 from backend.models.models import (
     Agent,
+    AgentMemoryFact,
+    AgentSessionMemory,
     ApiKey,
     AuditLog,
     BillingAccount,
@@ -96,6 +100,151 @@ class WorkflowRepository(BaseRepository[Workflow]):
         super().__init__(Workflow)
 
 
+class AgentSessionMemoryRepository(BaseRepository[AgentSessionMemory]):
+    def __init__(self):
+        super().__init__(AgentSessionMemory)
+
+    def get_by_session_id(self, db, session_id: str):
+        return db.query(AgentSessionMemory).filter(AgentSessionMemory.session_id == session_id).first()
+
+    def get_by_agent(self, db, agent_id: str, include_deleted: bool = False):
+        query = db.query(AgentSessionMemory).filter(AgentSessionMemory.agent_id == agent_id)
+        if not include_deleted:
+            query = query.filter(AgentSessionMemory.is_deleted == False)
+        return query.order_by(AgentSessionMemory.started_at.desc()).all()
+
+    def get_deleted(self, db, agent_id: str | None = None):
+        query = db.query(AgentSessionMemory).filter(AgentSessionMemory.is_deleted == True)
+        if agent_id:
+            query = query.filter(AgentSessionMemory.agent_id == agent_id)
+        return query.order_by(AgentSessionMemory.deleted_at.desc()).all()
+
+    def soft_delete(self, db, session_id: str) -> bool:
+        record = self.get_by_session_id(db, session_id)
+        if not record:
+            record = self.get_by_id(db, session_id)
+        if record:
+            now = datetime.now(timezone.utc)
+            record.is_deleted = True
+            record.deleted_at = now
+            # Cascade soft delete all facts extracted/bound to this session
+            tied_facts = db.query(AgentMemoryFact).filter(
+                (AgentMemoryFact.source_session_id == record.session_id) |
+                (AgentMemoryFact.source_session_id == record.id)
+            ).all()
+            for fact in tied_facts:
+                fact.is_deleted = True
+                fact.deleted_at = now
+            db.commit()
+            db.refresh(record)
+            return True
+        return False
+
+    def restore(self, db, session_id: str) -> bool:
+        record = self.get_by_session_id(db, session_id)
+        if not record:
+            record = self.get_by_id(db, session_id)
+        if record:
+            record.is_deleted = False
+            record.deleted_at = None
+            # Cascade restore all facts extracted/bound to this session
+            tied_facts = db.query(AgentMemoryFact).filter(
+                (AgentMemoryFact.source_session_id == record.session_id) |
+                (AgentMemoryFact.source_session_id == record.id)
+            ).all()
+            for fact in tied_facts:
+                fact.is_deleted = False
+                fact.deleted_at = None
+            db.commit()
+            db.refresh(record)
+            return True
+        return False
+
+    def permanent_delete(self, db, session_id: str) -> bool:
+        record = self.get_by_session_id(db, session_id)
+        if not record:
+            record = self.get_by_id(db, session_id)
+        if record:
+            # Cascade permanently purge all facts extracted/bound to this session
+            tied_facts = db.query(AgentMemoryFact).filter(
+                (AgentMemoryFact.source_session_id == record.session_id) |
+                (AgentMemoryFact.source_session_id == record.id)
+            ).all()
+            for fact in tied_facts:
+                db.delete(fact)
+            db.delete(record)
+            db.commit()
+            return True
+        return False
+
+    def empty_recycle_bin(self, db) -> int:
+        deleted_items = db.query(AgentSessionMemory).filter(AgentSessionMemory.is_deleted == True).all()
+        count = len(deleted_items)
+        for item in deleted_items:
+            tied_facts = db.query(AgentMemoryFact).filter(
+                (AgentMemoryFact.source_session_id == item.session_id) |
+                (AgentMemoryFact.source_session_id == item.id)
+            ).all()
+            for fact in tied_facts:
+                db.delete(fact)
+            db.delete(item)
+        db.commit()
+        return count
+
+
+class AgentMemoryFactRepository(BaseRepository[AgentMemoryFact]):
+    def __init__(self):
+        super().__init__(AgentMemoryFact)
+
+    def get_by_agent(self, db, agent_id: str, include_deleted: bool = False):
+        query = db.query(AgentMemoryFact).filter(AgentMemoryFact.agent_id == agent_id)
+        if not include_deleted:
+            query = query.filter(AgentMemoryFact.is_deleted == False)
+        return query.order_by(AgentMemoryFact.created_at.desc()).all()
+
+    def get_deleted(self, db, agent_id: str | None = None):
+        query = db.query(AgentMemoryFact).filter(AgentMemoryFact.is_deleted == True)
+        if agent_id:
+            query = query.filter(AgentMemoryFact.agent_id == agent_id)
+        return query.order_by(AgentMemoryFact.deleted_at.desc()).all()
+
+    def soft_delete(self, db, fact_id: str) -> bool:
+        record = self.get_by_id(db, fact_id)
+        if record:
+            record.is_deleted = True
+            record.deleted_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(record)
+            return True
+        return False
+
+    def restore(self, db, fact_id: str) -> bool:
+        record = self.get_by_id(db, fact_id)
+        if record:
+            record.is_deleted = False
+            record.deleted_at = None
+            db.commit()
+            db.refresh(record)
+            return True
+        return False
+
+    def permanent_delete(self, db, fact_id: str) -> bool:
+        record = self.get_by_id(db, fact_id)
+        if record:
+            db.delete(record)
+            db.commit()
+            return True
+        return False
+
+    def empty_recycle_bin(self, db) -> int:
+        deleted_items = db.query(AgentMemoryFact).filter(AgentMemoryFact.is_deleted == True).all()
+        count = len(deleted_items)
+        for item in deleted_items:
+            db.delete(item)
+        db.commit()
+        return count
+
+
 user_repo = UserRepository()
 org_repo = OrganizationRepository()
 agent_repo = AgentRepository()
@@ -111,3 +260,6 @@ notification_repo = NotificationRepository()
 audit_repo = AuditRepository()
 settings_repo = SettingsRepository()
 workflow_repo = WorkflowRepository()
+memory_session_repo = AgentSessionMemoryRepository()
+memory_fact_repo = AgentMemoryFactRepository()
+

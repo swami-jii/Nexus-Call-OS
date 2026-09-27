@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import get_current_user, get_current_user_optional
 from backend.database.session import get_db
 from backend.integrations.deepgram_provider import DeepgramProvider
 from backend.integrations.elevenlabs_provider import ElevenLabsProvider
@@ -20,12 +20,13 @@ router = APIRouter(prefix="/api/providers", tags=["Voice Provider Layer"])
 
 
 @router.get("/models")
+@router.get("/models/")
 async def get_provider_models(
     provider: str = "",
     endpoint: str = "",
     api_key: str = "",
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Dynamically retrieve all available LLM models for the given provider or endpoint."""
     if not provider:
@@ -33,9 +34,10 @@ async def get_provider_models(
     
     clean_key = (api_key or "").strip()
     if not clean_key or "•" in clean_key or "*" in clean_key or "..." in clean_key:
-        resolved = resolve_credential_key(db, str(current_user.organization_id), str(current_user.id), provider)
-        if resolved:
-            clean_key = resolved
+        if current_user:
+            resolved = resolve_credential_key(db, str(current_user.organization_id), str(current_user.id), provider)
+            if resolved:
+                clean_key = resolved
 
     models = await registry_service.get_llm_models(provider, api_key=clean_key, endpoint=endpoint)
     return {"provider": provider, "models": models}
@@ -43,11 +45,12 @@ async def get_provider_models(
 
 
 @router.get("/voices")
+@router.get("/voices/")
 async def get_provider_voices(
     provider: str = "",
     api_key: str = "",
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Dynamically retrieve all available voices for the given voice provider."""
     if not provider:
@@ -55,9 +58,45 @@ async def get_provider_voices(
         
     clean_key = (api_key or "").strip()
     if not clean_key or "•" in clean_key or "*" in clean_key or "..." in clean_key:
-        resolved = resolve_credential_key(db, str(current_user.organization_id), str(current_user.id), provider)
-        if resolved:
-            clean_key = resolved
+        if current_user:
+            resolved = resolve_credential_key(db, str(current_user.organization_id), str(current_user.id), provider)
+            if resolved:
+                clean_key = resolved
+
+    if not clean_key or "•" in clean_key:
+        from backend.models.models import ProviderCredential
+        from backend.routers.credentials import decrypt_secret
+        matching_creds = db.query(ProviderCredential).all()
+        for cred in matching_creds:
+            c_name = (cred.provider_name or "").lower().strip()
+            if provider.lower() in c_name or c_name in provider.lower():
+                try:
+                    dec = decrypt_secret(str(cred.encrypted_key))
+                    if dec and len(dec) > 5 and "•" not in dec:
+                        clean_key = dec
+                        break
+                except Exception:
+                    pass
+    if not clean_key or "•" in clean_key:
+        p_low = provider.lower().strip()
+        if p_low in ["elevenlabs", "eleven_labs", "eleven-labs"]:
+            clean_key = os.getenv("ELEVENLABS_API_KEY", "")
+        elif p_low in ["google", "google_tts", "google-tts", "google_ai_studio", "google_cloud"]:
+            clean_key = os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
+        elif p_low in ["openai", "openai_tts", "openai-tts"]:
+            clean_key = os.getenv("OPENAI_API_KEY", "")
+        elif p_low in ["deepgram", "deepgram_aura", "deepgram-aura"]:
+            clean_key = os.getenv("DEEPGRAM_API_KEY", "")
+        elif p_low in ["cartesia", "cartesia_sonic", "cartesia-sonic"]:
+            clean_key = os.getenv("CARTESIA_API_KEY", "")
+        elif p_low in ["azure", "azure_speech", "azure-speech"]:
+            clean_key = os.getenv("AZURE_SPEECH_KEY", "")
+        elif p_low in ["playht", "play_ht", "play-ht"]:
+            clean_key = os.getenv("PLAYHT_API_KEY", "")
+        elif p_low in ["fish_audio", "fish-audio", "fishaudio"]:
+            clean_key = os.getenv("FISH_AUDIO_API_KEY", "")
+        elif p_low in ["lmnt", "lmnt_speech"]:
+            clean_key = os.getenv("LMNT_API_KEY", "")
 
     voices = await registry_service.get_voice_models(provider, api_key=clean_key)
     return {"provider": provider, "voices": voices}
@@ -96,10 +135,11 @@ async def test_telephony_dispatch(
 
 
 @router.post("/voices/preview")
+@router.post("/voices/preview/")
 async def preview_voice_synthesis(
     payload: dict[str, Any],
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Synthesize a short preview clip and stream it back directly as audio/mpeg."""
     import httpx
@@ -117,10 +157,51 @@ async def preview_voice_synthesis(
         raise HTTPException(status_code=400, detail="A valid Voice ID is required for audio synthesis.")
 
     passed_key = str(payload.get("api_key", "")).strip()
-    api_key = passed_key if passed_key and "•" not in passed_key and "*" not in passed_key else resolve_provider_credential(db, str(current_user.organization_id), str(current_user.id), provider_name)
+    api_key = ""
+    if passed_key and "•" not in passed_key and "*" not in passed_key and "..." not in passed_key:
+        api_key = passed_key
+    elif current_user:
+        api_key = resolve_credential_key(db, str(current_user.organization_id), str(current_user.id), provider_name)
 
     if not api_key:
-        raise HTTPException(status_code=400, detail=f"API Key is missing for provider {provider_name.upper()}.")
+        # Fallback to any matching credential stored in database for this provider
+        from backend.models.models import ProviderCredential
+        from backend.routers.credentials import decrypt_secret
+        matching_creds = db.query(ProviderCredential).all()
+        for cred in matching_creds:
+            c_name = (cred.provider_name or "").lower().strip()
+            if provider_name in c_name or c_name in provider_name:
+                try:
+                    dec = decrypt_secret(str(cred.encrypted_key))
+                    if dec and len(dec) > 5 and "•" not in dec:
+                        api_key = dec
+                        break
+                except Exception:
+                    pass
+
+    if not api_key:
+        # Fallback to standard environment variables
+        if provider_name in ["elevenlabs", "eleven_labs", "eleven-labs"]:
+            api_key = os.getenv("ELEVENLABS_API_KEY", "")
+        elif provider_name in ["google", "google_tts", "google-tts", "google_ai_studio", "google_cloud"]:
+            api_key = os.getenv("GOOGLE_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
+        elif provider_name in ["openai", "openai_tts", "openai-tts"]:
+            api_key = os.getenv("OPENAI_API_KEY", "")
+        elif provider_name in ["deepgram", "deepgram_aura", "deepgram-aura"]:
+            api_key = os.getenv("DEEPGRAM_API_KEY", "")
+        elif provider_name in ["cartesia", "cartesia_sonic", "cartesia-sonic"]:
+            api_key = os.getenv("CARTESIA_API_KEY", "")
+        elif provider_name in ["azure", "azure_speech", "azure-speech"]:
+            api_key = os.getenv("AZURE_SPEECH_KEY", "")
+        elif provider_name in ["playht", "play_ht", "play-ht"]:
+            api_key = os.getenv("PLAYHT_API_KEY", "")
+        elif provider_name in ["fish_audio", "fish-audio", "fishaudio"]:
+            api_key = os.getenv("FISH_AUDIO_API_KEY", "")
+        elif provider_name in ["lmnt", "lmnt_speech"]:
+            api_key = os.getenv("LMNT_API_KEY", "")
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail=f"API Key is missing for provider {provider_name.upper()}. Please connect your provider in API & Integrations.")
 
     # Raw runtime logging of incoming frontend payload
     print("\n==================================================")

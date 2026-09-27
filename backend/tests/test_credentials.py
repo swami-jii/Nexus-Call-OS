@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
 
@@ -35,5 +34,50 @@ def test_credentials_flow():
     assert res.status_code == 400
     detail_lower = res.json().get("detail", "").lower()
     assert any(k in detail_lower for k in ["invalid", "error", "failed"])
+    
+    app.dependency_overrides.clear()
+
+
+def test_regular_user_save_and_manage_credentials():
+    from backend.auth.deps import get_current_user
+    
+    class MockRegularUser:
+        id = "regular-user-id"
+        organization_id = "regular-user-org-123"
+        role = "user"
+        email = "user@company.com"
+        
+    app.dependency_overrides[get_current_user] = lambda: MockRegularUser()
+    
+    # Regular user saves LLM provider with is_owner=True
+    res = client.post("/api/credentials/", json={
+        "provider": "openai",
+        "category": "llm",
+        "is_owner": True,
+        "primary_model": "gpt-4o",
+        "selection_strategy": "dynamic",
+        "api_key": "sk-test-real-format-key-1234567890"
+    })
+    
+    assert res.status_code == 200, f"Expected 200, got {res.status_code}: {res.text}"
+    assert res.json().get("status") == "success"
+    
+    # Regular user saves Voice engine
+    res_voice = client.post("/api/credentials/", json={
+        "provider": "elevenlabs",
+        "category": "voice",
+        "is_owner": True,
+        "default_voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "selection_strategy": "dynamic",
+        "api_key": "xi-test-real-format-key-1234567890"
+    })
+    assert res_voice.status_code == 200, f"Expected 200, got {res_voice.status_code}: {res_voice.text}"
+    
+    # Query credentials
+    res_get = client.get("/api/credentials/")
+    assert res_get.status_code == 200
+    creds = res_get.json().get("credentials", [])
+    assert any(c["provider"] == "openai" for c in creds)
+    assert any(c["provider"] == "elevenlabs" for c in creds)
     
     app.dependency_overrides.clear()

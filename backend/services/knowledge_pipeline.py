@@ -237,6 +237,20 @@ class DocumentJobTracker:
                 pass
         return None
 
+    @classmethod
+    def cleanup_job(cls, document_id: str) -> bool:
+        """Remove a job from memory tracker."""
+        with cls._lock:
+            if document_id in cls._jobs:
+                del cls._jobs[document_id]
+                return True
+        return False
+
+    @classmethod
+    def remove_job(cls, document_id: str) -> bool:
+        """Alias for cleanup_job."""
+        return cls.cleanup_job(document_id)
+
 
 class BackgroundKnowledgeWorker:
     """
@@ -553,6 +567,17 @@ class BackgroundKnowledgeWorker:
         total_time_ms = (time.time() - worker_start_t) * 1000
 
         # 6. Save extracted & indexed document cache to disk for instant query retrieval
+        pages_list = [
+            {
+                "page_number": p["page_number"],
+                "text": p["text"].strip(),
+                "char_count": len(p["text"].strip()),
+                "lines_count": len(p["text"].strip().split("\n")),
+            }
+            for p in pages_plan
+            if p.get("text") and p["text"].strip()
+        ] if ext_lower == "pdf" else []
+
         cache_data = {
             "document_id": document_id,
             "filename": filename,
@@ -564,6 +589,7 @@ class BackgroundKnowledgeWorker:
             "chunk_count": len(chunks),
             "page_count": page_count,
             "text": extracted_text,
+            "pages": pages_list,
             "chunks": chunks,
             "metrics": {
                 "background_parse_time_ms": round(bg_parse_time_ms, 2),
@@ -597,6 +623,7 @@ class BackgroundKnowledgeWorker:
                 "indexed_chunks": len(chunks),
                 "progress_percent": 100,
                 "extracted_text": extracted_text,
+                "pages": pages_list,
                 "error": None,
                 "metrics": {
                     "background_parse_time_ms": round(bg_parse_time_ms, 2),

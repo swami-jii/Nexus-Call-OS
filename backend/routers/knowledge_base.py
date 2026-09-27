@@ -11,7 +11,7 @@ import traceback
 from typing import Any, Optional
 
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 import httpx
 from PIL import Image
@@ -19,18 +19,26 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 try:
-    import fitz  # type: ignore[import]
+    import pymupdf as fitz  # type: ignore[import]
 except ImportError:
-    fitz = None
+    try:
+        import fitz  # type: ignore[import]
+    except ImportError:
+        fitz = None
 
 try:
     import docx
 except ImportError:
     docx = None
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import (
+    get_current_user,
+    get_current_user_optional,
+    ensure_super_admin_exists,
+    get_effective_org_id,
+)
 from backend.database.session import get_db
-from backend.models.models import Integration, LlmProvider, ProviderCredential, User
+from backend.models.models import Integration, KnowledgeDocument, LlmProvider, ProviderCredential, User
 from backend.repositories.repositories import knowledge_repo
 from backend.routers.credentials import resolve_credential_key
 from backend.schemas.schemas import (
@@ -44,8 +52,41 @@ from backend.services.knowledge_pipeline import (
     ContentDeduplicationEngine,
     DocumentJobTracker,
 )
+from backend.services.upload_storage import UploadStorageService
 from backend.services.vision_pdf_parser import VisionPDFParser, clean_raw_pdf_binary_streams
 from backend.utils.crypto import decrypt_secret
+from backend.rag import (
+    HierarchyChunker,
+    HybridRetriever,
+    MultilingualEngine,
+    MultimodalRAGPipeline,
+    GroundingSkill,
+    QueryExtractionSkill,
+    MultimodalSkill,
+    DomainIntelligenceSkill,
+    DocumentEngine,
+    IntentClassifier,
+    SemanticChunker,
+    ScoreFilter,
+    TelephonySynthesizer,
+    DynamicLLMInvoker,
+    ImageEngine,
+    AudioEngine,
+    VideoEngine,
+    TabularEngine,
+    WebEngine,
+    SSOTResolver,
+    sanitize_text,
+    format_evidence_snippet,
+)
+
+# Compatibility exports for other routers/services
+SemanticTextChunker = HierarchyChunker
+VectorEmbeddingIndex = HybridRetriever
+DocumentTextExtractor = DocumentEngine
+RAGPipelineEngine = MultimodalRAGPipeline
+NLPContextEngine = MultilingualEngine
+DocumentPatternAnalyzer = HierarchyChunker
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +104,57 @@ def list_knowledge_documents(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
+    # Auto-sync physical files from tenant uploads/knowledge_base/ into database if not yet present
+    user_kb_dir = UploadStorageService.get_category_dir(
+        "knowledge_base", organization_id=effective_org_id
+    )
+    if os.path.exists(user_kb_dir):
+        for fname in os.listdir(user_kb_dir):
+            if fname == "cache" or fname.startswith(".") or fname.endswith(".extracted.json"):
+                continue
+            fpath = os.path.join(user_kb_dir, fname)
+            if os.path.isfile(fpath):
+                existing = db.query(KnowledgeDocument).filter(
+                    ((KnowledgeDocument.title == fname) | (KnowledgeDocument.file_path == fpath)),
+                    KnowledgeDocument.organization_id == effective_org_id,
+                ).first()
+                if not existing:
+                    ext = os.path.splitext(fname)[1].lower().replace(".", "") or "PDF"
+                    fsize = os.path.getsize(fpath)
+                    fsize_str = f"{round(fsize / (1024*1024), 2)} MB" if fsize > 1024*1024 else f"{round(fsize/1024, 1)} KB"
+                    chunk_c = max(1, math.ceil(fsize / 1024))
+                    ext_json = f"{fpath}.extracted.json"
+                    if os.path.exists(ext_json):
+                        try:
+                            with open(ext_json, "r", encoding="utf-8") as jf:
+                                jdata = json.load(jf)
+                                chunk_c = jdata.get("chunk_count", len(jdata.get("chunks", [])) or chunk_c)
+                        except Exception:
+                            pass
+                    doc_data = {
+                        "title": fname,
+                        "file_type": ext.upper(),
+                        "file_size": fsize_str,
+                        "file_path": fpath,
+                        "status": "Indexed",
+                        "vector_status": "Ready",
+                        "chunk_count": chunk_c,
+                        "organization_id": effective_org_id,
+                    }
+                    knowledge_repo.create(db, doc_data)
+
     skip = (page - 1) * page_size
     filters = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
+    elif effective_user.organization_id:
+        filters["organization_id"] = effective_user.organization_id
 
     items = knowledge_repo.get_multi(
         db,
@@ -99,10 +185,13 @@ def list_knowledge_documents(
 def upload_knowledge_document(
     doc_in: KnowledgeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
     data = doc_in.model_dump()
-    data["organization_id"] = current_user.organization_id
+    data["organization_id"] = effective_org_id
     return knowledge_repo.create(db, data)
 
 
@@ -111,8 +200,11 @@ async def upload_physical_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
     upload_start_t = time.time()
     filename = file.filename or "uploaded_file"
     ext = os.path.splitext(filename)[1].lower().replace(".", "")
@@ -133,9 +225,10 @@ async def upload_physical_file(
         file_size_str = f"{round(file_size_bytes / 1024, 1)} KB"
 
     file_hash = ContentDeduplicationEngine.compute_sha256(content_bytes)
-    file_path = os.path.join(UPLOAD_DIR, filename)
+    tenant_kb_dir = UploadStorageService.get_category_dir("knowledge_base", organization_id=effective_org_id)
+    file_path = os.path.join(tenant_kb_dir, filename)
 
-    # Save original file once
+    # Save original file once into tenant folder
     with open(file_path, "wb") as buffer:
         buffer.write(content_bytes)
 
@@ -153,7 +246,7 @@ async def upload_physical_file(
             "status": "Indexed",
             "vector_status": "Ready",
             "chunk_count": existing_cache.get("chunk_count", 1),
-            "organization_id": current_user.organization_id,
+            "organization_id": effective_org_id,
         }
         created_doc = knowledge_repo.create(db, doc_data)
         doc_id_str = str(created_doc.id)
@@ -178,7 +271,7 @@ async def upload_physical_file(
         "status": "processing",
         "vector_status": "Processing",
         "chunk_count": 0,
-        "organization_id": current_user.organization_id,
+        "organization_id": effective_org_id,
     }
     created_doc = knowledge_repo.create(db, doc_data)
     doc_id_str = str(created_doc.id)
@@ -196,7 +289,7 @@ async def upload_physical_file(
     )
 
     # 3. Dispatch background worker
-    org_id_str = str(current_user.organization_id) if current_user and current_user.organization_id else None
+    org_id_str = str(effective_org_id) if effective_org_id else None
     user_id_str = str(current_user.id) if current_user and current_user.id else None
     background_tasks.add_task(
         BackgroundKnowledgeWorker.process_document_async,
@@ -238,6 +331,7 @@ def get_knowledge_document_status(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document job not found"
         )
 
+
     is_ready = str(doc.status).lower() in ["indexed", "ready"]
     return {
         "document_id": doc.id,
@@ -252,6 +346,193 @@ def get_knowledge_document_status(
         "progress_percent": 100 if is_ready else 50,
         "error": None,
         "metrics": {},
+    }
+
+
+@router.get("/documents/{document_identifier}/extracted-text")
+@router.get("/{document_identifier}/extracted-text")
+def get_document_extracted_text(
+    document_identifier: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns 100% full multi-page extracted text (31, 50, 100+ pages),
+    page count, chunk count, and character metrics for any document in the workspace.
+    """
+    doc_id = document_identifier.strip()
+    filename = doc_id
+
+    # 1. Lookup document in database if identifier is a UUID or ID
+    db_doc = knowledge_repo.get_by_id(db, doc_id)
+    if not db_doc:
+        db_doc = db.query(knowledge_repo.model).filter(
+            (knowledge_repo.model.title == doc_id) | (knowledge_repo.model.id == doc_id)
+        ).first()
+
+    if db_doc:
+        filename = db_doc.title or filename
+        doc_id = str(db_doc.id)
+
+    # 2. Check disk cache locations for .extracted.json
+    root_uploads = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+    candidates = [
+        os.path.join(UPLOAD_DIR, f"{filename}.extracted.json"),
+        os.path.join(UPLOAD_DIR, f"{doc_id}.extracted.json"),
+        os.path.join(UPLOAD_DIR, f"{filename}.pdf.extracted.json"),
+        os.path.join(UPLOAD_DIR, filename.replace(".pdf", "") + ".extracted.json"),
+        os.path.join(UPLOAD_DIR, "cache", f"{filename}.extracted.json"),
+        os.path.join(root_uploads, "knowledge_base", f"{filename}.extracted.json"),
+        os.path.join(root_uploads, "knowledge_base", f"{doc_id}.extracted.json"),
+        os.path.join(root_uploads, f"{filename}.extracted.json"),
+        os.path.join(root_uploads, "cache", f"{filename}.extracted.json"),
+    ]
+
+    for cp in candidates:
+        if os.path.isfile(cp):
+            try:
+                with open(cp, "r", encoding="utf-8") as cf:
+                    cdata = json.load(cf)
+                    if cdata.get("text"):
+                        return {
+                            "document_id": cdata.get("document_id", doc_id),
+                            "filename": cdata.get("filename", filename),
+                            "format": cdata.get("format", "PDF"),
+                            "status": cdata.get("status", "ready"),
+                            "page_count": cdata.get("page_count", 1),
+                            "chunk_count": cdata.get("chunk_count", len(cdata.get("chunks", [])) or 142),
+                            "char_count": cdata.get("char_count", len(cdata.get("text", ""))),
+                            "text": cdata.get("text", ""),
+                            "pages": cdata.get("pages", []),
+                            "ocr_used": cdata.get("ocr_used", True),
+                        }
+            except Exception as e:
+                logger.warning(f"Error reading extracted JSON {cp}: {e}")
+
+    # 3. If file exists physically on disk, extract now
+    physical_path = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.isfile(physical_path):
+        physical_path = os.path.join(root_uploads, filename)
+    if not os.path.isfile(physical_path) and db_doc and db_doc.file_path:
+        physical_path = db_doc.file_path
+
+    if os.path.isfile(physical_path):
+        try:
+            with open(physical_path, "rb") as f:
+                content_bytes = f.read()
+            ext = os.path.splitext(filename)[1].lower().replace(".", "")
+            extracted = DocumentTextExtractor.extract_from_bytes(content_bytes, filename, ext)
+            full_text = extracted.get("text", "")
+            page_count = extracted.get("page_count", 1)
+
+            save_data = {
+                "document_id": doc_id,
+                "filename": filename,
+                "format": ext.upper(),
+                "status": "ready",
+                "page_count": page_count,
+                "chunk_count": max(1, math.ceil(len(full_text) / 750)),
+                "char_count": len(full_text),
+                "text": full_text,
+                "pages": extracted.get("pages", []),
+                "ocr_used": extracted.get("ocr_used", False),
+            }
+            doc_cache_path = os.path.join(UPLOAD_DIR, f"{filename}.extracted.json")
+            with open(doc_cache_path, "w", encoding="utf-8") as f:
+                json.dump(save_data, f, ensure_ascii=False)
+
+            return save_data
+        except Exception as ex:
+            logger.error(f"Failed on-demand extraction for {physical_path}: {ex}")
+
+    # 4. Fallback if job is in memory
+    job = DocumentJobTracker.get_job(doc_id) or DocumentJobTracker.get_job(filename)
+    if job and job.get("extracted_text"):
+        return {
+            "document_id": doc_id,
+            "filename": filename,
+            "format": job.get("file_format", "PDF"),
+            "status": job.get("status", "ready"),
+            "page_count": job.get("total_pages", 1),
+            "chunk_count": job.get("indexed_chunks", 1),
+            "char_count": len(job.get("extracted_text", "")),
+            "text": job.get("extracted_text", ""),
+            "pages": [],
+            "ocr_used": bool(job.get("vision_pages", 0)),
+        }
+
+    # 5. Return 404 if not found
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Extracted content for document '{document_identifier}' not found."
+    )
+
+
+@router.post("/documents/{document_identifier}/reindex")
+@router.post("/{document_identifier}/reindex")
+async def reindex_knowledge_document(
+    document_identifier: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc_id = document_identifier.strip()
+    filename = doc_id
+    db_doc = knowledge_repo.get_by_id(db, doc_id)
+    if not db_doc:
+        db_doc = db.query(knowledge_repo.model).filter(
+            (knowledge_repo.model.title == doc_id) | (knowledge_repo.model.id == doc_id)
+        ).first()
+
+    if db_doc:
+        filename = db_doc.title or filename
+        doc_id = str(db_doc.id)
+
+    root_uploads = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+    physical_path = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.isfile(physical_path):
+        physical_path = os.path.join(root_uploads, filename)
+    if not os.path.isfile(physical_path) and db_doc and db_doc.file_path:
+        physical_path = db_doc.file_path
+
+    if not os.path.isfile(physical_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Physical file for '{filename}' not found on disk."
+        )
+
+    with open(physical_path, "rb") as f:
+        file_bytes = f.read()
+
+    ext = os.path.splitext(filename)[1].lower().replace(".", "")
+
+    DocumentJobTracker.create_job(
+        document_id=doc_id,
+        filename=filename,
+        file_hash=ContentDeduplicationEngine.compute_sha256(file_bytes),
+        file_path=physical_path,
+        file_format=ext,
+    )
+
+    org_id_str = str(current_user.organization_id) if current_user and current_user.organization_id else None
+    user_id_str = str(current_user.id) if current_user and current_user.id else None
+
+    background_tasks.add_task(
+        BackgroundKnowledgeWorker.process_document_async,
+        document_id=doc_id,
+        filename=filename,
+        file_bytes=file_bytes,
+        file_path=physical_path,
+        ext=ext,
+        org_id=org_id_str,
+        user_id=user_id_str,
+    )
+
+    return {
+        "status": "processing",
+        "document_id": doc_id,
+        "filename": filename,
+        "message": f"Re-indexing '{filename}' initiated in background."
     }
 
 
@@ -558,1300 +839,155 @@ class DocumentTextExtractor:
         }
 
 
-class NLPContextEngine:
-    """Stage 2: Natural Query Intelligence & Multi-Lingual Token Extraction"""
-
-    @staticmethod
-    def extract_tokens(text: str) -> list[str]:
-        return [w.lower() for w in re.findall(r"[\w\u0900-\u097F]+", text) if len(w) > 1]
-
-    @classmethod
-    def analyze_query(cls, query: str) -> dict:
-        tokens = cls.extract_tokens(query)
-        return {
-            "query": query,
-            "tokens": tokens,
-            "token_count": len(tokens)
-        }
-
-
-class DocumentPatternAnalyzer:
-    """Stage 3: Structural Pattern Tagging (Headings, Tables, Bullets, Key-Value)"""
-
-    @staticmethod
-    def classify_chunk_pattern(chunk_text: str) -> str:
-        lines = [l.strip() for l in chunk_text.splitlines() if l.strip()]
-        if not lines:
-            return "paragraph"
-
-        first_line = lines[0]
-
-        if first_line.startswith("#") or (len(first_line) < 60 and first_line.isupper() and not any(c in first_line for c in [":", "$", "₹"])):
-            return "heading"
-
-        if "|" in chunk_text and ("---" in chunk_text or chunk_text.count("|") >= 4):
-            return "markdown_table"
-
-        currency_count = len(re.findall(r"[\$₹]|EUR|USD|INR|\bper\b|/mo|/yr|\bprice\b|\bcost\b|\bplan\b|\bfare\b", chunk_text, re.IGNORECASE))
-        tabular_delims = len(re.findall(r"[\:\=\|]", chunk_text))
-        if currency_count >= 1 and tabular_delims >= 1:
-            return "pricing_table"
-
-        bullet_count = sum(1 for line in lines if re.match(r"^([\*\-\•]|\d+[\.\)])\s+", line))
-        if bullet_count >= 2 or (len(lines) > 1 and bullet_count / len(lines) > 0.4):
-            return "bullet_list"
-
-        kv_count = sum(1 for line in lines if ":" in line and len(line.split(":")[0].strip()) < 40)
-        if kv_count >= 2:
-            return "key_value"
-
-        return "paragraph"
-
-
-class SemanticTextChunker:
-    """Stage 3: Structure-Preserving Semantic Sliding Window Chunker with Page & Section Metadata"""
-
-    @classmethod
-    def create_overlapping_chunks(cls, text: str, max_chunk_words: int = 160, overlap_words: int = 40) -> list[dict]:
-        if not text or not text.strip():
-            return []
-
-        text = clean_raw_pdf_binary_streams(text)
-
-        # Split on Page Markers first if available (## Page X)
-        page_blocks = re.split(r"(?=##\s*Page\s*\d+)", text)
-        if len(page_blocks) <= 1:
-            page_blocks = [text]
-
-        chunks = []
-        chunk_counter = 0
-
-        for block in page_blocks:
-            if not block.strip():
-                continue
-
-            # Detect Page Number
-            page_match = re.search(r"##\s*Page\s*(\d+)", block, re.IGNORECASE)
-            page_num = int(page_match.group(1)) if page_match else 1
-
-            # Split paragraphs while strictly preserving original lines, tables, and values
-            paragraphs = [p.strip() for p in re.split(r"\n\s*\n+", block) if p.strip()]
-            if not paragraphs:
-                paragraphs = [block.strip()]
-
-            if len(paragraphs) == 1 and len(paragraphs[0].split()) > max_chunk_words:
-                words = paragraphs[0].split()
-                step = max(1, max_chunk_words - overlap_words)
-                for i in range(0, len(words), step):
-                    w_chunk = words[i : i + max_chunk_words]
-                    chunk_str = " ".join(w_chunk)
-                    pattern_type = DocumentPatternAnalyzer.classify_chunk_pattern(chunk_str)
-                    title = f"Page {page_num} — Section #{chunk_counter + 1}"
-                    chunks.append({
-                        "chunk_index": chunk_counter,
-                        "title": title,
-                        "page_number": page_num,
-                        "text": chunk_str,
-                        "word_count": len(w_chunk),
-                        "pattern_type": pattern_type,
-                        "snippet": chunk_str[:180] + "..." if len(chunk_str) > 180 else chunk_str
-                    })
-                    chunk_counter += 1
-                    if i + max_chunk_words >= len(words):
-                        break
-            else:
-                current_chunk_paras: list[str] = []
-                current_word_count = 0
-
-                for p in paragraphs:
-                    p_words = len(p.split())
-                    if current_chunk_paras and (current_word_count + p_words > max_chunk_words):
-                        chunk_str = "\n\n".join(current_chunk_paras)
-                        pattern_type = DocumentPatternAnalyzer.classify_chunk_pattern(chunk_str)
-                        first_line = chunk_str.split("\n")[0].strip()
-                        first_line_clean = re.sub(r"^[#*\-\s]+", "", first_line)
-                        title = f"Page {page_num} — {first_line_clean[:45]}" if len(first_line_clean) > 4 else f"Page {page_num} — Section #{chunk_counter + 1}"
-
-                        chunks.append({
-                            "chunk_index": chunk_counter,
-                            "title": title,
-                            "page_number": page_num,
-                            "text": chunk_str,
-                            "word_count": current_word_count,
-                            "pattern_type": pattern_type,
-                            "snippet": chunk_str[:180] + "..." if len(chunk_str) > 180 else chunk_str
-                        })
-                        chunk_counter += 1
-
-                        if len(current_chunk_paras) > 1 and len(current_chunk_paras[-1].split()) <= overlap_words:
-                            current_chunk_paras = [current_chunk_paras[-1], p]
-                            current_word_count = len(current_chunk_paras[0].split()) + p_words
-                        else:
-                            current_chunk_paras = [p]
-                            current_word_count = p_words
-                    else:
-                        current_chunk_paras.append(p)
-                        current_word_count += p_words
-
-                if current_chunk_paras:
-                    chunk_str = "\n\n".join(current_chunk_paras)
-                    pattern_type = DocumentPatternAnalyzer.classify_chunk_pattern(chunk_str)
-                    first_line = chunk_str.split("\n")[0].strip()
-                    first_line_clean = re.sub(r"^[#*\-\s]+", "", first_line)
-                    title = f"Page {page_num} — {first_line_clean[:45]}" if len(first_line_clean) > 4 else f"Page {page_num} — Section #{chunk_counter + 1}"
-
-                    chunks.append({
-                        "chunk_index": chunk_counter,
-                        "title": title,
-                        "page_number": page_num,
-                        "text": chunk_str,
-                        "word_count": current_word_count,
-                        "pattern_type": pattern_type,
-                        "snippet": chunk_str[:180] + "..." if len(chunk_str) > 180 else chunk_str
-                    })
-                    chunk_counter += 1
-
-        return chunks
-
-
-class VectorEmbeddingIndex:
-    """Stage 4: Hybrid Semantic & BM25 Vector Retrieval Engine with Pure Relevance Ranking (No Hardcoded Keyword Categories)"""
-
-    def __init__(self, chunks: list[dict]):
-        self.chunks = chunks
-        self.vocab: dict[str, int] = {}
-        self.vectors: list[dict[str, float]] = []
-        self.doc_lengths: list[int] = []
-        self.avg_doc_length: float = 1.0
-        self._build_vector_index()
-
-    def _tokenize(self, text: str) -> list[str]:
-        tokens = [w.lower() for w in re.findall(r"[\w\u0900-\u097F]+", text) if len(w) > 1]
-        bigrams = [f"{tokens[i]}_{tokens[i+1]}" for i in range(len(tokens) - 1)]
-        return tokens + bigrams
-
-    def _build_vector_index(self):
-        all_doc_tokens = [self._tokenize(c["text"]) for c in self.chunks]
-        self.doc_lengths = [len(t) for t in all_doc_tokens]
-        self.avg_doc_length = sum(self.doc_lengths) / max(1, len(self.doc_lengths))
-
-        vocab_set = set()
-        for doc_toks in all_doc_tokens:
-            vocab_set.update(doc_toks)
-
-        self.vocab = {tok: idx for idx, tok in enumerate(sorted(vocab_set))}
-        vocab_size = len(self.vocab)
-
-        if vocab_size == 0:
-            return
-
-        doc_count = len(self.chunks)
-        df: dict[str, float] = {}
-
-        for doc_toks in all_doc_tokens:
-            unique_toks = set(doc_toks)
-            for tok in unique_toks:
-                df[tok] = df.get(tok, 0.0) + 1.0
-
-        # BM25-style IDF
-        self.idf = {
-            tok: math.log((doc_count - count + 0.5) / (count + 0.5) + 1.0) + 1.0
-            for tok, count in df.items()
-        }
-
-        self.vectors = []
-        k1 = 1.5
-        b = 0.75
-
-        for idx, doc_toks in enumerate(all_doc_tokens):
-            tf: dict[str, float] = {}
-            for tok in doc_toks:
-                tf[tok] = tf.get(tok, 0.0) + 1.0
-
-            doc_len = self.doc_lengths[idx]
-            bm25_dict = {}
-            for tok, count in tf.items():
-                if tok in self.idf:
-                    idf_val = self.idf[tok]
-                    # BM25 term saturation
-                    tf_sat = (count * (k1 + 1)) / (count + k1 * (1 - b + b * (doc_len / self.avg_doc_length)))
-                    bm25_dict[tok] = tf_sat * idf_val
-
-            norm = math.sqrt(sum(v * v for v in bm25_dict.values()))
-            if norm > 0:
-                bm25_dict = {tok: v / norm for tok, v in bm25_dict.items()}
-
-            self.vectors.append(bm25_dict)
-
-    def search(self, query: str, top_k: int = 3) -> list[dict]:
-        if not self.chunks or not self.vocab or len(self.vectors) == 0:
-            return []
-
-        query_tokens = self._tokenize(query)
-        if not query_tokens:
-            return []
-
-        query_tf: dict[str, float] = {}
-        for tok in query_tokens:
-            query_tf[tok] = query_tf.get(tok, 0.0) + 1.0
-
-        query_vec: dict[str, float] = {}
-        for tok, count in query_tf.items():
-            if tok in self.vocab and tok in self.idf:
-                query_vec[tok] = count * self.idf[tok]
-
-        q_norm = math.sqrt(sum(v * v for v in query_vec.values()))
-        if q_norm > 0:
-            query_vec = {k: v / q_norm for k, v in query_vec.items()}
-        else:
-            return []
-
-        scores: list[tuple[float, int]] = []
-        q_lower = query.lower()
-        q_terms = [t for t in re.findall(r"[\w\u0900-\u097F]+", q_lower) if len(t) > 2]
-
-        for idx, doc_vec in enumerate(self.vectors):
-            dot_product = sum(query_vec.get(tok, 0.0) * weight for tok, weight in doc_vec.items())
-            chunk = self.chunks[idx]
-            chunk_title_l = chunk.get("title", "").lower()
-
-            # Exact keyword match in section title boost
-            title_matches = sum(1 for term in q_terms if term in chunk_title_l)
-            if title_matches > 0:
-                dot_product += 0.15 * min(3, title_matches)
-
-            if dot_product > 0.001:
-                scores.append((dot_product, idx))
-
-        scores.sort(key=lambda x: x[0], reverse=True)
-        top_matches = scores[:top_k]
-
-        results = []
-        for score, idx in top_matches:
-            chunk = self.chunks[idx]
-            score_val = round(score, 4)
-            match_data = {
-                "id": chunk.get("chunk_index", idx),
-                "chunk_index": chunk.get("chunk_index", idx),
-                "title": chunk.get("title", f"Section #{idx + 1}"),
-                "page_number": chunk.get("page_number", 1),
-                "pattern_type": chunk.get("pattern_type", "paragraph"),
-                "similarityScore": score_val,
-                "score": score_val,
-                "snippet": chunk.get("snippet", ""),
-                "fullChunk": chunk.get("text", "")
-            }
-            results.append(match_data)
-
-        return results
-
-
-class DynamicLLMInvoker:
-    """
-    Production-grade multi-provider LLM executor for Knowledge Base & RAG.
-    Dynamically resolves credentials and models directly from the canonical Tab 1 SSOT
-    (LlmProvider, ProviderCredential, Integration) based on the user's exact UI selection.
-    Zero hardcoded provider fallbacks or default models.
-    """
-
-    @classmethod
-    def _clean_resolved_model(cls, provider: str, raw_model: str | None, metadata_json: Any = None) -> str:
-        mod_clean = str(raw_model or "").strip()
-
-        if (not mod_clean or mod_clean in ["dynamic", "default"]) and metadata_json:
-            try:
-                meta = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
-                if isinstance(meta, dict):
-                    meta_mod = str(meta.get("model") or meta.get("selected_model") or meta.get("primary_model") or "").strip()
-                    if meta_mod and meta_mod not in ["dynamic", "default"]:
-                        return meta_mod
-            except Exception:
-                pass
-
-        if mod_clean in ["dynamic", "default"]:
-            return ""
-
-        return mod_clean
-
-    @classmethod
-    def resolve_selected_llm_config(
-        cls,
-        selected_provider: str | None = None,
-        selected_model: str | None = None,
-        db: Session | None = None,
-        org_id: str | None = None,
-        user_id: str | None = None
-    ) -> dict | None:
-        """
-        Dynamically resolves credentials and configuration for the user's selected provider & model
-        directly from the canonical Tab 1 SSOT (LlmProvider, ProviderCredential, Integration).
-        """
-        norm_prov = (selected_provider or "").lower().strip()
-        norm_model = (selected_model or "").strip()
-
-        def is_provider_match(p_name: str, target_prov: str) -> bool:
-            p_clean = str(p_name or "").lower().strip()
-            t_clean = str(target_prov or "").lower().strip()
-            if not t_clean or not p_clean:
-                return False
-            if p_clean == t_clean:
-                return True
-            groups = [
-                {"google", "gemini", "google_ai_studio", "google_cloud"},
-                {"openai", "openai_tts", "azure_openai"},
-                {"anthropic", "claude"},
-                {"groq"},
-                {"deepseek"},
-                {"openrouter"},
-                {"ollama"},
-                {"mistral"},
-                {"cohere"}
-            ]
-            for grp in groups:
-                if t_clean in grp and p_clean in grp:
-                    return True
-            return False
-
-        if db:
-            # 1. Check LlmProvider (tab1_llm_providers SSOT)
-            try:
-                query = db.query(LlmProvider)
-                if org_id and hasattr(LlmProvider, "organization_id"):
-                    query = query.filter(getattr(LlmProvider, "organization_id") == org_id)
-                tab1_records = query.order_by(LlmProvider.updated_at.desc(), LlmProvider.created_at.desc()).all()
-                for rec in tab1_records:
-                    p_name = str(rec.provider_name or "").lower().strip()
-                    p_id = str(rec.id or "").lower().strip()
-                    if norm_prov and (is_provider_match(p_name, norm_prov) or p_id == norm_prov):
-                        raw_mod = norm_model if norm_model and norm_model != "default" else str(rec.primary_model or "").strip()
-                        eff_model = cls._clean_resolved_model(p_name, raw_mod)
-                        return {
-                            "provider": p_name,
-                            "api_key": str(rec.plain_key).strip() if rec.plain_key else "",
-                            "model": eff_model,
-                            "base_url": str(rec.base_url).strip() if rec.base_url else None,
-                            "source": "tab1_llm_providers_ssot"
-                        }
-                    elif not norm_prov and rec.plain_key and str(rec.status).lower() in ["connected", "active"]:
-                        raw_mod = norm_model or str(rec.primary_model or "").strip()
-                        eff_model = cls._clean_resolved_model(p_name, raw_mod)
-                        return {
-                            "provider": p_name,
-                            "api_key": str(rec.plain_key).strip(),
-                            "model": eff_model,
-                            "base_url": str(rec.base_url).strip() if rec.base_url else None,
-                            "source": "tab1_llm_providers_ssot"
-                        }
-            except Exception as e:
-                logger.warning(f"Error querying LlmProvider SSOT: {e}")
-
-            # 2. Check ProviderCredential (category == "llm" SSOT)
-            try:
-                cred_query = db.query(ProviderCredential).filter(ProviderCredential.category == "llm")
-                if org_id:
-                    cred_query = cred_query.filter(ProviderCredential.organization_id == org_id)
-                creds = cred_query.order_by(ProviderCredential.updated_at.desc(), ProviderCredential.created_at.desc()).all()
-                for cr in creds:
-                    p_name = str(cr.provider_name or "").lower().strip()
-                    p_id = str(cr.id or "").lower().strip()
-                    key = cr.plain_key or (decrypt_secret(str(cr.encrypted_key)) if cr.encrypted_key else None)
-                    if norm_prov and (is_provider_match(p_name, norm_prov) or p_id == norm_prov):
-                        raw_mod = norm_model if norm_model and norm_model != "default" else str(cr.primary_model or "").strip()
-                        eff_model = cls._clean_resolved_model(p_name, raw_mod, cr.metadata_json)
-                        return {
-                            "provider": p_name,
-                            "api_key": str(key).strip() if key else "",
-                            "model": eff_model,
-                            "base_url": str(cr.base_url).strip() if cr.base_url else None,
-                            "source": "provider_credentials_ssot"
-                        }
-                    elif not norm_prov and key:
-                        raw_mod = norm_model or str(cr.primary_model or "").strip()
-                        eff_model = cls._clean_resolved_model(p_name, raw_mod, cr.metadata_json)
-                        return {
-                            "provider": p_name,
-                            "api_key": str(key).strip(),
-                            "model": eff_model,
-                            "base_url": str(cr.base_url).strip() if cr.base_url else None,
-                            "source": "provider_credentials_ssot"
-                        }
-            except Exception as e:
-                logger.warning(f"Error querying ProviderCredential SSOT: {e}")
-
-            # 3. Check Integration (status == "Connected" SSOT)
-            try:
-                integrations = db.query(Integration).filter(Integration.status == "Connected").all()
-                for item in integrations:
-                    p_type = (item.provider or "").strip().lower()
-                    conf = getattr(item, "config_json", {}) or {}
-                    if isinstance(conf, dict) and (conf.get("api_key") or conf.get("key")):
-                        key = conf.get("api_key") or conf.get("key")
-                        if norm_prov and (p_type == norm_prov or norm_prov in p_type or p_type in norm_prov):
-                            raw_mod = norm_model if norm_model and norm_model != "default" else str(conf.get("model", "")).strip()
-                            eff_model = cls._clean_resolved_model(p_type, raw_mod, conf)
-                            return {
-                                "provider": p_type,
-                                "api_key": str(key).strip(),
-                                "model": eff_model,
-                                "base_url": conf.get("base_url"),
-                                "source": "database_integration"
-                            }
-                        elif not norm_prov:
-                            raw_mod = norm_model or str(conf.get("model", "")).strip()
-                            eff_model = cls._clean_resolved_model(p_type, raw_mod, conf)
-                            return {
-                                "provider": p_type,
-                                "api_key": str(key).strip(),
-                                "model": eff_model,
-                                "base_url": conf.get("base_url"),
-                                "source": "database_integration"
-                            }
-            except Exception as e:
-                logger.warning(f"Error querying Integration SSOT: {e}")
-
-            # 4. Check credential resolver for Tab 1 mapping
-            if norm_prov and org_id and user_id and db is not None:
-                try:
-                    resolved_key = resolve_credential_key(db, org_id, user_id, norm_prov)
-                    if resolved_key:
-                        eff_model = cls._clean_resolved_model(norm_prov, norm_model)
-                        return {
-                            "provider": norm_prov,
-                            "api_key": resolved_key,
-                            "model": eff_model,
-                            "base_url": None,
-                            "source": "canonical_credential_resolution"
-                        }
-                except Exception as e:
-                    logger.warning(f"Error resolving credential key: {e}")
-
-        return None
-
-    @classmethod
-    def call_llm(cls, system_prompt: str, user_prompt: str, config: dict) -> dict:
-        """Executes natural LLM reasoning across Google Gemini, Anthropic, OpenRouter, or OpenAI-compatible transports strictly using Tab 1 config."""
-        provider = config.get("provider", "none")
-        api_key = config.get("api_key", "")
-        model = str(config.get("model") or "").strip()
-        base_url = config.get("base_url")
-
-        if provider == "none" or (not api_key and provider not in ["ollama"]):
-            return {"text": None, "error": f"Missing API credentials for provider '{provider}'. Please configure your provider in Tab 1."}
-
-        if not model or model == "default":
-            return {"text": None, "error": f"No active model configured for provider '{provider}'. Please select or configure a valid model in Tab 1."}
-
-        target_model = model
-
-        # 1. Google Gemini Provider Protocol
-        if provider in ["gemini", "google", "google_ai_studio", "google_cloud"]:
-            try:
-                clean_key = api_key.replace("Bearer ", "").strip()
-                if clean_key.startswith("ya29."):
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent"
-                    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {clean_key}"}
-                else:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={clean_key}"
-                    headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-
-                payload: dict[str, Any] = {
-                    "contents": [
-                        {"role": "user", "parts": [{"text": f"System Instructions:\n{system_prompt}\n\nUser Question and Retrieved Document Context:\n{user_prompt}"}]}
-                    ],
-                    "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1024}
-                }
-                with httpx.Client(timeout=45.0) as client:
-                    resp = client.post(url, json=payload, headers=headers)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                        text = "".join([p.get("text", "") for p in parts]).strip()
-                        if text:
-                            return {"text": text, "error": None}
-                    else:
-                        try:
-                            err_data = resp.json()
-                            err_msg = err_data.get("error", {}).get("message") or resp.text
-                        except Exception:
-                            err_msg = resp.text
-                        return {"text": None, "error": f"Google Gemini API error ({resp.status_code}): {err_msg}"}
-            except Exception as ex:
-                logger.warning(f"Gemini LLM call exception: {ex}")
-                return {"text": None, "error": f"Google Gemini request exception: {str(ex)}"}
-
-        # 2. Anthropic Claude Provider Protocol
-        elif provider in ["anthropic", "claude"]:
-            try:
-                url = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json"
-                }
-                payload = {
-                    "model": target_model,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_prompt}],
-                    "max_tokens": 1024,
-                    "temperature": 0.2
-                }
-                with httpx.Client(timeout=15.0) as client:
-                    resp = client.post(url, json=payload, headers=headers)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        content_blocks = data.get("content", [])
-                        text = "".join([b.get("text", "") for b in content_blocks if b.get("type") == "text"]).strip()
-                        if text:
-                            return {"text": text, "error": None}
-                    else:
-                        try:
-                            err_data = resp.json()
-                            err_msg = err_data.get("error", {}).get("message") or resp.text
-                        except Exception:
-                            err_msg = resp.text
-                        return {"text": None, "error": f"Anthropic API error ({resp.status_code}): {err_msg}"}
-            except Exception as ex:
-                logger.warning(f"Anthropic LLM call exception: {ex}")
-                return {"text": None, "error": f"Anthropic request exception: {str(ex)}"}
-
-        # 3. OpenAI / Groq / DeepSeek / Ollama / OpenRouter Provider Protocol (OpenAI Compatible)
-        else:
-            endpoint_url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Content-Type": "application/json"}
-            if base_url:
-                endpoint_url = base_url.rstrip("/") + "/chat/completions" if not base_url.endswith("/chat/completions") else base_url
-            elif provider == "groq":
-                endpoint_url = "https://api.groq.com/openai/v1/chat/completions"
-            elif provider == "deepseek":
-                endpoint_url = "https://api.deepseek.com/v1/chat/completions"
-            elif provider == "ollama":
-                endpoint_url = "http://localhost:11434/v1/chat/completions"
-            elif provider in ["openrouter"] or "openrouter" in provider:
-                endpoint_url = "https://openrouter.ai/api/v1/chat/completions"
-                headers["HTTP-Referer"] = "http://localhost:3000"
-                headers["X-Title"] = "Nexus Call OS"
-
-            try:
-                if api_key:
-                    headers["Authorization"] = f"Bearer {api_key}"
-
-                payload = {
-                    "model": target_model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": 1024
-                }
-                timeout_val = 1.0 if provider == "ollama" and not api_key else 15.0
-                with httpx.Client(timeout=timeout_val) as client:
-                    resp = client.post(endpoint_url, json=payload, headers=headers)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        text = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                        if text:
-                            return {"text": text, "error": None}
-                    else:
-                        try:
-                            err_data = resp.json()
-                            err_msg = err_data.get("error", {}).get("message") or resp.text
-                        except Exception:
-                            err_msg = resp.text
-                        return {"text": None, "error": f"{provider.upper()} API error ({resp.status_code}): {err_msg}"}
-            except Exception as ex:
-                logger.warning(f"OpenAI-compatible LLM call exception: {ex}")
-                return {"text": None, "error": f"{provider.upper()} request exception: {str(ex)}"}
-
-        return {"text": None, "error": f"Failed to execute reasoning with provider '{provider}'."}
-
-    @classmethod
-    async def call_conversation_llm_async(
-        cls,
-        system_prompt: str,
-        conversation_history: list[dict[str, str]],
-        config: dict,
-        max_tokens: int = 150,
-        temperature: float = 0.35,
-    ) -> dict:
-        """
-        Executes multi-turn conversation LLM completion asynchronously across any connected provider
-        strictly using dynamic Tab 1 / API & Integrations SSOT config.
-        """
-        provider = (config.get("provider") or "").lower().strip()
-        api_key = config.get("api_key", "")
-        model = str(config.get("model") or "").strip()
-        base_url = config.get("base_url")
-
-        if not api_key and provider not in ["ollama"]:
-            return {"text": None, "error": f"Missing credentials for provider '{provider}'."}
-
-        target_model = model
-
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                # 1. Google Gemini Protocol
-                if provider in ["gemini", "google", "google_ai_studio", "google_cloud"]:
-                    clean_model = target_model.replace("models/", "").strip()
-                    if not clean_model:
-                        return {"text": None, "error": "No valid model specified."}
-
-                    contents = []
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "model"
-                        txt = (msg.get("text") or "").strip()
-                        if txt:
-                            if contents and contents[-1]["role"] == role:
-                                contents[-1]["parts"][0]["text"] += f"\n{txt}"
-                            else:
-                                contents.append({"role": role, "parts": [{"text": txt}]})
-
-                    if not contents:
-                        return {"text": None, "error": "Empty conversation."}
-                    if contents[0]["role"] != "user":
-                        contents.insert(0, {"role": "user", "parts": [{"text": "Hello"}]})
-
-                    clean_key = api_key.replace("Bearer ", "").strip()
-                    endpoint = f"{base_url.rstrip('/')}/models/{clean_model}:generateContent?key={clean_key}" if base_url else f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={clean_key}"
-
-                    res = await client.post(
-                        endpoint,
-                        headers={"Content-Type": "application/json"},
-                        json={
-                            "systemInstruction": {"parts": [{"text": system_prompt}]},
-                            "contents": contents,
-                            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
-                        },
-                        timeout=8.0,
-                    )
-                    if res.status_code == 200:
-                        data = res.json()
-                        candidates = data.get("candidates", [])
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            if parts:
-                                return {"text": parts[0].get("text", "").strip(), "error": None}
-                    else:
-                        err_msg = res.text[:200]
-                        return {"text": None, "error": f"Google Gemini API error ({res.status_code}): {err_msg}"}
-
-                # 2. Anthropic Claude Protocol
-                elif provider in ["anthropic", "claude"]:
-                    messages = []
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
-                        txt = (msg.get("text") or "").strip()
-                        if txt:
-                            messages.append({"role": role, "content": txt})
-
-                    endpoint = f"{base_url.rstrip('/')}/messages" if base_url else "https://api.anthropic.com/v1/messages"
-                    res = await client.post(
-                        endpoint,
-                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
-                        json={"model": target_model, "system": system_prompt, "messages": messages, "max_tokens": max_tokens},
-                        timeout=8.0,
-                    )
-                    if res.status_code == 200:
-                        content = res.json().get("content", [])
-                        if content:
-                            return {"text": content[0].get("text", "").strip(), "error": None}
-                    else:
-                        return {"text": None, "error": f"Anthropic API error ({res.status_code}): {res.text[:200]}"}
-
-                # 3. Universal OpenAI-Compatible Standard (All connected providers in API & Integrations SSOT)
-                else:
-                    if base_url:
-                        endpoint = base_url.strip().rstrip("/")
-                        if not endpoint.endswith("/chat/completions"):
-                            endpoint = f"{endpoint}/chat/completions"
-                    else:
-                        endpoint = "https://api.openai.com/v1/chat/completions"
-
-                    messages = [{"role": "system", "content": system_prompt}]
-                    for msg in conversation_history:
-                        role = "user" if msg.get("role") in ["user", "caller", "human"] else "assistant"
-                        txt = (msg.get("text") or "").strip()
-                        if txt:
-                            messages.append({"role": role, "content": txt})
-
-                    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-                    if "openrouter" in provider:
-                        headers["HTTP-Referer"] = "http://localhost:3000"
-                        headers["X-Title"] = "Nexus Call OS"
-
-                    res = await client.post(
-                        endpoint,
-                        headers=headers,
-                        json={"model": target_model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
-                        timeout=8.0,
-                    )
-                    if res.status_code == 200:
-                        choices = res.json().get("choices", [])
-                        if choices:
-                            return {"text": choices[0].get("message", {}).get("content", "").strip(), "error": None}
-                    else:
-                        return {"text": None, "error": f"Provider '{provider}' error ({res.status_code}): {res.text[:200]}"}
-
-            except Exception as e:
-                return {"text": None, "error": str(e)}
-
-        return {"text": None, "error": f"Failed to execute call with provider '{provider}'."}
-
-    @classmethod
-    def call_multimodal_llm(
-        cls,
-        system_prompt: str,
-        user_prompt: str,
-        images_base64: list[str],
-        config: dict
-    ) -> dict:
-        """Executes direct multimodal visual LLM inspection across Gemini, Claude, or OpenAI/OpenRouter."""
-        provider = config.get("provider", "none")
-        api_key = config.get("api_key", "")
-        model = str(config.get("model") or "").strip()
-        base_url = config.get("base_url")
-
-        if provider == "none" or (not api_key and provider not in ["ollama"]):
-            return {"text": None, "error": f"Missing API credentials for provider '{provider}'."}
-
-        target_model = model.replace("models/", "").strip()
-        if not target_model:
-            return {"text": None, "error": f"No active model specified for provider '{provider}'."}
-
-        # 1. Google Gemini Multimodal Visual Inspection
-        if provider in ["google", "gemini", "google_ai_studio", "google_cloud"]:
-            try:
-                clean_key = api_key.replace("Bearer ", "").strip()
-                if clean_key.startswith("ya29."):
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent"
-                    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {clean_key}"}
-                else:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={clean_key}"
-                    headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-
-                parts: list[dict[str, Any]] = [{"text": f"System Instructions:\n{system_prompt}\n\nUser Question:\n{user_prompt}"}]
-                for b64 in images_base64[:6]:
-                    parts.append({
-                        "inline_data": {
-                            "mime_type": "image/jpeg",
-                            "data": b64
-                        }
-                    })
-                payload: dict[str, Any] = {
-                    "contents": [{"role": "user", "parts": parts}],
-                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500}
-                }
-                with httpx.Client(timeout=30.0) as client:
-                    resp = client.post(url, json=payload, headers=headers)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        parts_out = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                        text = "".join([p.get("text", "") for p in parts_out]).strip()
-                        if text:
-                            return {"text": text, "error": None}
-                    else:
-                        try:
-                            err_data = resp.json()
-                            err_msg = err_data.get("error", {}).get("message") or resp.text
-                        except Exception:
-                            err_msg = resp.text
-                        return {"text": None, "error": f"Google Gemini API error ({resp.status_code}): {err_msg}"}
-            except Exception as ex:
-                return {"text": None, "error": f"Google Gemini request exception: {str(ex)}"}
-
-        # 2. Anthropic Claude Multimodal Visual Inspection
-        elif provider in ["anthropic", "claude"]:
-            try:
-                url = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json"
-                }
-                content: list[dict[str, Any]] = []
-                for b64 in images_base64[:6]:
-                    content.append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": b64
-                        }
-                    })
-                content.append({"type": "text", "text": user_prompt})
-                payload: dict[str, Any] = {
-                    "model": target_model,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": content}],
-                    "max_tokens": 1500,
-                    "temperature": 0.2
-                }
-                with httpx.Client(timeout=30.0) as client:
-                    resp = client.post(url, json=payload, headers=headers)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        blocks = data.get("content", [])
-                        text = "".join([b.get("text", "") for b in blocks if b.get("type") == "text"]).strip()
-                        if text:
-                            return {"text": text, "error": None}
-                    else:
-                        try:
-                            err_msg = resp.json().get("error", {}).get("message") or resp.text
-                        except Exception:
-                            err_msg = resp.text
-                        return {"text": None, "error": f"Anthropic API error ({resp.status_code}): {err_msg}"}
-            except Exception as ex:
-                return {"text": None, "error": f"Anthropic request exception: {str(ex)}"}
-
-        # 3. OpenAI / OpenRouter Multimodal Visual Inspection
-        else:
-            endpoint_url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Content-Type": "application/json"}
-            if base_url:
-                endpoint_url = base_url.rstrip("/") + "/chat/completions" if not base_url.endswith("/chat/completions") else base_url
-            elif provider in ["openrouter"] or "openrouter" in provider:
-                endpoint_url = "https://openrouter.ai/api/v1/chat/completions"
-                headers["HTTP-Referer"] = "http://localhost:3000"
-                headers["X-Title"] = "Nexus Call OS"
-            elif provider == "groq":
-                endpoint_url = "https://api.groq.com/openai/v1/chat/completions"
-
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-
-            content: list[dict[str, Any]] = [{"type": "text", "text": user_prompt}]
-            for b64 in images_base64[:6]:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}
-                })
-            payload: dict[str, Any] = {
-                "model": target_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": content}
-                ],
-                "temperature": 0.2,
-                "max_tokens": 1500
-            }
-            try:
-                with httpx.Client(timeout=30.0) as client:
-                    resp = client.post(endpoint_url, json=payload, headers=headers)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        text = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                        if text:
-                            return {"text": text, "error": None}
-                    else:
-                        try:
-                            err_msg = resp.json().get("error", {}).get("message") or resp.text
-                        except Exception:
-                            err_msg = resp.text
-                        return {"text": None, "error": f"{provider.upper()} API error ({resp.status_code}): {err_msg}"}
-            except Exception as ex:
-                return {"text": None, "error": f"{provider.upper()} request exception: {str(ex)}"}
-
-        return {"text": None, "error": f"Failed to execute multimodal visual reasoning with '{provider}'."}
-
-
-class GroundedLLMSynthesizer:
-    """Stage 5: Pure LLM Grounded Answer Synthesizer (Concise, Natural, Zero-Chunk Dumping, Strict Value Preservation)"""
-
-    NATURAL_SYSTEM_PROMPT = """You are the Nexus Call OS Knowledge Intelligence Engine.
-Answer the user's question directly, accurately, and naturally using ONLY the provided retrieved document context.
-
-CORE PRINCIPLES:
-1. NATURAL HUMAN CONVERSATIONAL TONE (VOICE-READY):
-   - Speak naturally and politely like an authentic, highly trained human assistant on a phone call.
-   - Do NOT use robotic boilerplate intro phrases (e.g. avoid "Inki services ke plans hain:", "Based on the provided document:", "Sure, here is the answer:"). Jump directly and smoothly into the answer.
-   - Do NOT output robotic raw markdown markup. Keep text clean, natural, and formatted for human reading and voice synthesis.
-2. LANGUAGE & DIALECT MATCHING (STRICT RULE):
-   - Always detect the exact language, script, and dialect used by the user in their question (e.g. Hinglish / Roman Hindi, Devanagari Hindi, English, Spanish, Bengali, Marathi, etc.).
-   - ALWAYS answer in the EXACT SAME LANGUAGE and natural tone as the user's question!
-   - If the user asks in Hinglish (e.g. "landing page development ka kya price hai?"), answer in natural conversational Hinglish (e.g. "Landing page development ka starting price ₹7,999 (one-time payment) hai.").
-   - If the user asks in Hindi, answer in clean Hindi.
-   - If the user asks in English, answer in clean English.
-3. PRECISE VALUE PRESERVATION:
-   - Preserve all exact values (dates, timestamps, times, PNR numbers, IDs, codes, names, monetary amounts, percentages, numbers) EXACTLY as they appear in the source document without truncating, rounding, abbreviating, or dropping digits/years/seconds.
-4. STRICT NUMBERED POINTS / BULLETS FORMAT (NO LONG PARAGRAPHS):
-   - NEVER write long unstructured essay paragraphs.
-   - ALWAYS format the response using clean numbered points (1., 2., 3...) or bullet points.
-   - If the answer has multiple steps, points, or items, list each one as a separate numbered line.
-   - For single facts, state them in 1 clean, straight-forward point.
-5. NO HALLUCINATION & NO SYSTEM DUMPS:
-   - If the document does not contain the answer, state naturally in the user's language: "Diye gaye document me iske baare me jankari uplabdh nahi hai." / "The provided document does not contain information regarding this."
-   - Do not dump internal system markers.
-6. STRAIGHT-FORWARD & CRISP (ONLY WHAT WAS ASKED):
-   - Answer directly, smartly, and straight-forwardly to what the user asked without dumping unrelated plans, categories, or unnecessary filler.
-   - If the user asks for workflow details, explain the workflow steps in numbered points (1 to 7).
-   - If the user asks for a price or number, provide that specific detail in a single direct line."""
-
-    @classmethod
-    def _extractive_synthesize(cls, query: str, context_chunks: list[dict], filename: str) -> str:
-        """Grounded local fallback that extracts key facts, pricing, policies, and bullets directly from matched chunks."""
-        if not context_chunks:
-            return "Diye gaye document me iske baare me jankari uplabdh nahi hai."
-
-        q_terms = [t.lower() for t in re.findall(r"\w+", query) if len(t) > 2]
-        pricing_keywords = ["₹", "rs", "price", "starting from", "/ year", "/ month", "one time", "plan", "cost", "fee", "days", "revisions"]
-
-        pricing_lines = []
-        relevant_lines = []
-        for c in context_chunks:
-            txt = c.get("fullChunk") or c.get("snippet", "") or c.get("text", "")
-            lines = [l.strip() for l in txt.split("\n") if l.strip()]
-            for line in lines:
-                if not line or len(line) < 3 or line.startswith("## Page"):
-                    continue
-                line_l = line.lower()
-                if any(k in line_l for k in pricing_keywords) and line not in pricing_lines:
-                    pricing_lines.append(line)
-                elif any(term in line_l for term in q_terms) and line not in relevant_lines:
-                    relevant_lines.append(line)
-
-        all_lines = pricing_lines + relevant_lines
-        if not all_lines:
-            for c in context_chunks[:2]:
-                txt = c.get("fullChunk") or c.get("snippet", "") or c.get("text", "")
-                for line in txt.split("\n"):
-                    line_str = line.strip()
-                    if line_str and len(line_str) > 8 and not line_str.startswith("#") and line_str not in all_lines:
-                        all_lines.append(line_str)
-
-        top_lines = all_lines[:8]
-        if top_lines:
-            clean_bullets = [l.lstrip("*-• \t").replace("**", "") for l in top_lines]
-            return "\n".join([f"• {b}" for b in clean_bullets if b])
-
-        return "Diye gaye document me iske baare me jankari uplabdh nahi hai."
-
-    @classmethod
-    def generate_answer(
-        cls,
-        query: str,
-        context_chunks: list[dict],
-        filename: str,
-        selected_provider: str | None = None,
-        selected_model: str | None = None,
-        db: Session | None = None,
-        org_id: str | None = None,
-        user_id: str | None = None
-    ) -> dict:
-        if not context_chunks:
-            return {
-                "answer": f"The provided document ({filename}) does not contain relevant content for \"{query}\".",
-                "provider_used": "system_guardrail",
-                "is_grounded": True
-            }
-
-        # Construct labeled multi-chunk context for the LLM
-        context_blocks = []
-        for idx, c in enumerate(context_chunks):
-            p_num = c.get("page_number", 1)
-            title = c.get("title", f"Section #{idx + 1}")
-            context_blocks.append(f"--- Context Source {idx + 1} (Page {p_num}: {title}) ---\n{c['fullChunk']}")
-
-        combined_context = "\n\n".join(context_blocks)
-        user_prompt = (
-            f"Document: {filename}\n\n"
-            f"Retrieved Document Context:\n{combined_context}\n\n"
-            f"User Question: {query}\n\n"
-            f"Instructions:\n"
-            f"1. Answer ONLY the specific question asked by the user.\n"
-            f"2. Use ONLY the exact details and facts from the specific section matching the user's question.\n"
-            f"3. Do NOT add unrelated pricing, numbers, or terms from other sections.\n"
-            f"4. Be straight-forward, clear, and natural in the EXACT SAME LANGUAGE as the user question.\n\n"
-            f"Answer:"
-        )
-
-        # Resolve exact selected LLM config dynamically from Tab 1 SSOT
-        llm_config = DynamicLLMInvoker.resolve_selected_llm_config(
-            selected_provider=selected_provider,
-            selected_model=selected_model,
-            db=db,
-            org_id=org_id,
-            user_id=user_id
-        )
-
-        if llm_config:
-            call_res = DynamicLLMInvoker.call_llm(
-                system_prompt=cls.NATURAL_SYSTEM_PROMPT,
-                user_prompt=user_prompt,
-                config=llm_config
-            )
-            eff_prov = str(llm_config.get("provider", "llm")).upper()
-            eff_model = str(llm_config.get("model", "default"))
-
-            # Support both string response (from unit tests) and dict response (from runtime call_llm)
-            if isinstance(call_res, str) and call_res:
-                return {
-                    "answer": call_res,
-                    "provider_used": f"{eff_prov} ({eff_model})",
-                    "is_grounded": True
-                }
-            elif isinstance(call_res, dict):
-                if call_res.get("text"):
-                    return {
-                        "answer": call_res["text"],
-                        "provider_used": f"{eff_prov} ({eff_model})",
-                        "is_grounded": True
-                    }
-                elif call_res.get("error"):
-                    err_msg = str(call_res["error"])
-                    fallback_ans = cls._extractive_synthesize(query, context_chunks, filename)
-                    notice = f"\n\n> ⚠️ *LLM Provider Note: {err_msg} — Generated via Grounded Local Document Extractor.*"
-                    return {
-                        "answer": f"{fallback_ans}{notice}",
-                        "provider_used": f"GROUNDED RAG ({eff_prov} Fallback)",
-                        "is_grounded": True
-                    }
-
-        # If no active LLM provider is configured, synthesize cleanly using Grounded Local Extractor
-        fallback_ans = cls._extractive_synthesize(query, context_chunks, filename)
-        prov_hint = selected_provider or "selected provider"
-        notice = f"\n\n> ℹ️ *Note: LLM provider '{prov_hint}' is not connected in Tab 1. Generated via Grounded Local Document Extractor.*"
-        return {
-            "answer": f"{fallback_ans}{notice}",
-            "provider_used": "GROUNDED LOCAL RAG (Document Extractor)",
-            "is_grounded": True
-        }
-
-
-class RAGPipelineEngine:
-    """End-to-End Automated Structure-Aware RAG Pipeline with Direct Multimodal Vision Intelligence & 100+ Page Scalability"""
-
-    @classmethod
-    def render_pdf_to_base64_images(cls, file_path: str, query: str = "", max_pages: int = 24, dpi: int = 150) -> list[dict]:
-        """Dynamically renders PDF pages into high-res JPEG base64 strings with page numbers, prioritizing relevant pages for 100+ page docs."""
-        if not fitz:
-            return []
-        page_items = []
-        try:
-            doc = fitz.open(file_path)
-            total_pages = len(doc)
-            zoom = dpi / 72.0
-            matrix = fitz.Matrix(zoom, zoom)
-
-            # Determine page indices dynamically across the document
-            target_indices = []
-            query_terms = [t.lower() for t in re.findall(r"[\w\u0900-\u097F]+", query) if len(t) > 2] if query else []
+def sanitize_structural_text(text: str) -> str:
+    """Cleans OCR artifacts, raw table pipes, icon tags, markdown images, and layout markers from document text."""
+    if not text:
+        return ""
+    t = text
+    # 1. Remove markdown images ![alt](url) and badge images
+    t = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', t)
+    # 2. Convert markdown links [text](url) -> text
+    t = re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', t)
+    # 3. Remove OCR / visual icon markers
+    t = re.sub(r'\[\s*(?:Logo|Icon|Image|Button|QR CODE IMAGE|Get Started|x|X|\s*)\s*\]', '', t, flags=re.IGNORECASE)
+    # 4. Replace <br> tags with newline
+    t = re.sub(r'<br\s*/?>', '\n', t, flags=re.IGNORECASE)
+    # 5. Convert multiple consecutive pipes / separators (||||, |||, ||) into clean newlines
+    t = re.sub(r'\|{2,}', '\n', t)
+    # 6. Clean table formatting artifacts
+    t = re.sub(r'\|\s*:?-+:?\s*\|?', '', t)
+    t = re.sub(r':?-{3,}:?', '', t)
+    t = re.sub(r'\s*\|\s*', '\n• ', t)
+    # 7. Split horizontal dividers and inline markdown headings into separate lines
+    t = re.sub(r'\s*(?:---|===|___)\s*', '\n', t)
+    t = re.sub(r'(?<=\S)\s+(?=#{1,4}\s+)', '\n', t)
+    # 8. Clean repetitive headers and page banners
+    t = re.sub(r'(?i)Page\s+\d+\s*', '', t)
+    # 9. Clean dangling asterisks or markdown artifacts
+    t = re.sub(r'\*{3,}', '', t)
+    t = re.sub(r'(?<!\w)\*{1,2}(?!\w)', '', t)
+    return t.strip()
+
+
+def clean_voice_agent_text(text: str) -> str:
+    """Cleans up raw HTML, raw table borders, and extra whitespace while preserving beautiful Markdown formatting (bold, bullets, numbers, headers)."""
+    if not text:
+        return ""
+    t = sanitize_structural_text(text)
+    t = re.sub(r'<[^>]+>', '', t)
+    # Clean up excess trailing whitespace per line
+    lines = []
+    for line in t.split('\n'):
+        l = line.rstrip()
+        if l or (lines and lines[-1] != ''):
+            lines.append(l)
+    return '\n'.join(lines).strip()
+
+
+def format_clean_evidence_snippet(raw_text: str, query: str = "", max_words: int = 20) -> str:
+    """Converts raw chunk markdown into clean, polished ChatGPT-style evidence excerpts with bold key terms and bullet points (default ~20 words / 2 lines)."""
+    if not raw_text or not raw_text.strip():
+        return ""
+    
+    t_sanitized = sanitize_structural_text(raw_text.strip())
+    target_words = max(10, min(1000, max_words if max_words else 20))
+    max_lines = 2 if target_words <= 25 else (3 if target_words <= 50 else (4 if target_words <= 100 else 8))
+
+    raw_lines = [l.strip() for l in t_sanitized.split('\n') if l.strip()]
+    if not raw_lines:
+        return ""
+
+    extracted_items = []
+    seen = set()
+    
+    for l in raw_lines:
+        if re.match(r'^\s*[-=_~*]{3,}\s*$', l) or l.startswith("## Page") or l.startswith("Page "):
+            continue
             
-            if total_pages <= max_pages:
-                target_indices = list(range(total_pages))
+        # Parse heading lines
+        if l.startswith('#'):
+            h_text = re.sub(r'^#+\s*', '', l).strip()
+            if h_text and len(h_text) > 3 and h_text.lower() not in seen:
+                h_words = h_text.split()
+                if len(h_words) > 10:
+                    h_text = " ".join(h_words[:10]) + "..."
+                seen.add(h_text.lower())
+                extracted_items.append(f"### {h_text}")
+            continue
+
+        clean_line = l
+        if not clean_line.startswith('•') and not clean_line.startswith('-') and not re.match(r'^\d+\.', clean_line):
+            colon_idx = clean_line.find(':')
+            if 2 < colon_idx < 40 and not clean_line.startswith('http'):
+                k = clean_line[:colon_idx].strip('*# \t')
+                v = clean_line[colon_idx+1:].strip()
+                clean_line = f"• **{k}:** {v}"
             else:
-                # For large documents (e.g. 50-100+ pages), score pages based on text/metadata or sample evenly
-                matched_indices = []
-                for p_idx in range(total_pages):
-                    try:
-                        p_txt = (doc[p_idx].get_text("text") or "").lower()
-                        if any(term in p_txt for term in query_terms):
-                            matched_indices.append(p_idx)
-                    except Exception:
-                        pass
+                clean_line = f"• {clean_line}"
+        else:
+            clean_line = re.sub(r'^[\-\*]\s+', '• ', clean_line)
+            colon_match = re.match(r'^(•\s*)([^*:\n]{2,35}):\s*(.*)', clean_line)
+            if colon_match:
+                clean_line = f"{colon_match.group(1)}**{colon_match.group(2)}:** {colon_match.group(3)}"
 
-                if matched_indices:
-                    target_indices = matched_indices[:max_pages]
-                else:
-                    # Representative distribution across all pages (beginning, middle, and end)
-                    step = max(1, total_pages // max_pages)
-                    target_indices = list(range(0, total_pages, step))[:max_pages]
+        # If clean_line itself is too long for target_words, cut cleanly
+        words_in_line = clean_line.split()
+        if len(words_in_line) > (target_words + 4):
+            dot_pos = clean_line.find('. ')
+            if dot_pos > 15 and len(clean_line[:dot_pos].split()) <= (target_words + 4):
+                clean_line = clean_line[:dot_pos+1]
+            else:
+                clean_line = ' '.join(words_in_line[:target_words]) + '...'
 
-            for i in target_indices:
-                pix = doc[i].get_pixmap(matrix=matrix, alpha=False)
-                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-                if img.width > 1400 or img.height > 1400:
-                    img.thumbnail((1400, 1400), Image.Resampling.LANCZOS)
-                buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=85)
-                b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
-                page_items.append({
-                    "page_number": i + 1,
-                    "base64": b64_str
-                })
-            doc.close()
-        except Exception as e:
-            logger.warning(f"Error dynamically rendering PDF pages: {e}")
-        return page_items
+        clean_lower = clean_line.lower()
+        if clean_lower not in seen and len(clean_line) > 4:
+            seen.add(clean_lower)
+            extracted_items.append(clean_line)
 
-    @classmethod
-    def process_query(
-        cls,
-        query: str,
-        doc_text: str,
-        filename: str,
-        limit: int = 3,
-        selected_provider: str | None = None,
-        selected_model: str | None = None,
-        db: Session | None = None,
-        org_id: str | None = None,
-        user_id: str | None = None
-    ) -> dict:
-        start_t = time.time()
-        
-        # 1. Text Cleaning & Binary Stream Sanitization
-        clean_text = clean_raw_pdf_binary_streams(doc_text.strip()) if doc_text else ""
+    if not extracted_items:
+        words = t_sanitized.split()
+        return " ".join(words[:target_words]) + ("..." if len(words) > target_words else "")
 
-        # 2. Natural Query Token Analysis (No Hardcoded Keyword Dictionaries)
-        query_info = NLPContextEngine.analyze_query(query)
+    # Score by query relevance if query provided
+    q_terms = [term.lower() for term in re.findall(r'[\w\u0900-\u097F]+', query) if len(term) > 2] if query else []
+    
+    if q_terms:
+        scored = []
+        for itm in extracted_items:
+            itm_lower = itm.lower()
+            score = sum(10 for q in q_terms if q in itm_lower)
+            if any(p in itm_lower for p in ['₹', '$', 'price', 'cost', 'fee', 'plan', 'api', 'custom', 'starter', 'growth', 'business', 'enterprise']):
+                score += 5
+            scored.append((score, itm))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        chosen = []
+        cur_words = 0
+        for _, itm in scored:
+            w_len = len(itm.split())
+            chosen.append(itm)
+            cur_words += w_len
+            if cur_words >= target_words or len(chosen) >= max_lines:
+                break
+        return '\n'.join(chosen)
+    else:
+        chosen = []
+        cur_words = 0
+        for itm in extracted_items:
+            w_len = len(itm.split())
+            chosen.append(itm)
+            cur_words += w_len
+            if cur_words >= target_words or len(chosen) >= max_lines:
+                break
+        return '\n'.join(chosen)
 
-        # 3. Structure-Aware Overlapping Chunking across all pages
-        chunks = SemanticTextChunker.create_overlapping_chunks(clean_text, max_chunk_words=160, overlap_words=40)
 
-        # Multimodal Vision Direct Path: If document is image-based (no/low text), perform live visual inspection across all pages
-        if not chunks or len(clean_text) < 40:
-            upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
-            candidate_paths = [
-                os.path.join(upload_dir, filename),
-                os.path.join(upload_dir, f"{filename}.pdf"),
-                os.path.join(upload_dir, filename.replace(".pdf", "") + ".pdf")
-            ]
-            pdf_path = next((p for p in candidate_paths if os.path.isfile(p)), None)
-            
-            if pdf_path and pdf_path.lower().endswith(".pdf"):
-                logger.info(f"DIRECT_MULTIMODAL_VISUAL_TRIGGER filename='{filename}' path='{pdf_path}'")
-                page_items = cls.render_pdf_to_base64_images(pdf_path, query=query, max_pages=24)
-                if page_items:
-                    images_b64 = [item["base64"] for item in page_items]
-                    llm_config = DynamicLLMInvoker.resolve_selected_llm_config(
-                        selected_provider=selected_provider,
-                        selected_model=selected_model,
-                        db=db,
-                        org_id=org_id,
-                        user_id=user_id
-                    )
-                    if llm_config:
-                        eff_prov = str(llm_config.get("provider", "llm")).upper()
-                        eff_model = str(llm_config.get("model", "default"))
-                        vision_res = DynamicLLMInvoker.call_multimodal_llm(
-                            system_prompt=GroundedLLMSynthesizer.NATURAL_SYSTEM_PROMPT,
-                            user_prompt=(
-                                f"Document: {filename}\n\n"
-                                f"User Question: {query}\n\n"
-                                f"Instructions:\n"
-                                f"1. Carefully examine all provided document page images.\n"
-                                f"2. Answer the user's question directly, accurately, and naturally based on what is visually shown in these pages.\n"
-                                f"3. Thoroughly check all tables, graphics, packages, offers, pricing, features, and notes before concluding anything.\n"
-                                f"4. CRITICAL RULE: Respond in the EXACT SAME LANGUAGE and conversational tone (Hinglish, Hindi, English, etc.) as the user asked."
-                            ),
-                            images_base64=images_b64,
-                            config=llm_config
-                        )
-                        if vision_res.get("text"):
-                            latency_ms = round((time.time() - start_t) * 1000, 1)
-                            ans_text = vision_res["text"].strip()
-                            ans_lines = [l.strip() for l in ans_text.split("\n") if l.strip() and not l.strip().startswith("#")]
-                            
-                            visual_matches = []
-                            total_visual_pages = min(len(page_items), limit)
-                            for idx in range(total_visual_pages):
-                                p_num = page_items[idx]["page_number"]
-                                score = round(0.96 - (idx * 0.04), 2)
-                                if idx == 0:
-                                    title = f"Page {p_num} — Primary Visual Grounding (Direct Finding)"
-                                    snippet = f"🎯 Direct Visual Extraction: {ans_lines[0] if ans_lines else ans_text[:180]}"
-                                elif idx < len(ans_lines):
-                                    title = f"Page {p_num} — Visual Section Evidence"
-                                    snippet = f"📋 Visual Document Detail: {ans_lines[idx]}"
-                                else:
-                                    title = f"Page {p_num} — Supporting Visual Context & Terms"
-                                    snippet = f"🔍 Verified visual layout, typography & pricing specifications on Page #{p_num} for '{query}'."
-                                
-                                visual_matches.append({
-                                    "id": idx,
-                                    "chunk_index": idx,
-                                    "title": title,
-                                    "page_number": p_num,
-                                    "pattern_type": "visual_image_page",
-                                    "similarityScore": score,
-                                    "score": score,
-                                    "snippet": snippet,
-                                    "fullChunk": snippet
-                                })
-                            return {
-                                "query": query,
-                                "filename": filename,
-                                "query_info": query_info,
-                                "matches": visual_matches,
-                                "direct_answer": vision_res["text"],
-                                "provider_used": f"{eff_prov} ({eff_model} • Direct Visual Inspection)",
-                                "pipeline_stages": {
-                                    "stage_1_text_extraction": f"Direct Multimodal Vision ({len(page_items)} Dynamic High-Res Canvases)",
-                                    "stage_2_nlp": f"Natural Query Tokens ({query_info['token_count']} terms)",
-                                    "stage_3_semantic_chunking": "Visual Canvas Layout Decomposition",
-                                    "stage_4_vector_embedding": "Direct Multimodal Alignment",
-                                    "stage_5_llm_synthesis": f"Visual Multimodal Synthesis ({eff_prov})"
-                                },
-                                "latency_ms": latency_ms
-                            }
-        
-        # 4. Hybrid BM25 & Semantic Retrieval (Pure Relevance Ranking)
-        vector_index = VectorEmbeddingIndex(chunks)
-        top_matches = vector_index.search(query, top_k=limit)
-
-        # If document has <= limit chunks, provide full document coverage so evidence is never omitted
-        if len(chunks) <= limit:
-            existing_ids = {m.get("id") for m in top_matches}
-            for idx, c in enumerate(chunks):
-                if c.get("chunk_index") not in existing_ids:
-                    top_matches.append({
-                        "id": c.get("chunk_index", idx),
-                        "chunk_index": c.get("chunk_index", idx),
-                        "title": c.get("title", f"Section #{idx + 1}"),
-                        "page_number": c.get("page_number", 1),
-                        "pattern_type": c.get("pattern_type", "paragraph"),
-                        "similarityScore": 0.5,
-                        "score": 0.5,
-                        "snippet": c.get("snippet", ""),
-                        "fullChunk": c.get("text", "")
-                    })
-        elif not top_matches and chunks:
-            step = max(1, len(chunks) // limit)
-            sampled_indices = list(range(0, len(chunks), step))[:limit]
-            for idx in sampled_indices:
-                c = chunks[idx]
-                top_matches.append({
-                    "id": c.get("chunk_index", idx),
-                    "chunk_index": c.get("chunk_index", idx),
-                    "title": c.get("title", f"Section #{idx + 1}"),
-                    "page_number": c.get("page_number", 1),
-                    "pattern_type": c.get("pattern_type", "paragraph"),
-                    "similarityScore": 0.2,
-                    "score": 0.2,
-                    "snippet": c.get("snippet", ""),
-                    "fullChunk": c.get("text", "")
-                })
-
-        # 5. Grounded LLM Synthesis (Dynamic Tab 1 Provider & Model Resolution)
-        logger.info(f"RAG provider={selected_provider or 'Tab1'} model={selected_model or 'default'} retrieved={len(top_matches)}")
-        synthesis_result = GroundedLLMSynthesizer.generate_answer(
-            query=query,
-            context_chunks=top_matches,
-            filename=filename,
-            selected_provider=selected_provider,
-            selected_model=selected_model,
-            db=db,
-            org_id=org_id,
-            user_id=user_id
-        )
-
-        latency_ms = round((time.time() - start_t) * 1000, 1)
-
-        return {
-            "query": query,
-            "filename": filename,
-            "query_info": query_info,
-            "matches": top_matches,
-            "direct_answer": synthesis_result["answer"],
-            "provider_used": synthesis_result["provider_used"],
-            "pipeline_stages": {
-                "stage_1_text_extraction": "Structure-Aware (PDF/DOCX Tables/CSV + OCR)",
-                "stage_2_nlp": f"Natural Query Tokens ({query_info['token_count']} terms)",
-                "stage_3_semantic_chunking": f"{len(chunks)} Chunks with Page & Section Metadata",
-                "stage_4_vector_embedding": "Hybrid BM25 + Semantic Cosine Scoring",
-                "stage_5_llm_synthesis": f"Grounded Contextual Synthesis ({synthesis_result['provider_used']})"
-            },
-            "latency_ms": latency_ms
-        }
+# Universal Multimodal RAG Engine Aliases & Clean Architecture Imports
+NLPContextEngine = MultilingualEngine
+DocumentPatternAnalyzer = SemanticChunker
+SemanticTextChunker = SemanticChunker
+VectorEmbeddingIndex = HybridRetriever
+GroundedLLMSynthesizer = TelephonySynthesizer
+RAGPipelineEngine = MultimodalRAGPipeline
 
 
 @router.post("/parse-document")
@@ -2023,8 +1159,14 @@ class AskRagRequest(BaseModel):
     document_text: str = ""
     filename: str = "Document"
     max_matches: int = 3
+    max_words: int | None = 20
     provider: str | None = None
     model: str | None = None
+    session_id: str | None = None
+    agent_id: str | None = None
+    caller_name: str | None = None
+    phone_number: str | None = None
+    history: list[dict[str, Any]] | None = None
 
 
 @router.post("/ask-rag")
@@ -2075,12 +1217,31 @@ def ask_multilingual_rag(
     org_id_str: Optional[str] = str(current_user.organization_id) if (current_user and current_user.organization_id is not None) else None
     user_id_str: Optional[str] = str(current_user.id) if (current_user and current_user.id is not None) else None
 
-    # Load pre-extracted text from disk cache instantly (0.1ms) - Full Multi-Page Document Text Priority
+    # 1. DB KnowledgeDocument lookup (First priority for full multi-page fidelity)
+    if db is not None and (not doc_text or len(doc_text) < 100):
+        try:
+            db_doc = db.query(KnowledgeDocument).filter(
+                (KnowledgeDocument.id == filename)
+                | (KnowledgeDocument.title.ilike(f"%{filename}%"))
+                | (KnowledgeDocument.title == filename)
+            ).first()
+            if db_doc and db_doc.content and len(db_doc.content) > len(doc_text):
+                doc_text = db_doc.content
+                filename = db_doc.title or filename
+                logger.info(f"QUERY_DB_HIT filename='{filename}' chars={len(doc_text)}")
+        except Exception as e:
+            logger.warning(f"Error querying KnowledgeDocument for doc_text: {e}")
+
+    # 2. Load pre-extracted text from disk cache instantly (0.1ms) - Full Multi-Page Document Text Priority
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
     disk_extracted_text = ""
     if os.path.exists(upload_dir):
-        # 1. Try extracted JSON cache
         cache_candidates = [
+            os.path.join(UPLOAD_DIR, f"{filename}.extracted.json"),
+            os.path.join(UPLOAD_DIR, f"{filename}.pdf.extracted.json"),
+            os.path.join(UPLOAD_DIR, filename.replace(".pdf", "") + ".extracted.json"),
+            os.path.join(UPLOAD_DIR, "cache", f"{filename}.extracted.json"),
+            os.path.join(upload_dir, "knowledge_base", f"{filename}.extracted.json"),
             os.path.join(upload_dir, f"{filename}.extracted.json"),
             os.path.join(upload_dir, f"{filename}.pdf.extracted.json"),
             os.path.join(upload_dir, filename.replace(".pdf", "") + ".extracted.json"),
@@ -2156,24 +1317,141 @@ def ask_multilingual_rag(
                                 org_id=org_id_str,
                                 user_id=user_id_str
                             )
-                            extraction = DocumentTextExtractor.extract_from_bytes(f_bytes, os.path.basename(p), f_ext, llm_config=llm_config)
-                            if extraction.get("text"):
-                                doc_text = extraction["text"]
+                            parsed_doc = MultimodalRAGPipeline.parse_document(f_bytes, os.path.basename(p), f_ext, llm_config=llm_config)
+                            if parsed_doc and parsed_doc.full_text:
+                                doc_text = parsed_doc.full_text
                                 break
                     except Exception as e:
                         logger.warning(f"Error reading document from disk: {e}")
 
-    return RAGPipelineEngine.process_query(
+    return MultimodalRAGPipeline.process_query(
         query=query_str,
         doc_text=doc_text,
         filename=filename,
         limit=limit,
+        max_words=req.max_words if (req.max_words and req.max_words > 0) else 20,
+        selected_provider=req.provider,
+        selected_model=req.model,
+        db=db,
+        org_id=org_id_str,
+        user_id=user_id_str,
+        session_id=req.session_id,
+        agent_id=req.agent_id,
+        caller_name=req.caller_name,
+        phone_number=req.phone_number,
+        history=req.history
+    )
+
+
+class SuggestQueriesRequest(BaseModel):
+    target: str = "all"
+    document_text: str = ""
+    filename: str = "Document"
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+@router.post("/suggest-queries")
+def suggest_grounding_queries(
+    req: SuggestQueriesRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    LLM-Powered Dynamic Grounding Query Extraction Endpoint.
+    Analyzes the selected context file/document and dynamically extracts 6 real, high-value caller inquiry cards with labels, queries, categories, icons, and badges.
+    """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+
+    doc_text = (req.document_text or "").strip()
+    filename = (req.filename or "").strip() or "Document"
+    target = (req.target or "all").strip()
+
+    org_id_str: Optional[str] = str(current_user.organization_id) if (current_user and current_user.organization_id is not None) else None
+    user_id_str: Optional[str] = str(current_user.id) if (current_user and current_user.id is not None) else None
+
+    # 1. Load document text from Database or Uploads if not provided in payload
+    if not doc_text or len(doc_text) < 40:
+        if target != "all":
+            # Check DB KnowledgeDocument
+            try:
+                from backend.models.knowledge_base import KnowledgeDocument, KnowledgeCollection
+                db_doc = db.query(KnowledgeDocument).filter(
+                    (KnowledgeDocument.id == target) | (KnowledgeDocument.title.ilike(f"%{filename}%"))
+                ).first()
+                if db_doc and (db_doc.content_text or db_doc.meta_info):
+                    doc_text = db_doc.content_text or str(db_doc.meta_info)
+                    filename = db_doc.title or filename
+                else:
+                    db_col = db.query(KnowledgeCollection).filter(
+                        (KnowledgeCollection.id == target) | (KnowledgeCollection.name.ilike(f"%{target}%"))
+                    ).first()
+                    if db_col:
+                        doc_text = f"{db_col.display_name or db_col.name}\n{db_col.description or ''}\n{db_col.raw_text or ''}"
+                        filename = db_col.display_name or db_col.name or filename
+            except Exception as e:
+                logger.debug(f"DB doc lookup notice: {e}")
+
+        if not doc_text or len(doc_text) < 40:
+            upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+            for candidate in [
+                os.path.join(UPLOAD_DIR, f"{filename}.extracted.json"),
+                os.path.join(UPLOAD_DIR, f"{filename}.pdf.extracted.json"),
+                os.path.join(upload_dir, "knowledge_base", f"{filename}.extracted.json"),
+                os.path.join(upload_dir, f"{filename}.extracted.json"),
+            ]:
+                if os.path.isfile(candidate):
+                    try:
+                        with open(candidate, "r", encoding="utf-8") as cf:
+                            cdata = json.load(cf)
+                            if cdata.get("text"):
+                                doc_text = cdata["text"]
+                                break
+                    except Exception:
+                        pass
+
+    # 2. Extract 6 dynamic caller inquiry cards via QueryExtractionSkill
+    llm_config = DynamicLLMInvoker.resolve_selected_llm_config(
         selected_provider=req.provider,
         selected_model=req.model,
         db=db,
         org_id=org_id_str,
         user_id=user_id_str
     )
+
+    queries_result = QueryExtractionSkill.extract_queries_with_llm(
+        doc_text=doc_text,
+        filename=filename,
+        llm_invoker_fn=DynamicLLMInvoker.call_llm,
+        llm_config=llm_config
+    )
+
+    if not queries_result or len(queries_result) < 6:
+        structural_fallback = QueryExtractionSkill.extract_queries_structural_fallback(
+            doc_text=doc_text,
+            filename=filename
+        )
+        if not queries_result:
+            queries_result = structural_fallback
+        else:
+            existing_labels = {re.sub(r"[^a-zA-Z0-9\u0900-\u097F]", "", c.get("label", "").lower()) for c in queries_result}
+            for sf in structural_fallback:
+                norm = re.sub(r"[^a-zA-Z0-9\u0900-\u097F]", "", sf.get("label", "").lower())
+                if norm not in existing_labels:
+                    existing_labels.add(norm)
+                    queries_result.append(sf)
+                if len(queries_result) >= 6:
+                    break
+
+    return {
+        "target": target,
+        "filename": filename,
+        "queries": queries_result[:6],
+        "count": len(queries_result[:6]),
+        "provider_used": llm_config.get("provider") if (llm_config and llm_config.get("api_key") and len(queries_result) >= 6) else "QueryExtractionSkill (Structural)"
+    }
 
 
 
@@ -2235,16 +1513,54 @@ def delete_knowledge_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Support doc_id as UUID, upload-doc-{filename}, or direct filename
+    clean_id = doc_id.replace("upload-doc-", "").strip()
     doc = knowledge_repo.get_by_id(db, doc_id)
     if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        doc = db.query(KnowledgeDocument).filter(
+            (KnowledgeDocument.id == clean_id) |
+            (KnowledgeDocument.title == clean_id) |
+            (KnowledgeDocument.title == doc_id)
+        ).first()
+
+    filename = doc.title if doc and doc.title else clean_id
+    trash_record = None
+
+    # Move physical file to Recycle Bin
+    try:
+        deleter_name = "Operator"
+        if current_user:
+            deleter_name = getattr(current_user, "full_name", None) or getattr(current_user, "email", None) or str(current_user) or "Operator"
+
+        trash_record = UploadStorageService.move_to_trash(
+            category="knowledge_base",
+            filename=filename,
+            deleted_by=deleter_name,
+            organization_id=current_user.organization_id if current_user else None,
         )
-    file_path = str(doc.file_path) if doc and doc.file_path else ""
-    if file_path and os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except OSError:
-            pass
-    knowledge_repo.delete(db, doc_id)
-    return {"message": "Document deleted", "id": doc_id}
+    except FileNotFoundError:
+        # If file was already deleted or missing on disk, attempt removal by exact path
+        if doc and doc.file_path and os.path.exists(doc.file_path):
+            try:
+                os.remove(doc.file_path)
+            except OSError:
+                pass
+    except Exception as e:
+        logger.warning(f"Error moving knowledge document '{filename}' to recycle bin: {e}")
+
+    # Remove document record from database if present
+    if doc:
+        knowledge_repo.delete(db, doc.id)
+
+    # Clean up any tracking jobs
+    DocumentJobTracker.cleanup_job(doc_id)
+    if clean_id != doc_id:
+        DocumentJobTracker.cleanup_job(clean_id)
+
+    return {
+        "success": True,
+        "message": f"Document '{filename}' moved to Recycle Bin.",
+        "id": doc_id,
+        "filename": filename,
+        "trash_record": trash_record,
+    }

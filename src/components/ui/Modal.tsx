@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -23,10 +24,15 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth,
   size,
   footer,
-  zIndexClass = 'z-50',
+  zIndexClass = 'z-[9999]',
 }) => {
+  const [mounted, setMounted] = useState(false);
   const effectiveSize = size || maxWidth || 'md';
   const isFull = effectiveSize === 'full';
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -49,7 +55,7 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-xl',
-    '2xl': 'max-w-2xl',
+    '2xl': 'max-w-[720px]',
     '3xl': 'max-w-3xl',
     '4xl': 'max-w-[1100px]',
     '5xl': 'max-w-5xl',
@@ -57,17 +63,17 @@ export const Modal: React.FC<ModalProps> = ({
     full: 'w-full max-w-none h-screen max-h-screen',
   };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center ${isFull ? 'p-0' : 'p-[40px]'} overflow-hidden`}>
-          {/* Backdrop */}
+        <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center ${isFull ? 'p-0' : 'p-4 sm:p-6 md:p-8'} overflow-hidden`}>
+          {/* Backdrop (Dark overlay + Glassmorphic blur covering entire viewport) */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
             onClick={onClose}
           />
 
@@ -105,7 +111,7 @@ export const Modal: React.FC<ModalProps> = ({
             )}
 
             {/* Content */}
-            <div className={isFull ? 'p-0 overflow-hidden flex-1 flex flex-col min-h-0' : 'p-6 overflow-y-auto overflow-x-hidden flex-1 scroll-smooth'}>{children}</div>
+            <div className={isFull ? 'p-0 overflow-hidden flex-1 flex flex-col min-h-0' : 'p-6 overflow-y-auto overflow-x-hidden flex-1 scrollbar-thin scroll-smooth'}>{children}</div>
 
             {/* Footer */}
             {footer && (
@@ -118,4 +124,7 @@ export const Modal: React.FC<ModalProps> = ({
       )}
     </AnimatePresence>
   );
+
+  if (!mounted) return null;
+  return createPortal(modalContent, document.body);
 };

@@ -2,12 +2,12 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import get_current_user, get_effective_org_id
 from backend.database.session import get_db
 from backend.models.models import ProviderCredential, User, WebhookDeliveryLog, WebhookSubscription
 from backend.services.webhook_dispatcher import test_single_webhook_dispatch
@@ -85,14 +85,13 @@ def mask_secret(secret: Optional[str]) -> Optional[str]:
 def list_webhooks(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None),
 ):
     """Lists all active and configured webhooks for current workspace."""
+    org_id = get_effective_org_id(current_user, x_target_organization_id)
     query = db.query(WebhookSubscription)
-    if current_user and current_user.organization_id:
-        query = query.filter(
-            (WebhookSubscription.organization_id == current_user.organization_id)
-            | (WebhookSubscription.scope == "Global Workspace")
-        )
+    if org_id:
+        query = query.filter(WebhookSubscription.organization_id == org_id)
 
     webhooks = query.order_by(WebhookSubscription.created_at.desc()).all()
     return [
@@ -126,13 +125,15 @@ def create_webhook(
     sub_in: WebhookSubscriptionCreate,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None),
 ):
     """Creates a new Webhook Subscription or updates if matching name already exists (Upsert)."""
-    org_id = current_user.organization_id if current_user and current_user.organization_id is not None else 1
+    org_id = get_effective_org_id(current_user, x_target_organization_id) or "default-org"
     user_id = current_user.id if current_user else None
 
-    # Check if existing webhook exists by name or display_name
+    # Check if existing webhook exists by name or display_name in organization
     existing = db.query(WebhookSubscription).filter(
+        WebhookSubscription.organization_id == org_id,
         (WebhookSubscription.name == sub_in.name.strip()) |
         (WebhookSubscription.display_name == sub_in.name.strip())
     ).first()
@@ -158,6 +159,7 @@ def create_webhook(
         # Sync ProviderCredential
         try:
             cred = db.query(ProviderCredential).filter(
+                ProviderCredential.organization_id == org_id,
                 (ProviderCredential.id == existing.id) |
                 (ProviderCredential.provider_name == existing.name)
             ).first()
@@ -272,9 +274,14 @@ def update_webhook(
     sub_in: WebhookSubscriptionUpdate,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None),
 ):
     """Updates an existing Webhook Subscription."""
-    sub = db.query(WebhookSubscription).filter(WebhookSubscription.id == webhook_id).first()
+    org_id = get_effective_org_id(current_user, x_target_organization_id)
+    query = db.query(WebhookSubscription).filter(WebhookSubscription.id == webhook_id)
+    if org_id:
+        query = query.filter(WebhookSubscription.organization_id == org_id)
+    sub = query.first()
     if not sub:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found"
@@ -289,7 +296,10 @@ def update_webhook(
 
     # Sync ProviderCredential
     try:
-        cred = db.query(ProviderCredential).filter(ProviderCredential.id == webhook_id).first()
+        cred = db.query(ProviderCredential).filter(
+            ProviderCredential.organization_id == org_id,
+            ProviderCredential.id == webhook_id
+        ).first()
         if cred:
             if sub.endpoint_url:
                 cred.base_url = sub.endpoint_url
@@ -325,31 +335,39 @@ def delete_webhook(
     webhook_id: str,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None),
 ):
     """Deletes a Webhook Subscription and its associated credentials."""
-    subs = db.query(WebhookSubscription).filter(
+    org_id = get_effective_org_id(current_user, x_target_organization_id)
+    query = db.query(WebhookSubscription).filter(
         (WebhookSubscription.id == webhook_id) |
         (WebhookSubscription.name == webhook_id) |
         (WebhookSubscription.display_name == webhook_id)
-    ).all()
+    )
+    if org_id:
+        query = query.filter(WebhookSubscription.organization_id == org_id)
+    subs = query.all()
 
     for sub in subs:
         db.delete(sub)
 
     # Also clean ProviderCredential and subtab table
     try:
-        creds = db.query(ProviderCredential).filter(
+        cred_query = db.query(ProviderCredential).filter(
             (ProviderCredential.id == webhook_id) |
             (ProviderCredential.provider_name == webhook_id) |
             (ProviderCredential.display_name == webhook_id) |
             (ProviderCredential.category == "webhooks")
-        ).all()
+        )
+        if org_id:
+            cred_query = cred_query.filter(ProviderCredential.organization_id == org_id)
+        creds = cred_query.all()
         for cred in creds:
             if cred.id == webhook_id or cred.provider_name == webhook_id or cred.display_name == webhook_id or (subs and any(s.name == cred.provider_name or s.id == cred.id for s in subs)):
                 db.delete(cred)
         
         from sqlalchemy import text
-        db.execute(text("DELETE FROM group4_data_webhooks__3_webhook_endpoints WHERE id = :id OR provider_name = :id OR display_name = :id"), {"id": webhook_id})
+        db.execute(text("DELETE FROM group4_data_webhooks__3_webhook_endpoints WHERE (id = :id OR provider_name = :id OR display_name = :id) AND organization_id = :org_id"), {"id": webhook_id, "org_id": org_id})
     except Exception:
         pass
 
@@ -361,13 +379,14 @@ def delete_webhook(
 async def execute_test_dispatch(
     req: TestWebhookRequest,
     current_user: Optional[User] = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None),
 ):
     """
     Executes a direct server-side simulated webhook dispatch.
     Dispatches every selected event so all real events appear on the endpoint.
     Returns HTTP status, response body preview, HMAC header details, and real latency.
     """
-    org_id = str(current_user.organization_id) if current_user and current_user.organization_id is not None else "demo_org"
+    org_id = str(get_effective_org_id(current_user, x_target_organization_id) or "demo_org")
 
     events_to_dispatch = req.test_event_types if (req.test_event_types and len(req.test_event_types) > 0) else [req.test_event_type or "call.completed"]
 
@@ -415,13 +434,15 @@ def get_webhook_delivery_logs(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None),
 ):
     """Returns recent delivery logs for a specific webhook."""
+    org_id = get_effective_org_id(current_user, x_target_organization_id)
     query = db.query(WebhookDeliveryLog).filter(
         WebhookDeliveryLog.webhook_id == webhook_id
     )
-    if current_user and current_user.organization_id:
-        query = query.filter(WebhookDeliveryLog.organization_id == current_user.organization_id)
+    if org_id:
+        query = query.filter(WebhookDeliveryLog.organization_id == org_id)
 
     logs = query.order_by(desc(WebhookDeliveryLog.created_at)).limit(limit).all()
 
@@ -454,11 +475,13 @@ def get_all_delivery_logs(
     success_only: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None),
 ):
     """Returns recent workspace-wide webhook delivery logs."""
+    org_id = get_effective_org_id(current_user, x_target_organization_id)
     query = db.query(WebhookDeliveryLog)
-    if current_user and current_user.organization_id:
-        query = query.filter(WebhookDeliveryLog.organization_id == current_user.organization_id)
+    if org_id:
+        query = query.filter(WebhookDeliveryLog.organization_id == org_id)
     if event_type:
         query = query.filter(WebhookDeliveryLog.event_type == event_type)
     if success_only is not None:

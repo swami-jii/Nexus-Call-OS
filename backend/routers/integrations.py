@@ -12,6 +12,7 @@ from backend.database.session import get_db
 from backend.models.models import User
 from backend.repositories.repositories import integration_repo
 from backend.schemas.schemas import IntegrationBase, IntegrationCreate, IntegrationOut
+from backend.tenant import TenantContext, get_tenant_context
 
 router = APIRouter(prefix="/api/integrations", tags=["Ecosystem Integrations"])
 
@@ -19,11 +20,11 @@ router = APIRouter(prefix="/api/integrations", tags=["Ecosystem Integrations"])
 @router.get("", response_model=List[IntegrationOut])
 def list_integrations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     filters: Dict[str, Any] = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if tenant.effective_org_id:
+        filters["organization_id"] = tenant.effective_org_id
     items = integration_repo.get_multi(db, limit=100, filters=filters)
     return [IntegrationOut.model_validate(item) for item in items]
 
@@ -32,10 +33,10 @@ def list_integrations(
 def connect_integration(
     integration_in: IntegrationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     data = integration_in.model_dump(exclude={"api_key"})
-    data["organization_id"] = current_user.organization_id
+    data["organization_id"] = tenant.effective_org_id
     if integration_in.api_key:
         data["api_key_hash"] = hash_password(integration_in.api_key)
     return integration_repo.create(db, data)

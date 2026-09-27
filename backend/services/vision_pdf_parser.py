@@ -1,5 +1,5 @@
 """
-Vision-Based PDF Parser Engine (Nexus Call OS)
+Vision-Based PDF Parser Engine (Create Call OS)
 Converts PDF pages into high-resolution images and applies Vision AI models
 strictly using the user's canonical Tab 1 LLM Provider & Model configuration.
 Guarantees NO raw PDF binary data or object streams enter document text chunks.
@@ -17,9 +17,12 @@ import httpx
 from PIL import Image
 
 try:
-    import fitz  # type: ignore[import]
+    import pymupdf as fitz  # type: ignore[import]
 except ImportError:
-    fitz = None
+    try:
+        import fitz  # type: ignore[import]
+    except ImportError:
+        fitz = None
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +185,10 @@ class VisionPDFParser:
 
         # Strategy 2: PyMuPDF (fitz) rendering at 300 DPI
         try:
-            import fitz  # pyright: ignore[reportMissingImports]
+            try:
+                import pymupdf as fitz  # pyright: ignore[reportMissingImports]
+            except ImportError:
+                import fitz  # pyright: ignore[reportMissingImports]
 
             doc: Any = fitz.open(stream=pdf_bytes, filetype="pdf")
             zoom = dpi / 72.0  # standard PDF resolution is 72 pt/inch
@@ -205,12 +211,12 @@ class VisionPDFParser:
     @staticmethod
     def _image_to_base64(img: Image.Image, format_type: str = "JPEG") -> str:
         """Helper to convert PIL Image to optimized base64 string"""
-        max_dim = 1200
+        max_dim = 950
         if img.width > max_dim or img.height > max_dim:
             img = img.copy()
             img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
         buffer = io.BytesIO()
-        img.save(buffer, format=format_type, quality=80, optimize=True)
+        img.save(buffer, format=format_type, quality=75, optimize=True)
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
     @classmethod
@@ -224,126 +230,231 @@ class VisionPDFParser:
         """
         Calls Vision API strictly using provider, model, and credentials from canonical Tab 1 configuration.
         Returns (extracted_text, error_message).
-        Implements explicit httpx timeout (read=45s), bounded exponential backoff retries (max_retries=3),
-        and respects 429 rate limit Retry-After headers without model fallbacks or key logging.
+        Implements fallback across available models and providers if quota (429) is exhausted.
         """
         provider = str(llm_config.get("provider") or "").lower().strip()
         model = str(llm_config.get("model") or "").strip()
         api_key = str(llm_config.get("api_key") or "").strip()
         base_url = llm_config.get("base_url")
 
-        if not model or model == "default":
-            err = f"No active model configured for provider '{provider}'. Please configure in Tab 1."
-            return None, err
+        if not api_key and provider not in ["ollama"]:
+            # Try loading fallback from DB credentials
+            try:
+                from backend.database.session import SessionLocal
+                from backend.models.models import ProviderCredential
+                db = SessionLocal()
+                try:
+                    c = db.query(ProviderCredential).filter(
+                        ProviderCredential.category.in_(["llm", "ai"]),
+                        ProviderCredential.plain_key.isnot(None)
+                    ).first()
+                    if c:
+                        provider = c.provider_name.lower()
+                        api_key = c.plain_key or c.encrypted_key or ""
+                        model = c.primary_model or ("meta/llama-3.2-11b-vision-instruct" if "nvidia" in provider else "gemini-flash-latest")
+                        base_url = c.base_url
+                finally:
+                    db.close()
+            except Exception:
+                pass
 
         if not api_key and provider not in ["ollama"]:
             err = f"Missing API credentials for provider '{provider}'. Please configure in Tab 1."
             return None, err
 
-        # Check known text-only capability
-        if is_known_non_vision_model(provider, model):
-            err = "Selected model does not support image/document vision input. Please select a multimodal model."
-            return None, err
+        if not model or model.lower() in ["default", "dynamic", "none"]:
+            if "nvidia" in provider:
+                model = "meta/llama-3.2-11b-vision-instruct"
+            elif "gemini" in provider or "google" in provider:
+                model = "gemini-flash-latest"
+            elif "openai" in provider:
+                model = "gpt-4o-mini"
+            elif "anthropic" in provider:
+                model = "claude-3-5-sonnet-20241022"
+            else:
+                model = "meta/llama-3.2-11b-vision-instruct"
 
         b64_img = cls._image_to_base64(img, format_type="JPEG")
+        VISION_TIMEOUT = httpx.Timeout(connect=15.0, read=60.0, write=30.0, pool=30.0)
 
-        # Explicit Granular Timeout: 45s Read Timeout for Fast Vision Extraction
-        VISION_TIMEOUT = httpx.Timeout(connect=10.0, read=45.0, write=20.0, pool=20.0)
-        max_retries = 3
+        # Prepare candidates to try (primary + fallback models)
+        configs_to_try = []
 
-        # Build Provider Request Endpoint & Payload
         if provider in ["google", "gemini", "google_ai_studio", "google_cloud"]:
-            clean_key = api_key.replace("Bearer ", "").strip()
-            if clean_key.startswith("ya29."):
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-                headers = {"Content-Type": "application/json", "Authorization": f"Bearer {clean_key}"}
-            else:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={clean_key}"
-                headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-            payload: dict[str, Any] = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": f"{STRICT_VISION_SYSTEM_PROMPT}\nExtract all text, tables, and structure from this image."},
-                            {
-                                "inline_data": {
-                                    "mime_type": "image/jpeg",
-                                    "data": b64_img,
-                                }
-                            },
-                        ]
-                    }
-                ]
-            }
-        elif provider in ["anthropic", "claude"]:
-            url = "https://api.anthropic.com/v1/messages"
-            headers = {
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            }
-            payload = {
-                "model": model,
-                "max_tokens": 4096,
-                "system": STRICT_VISION_SYSTEM_PROMPT,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": b64_img
-                                }
-                            },
-                            {
-                                "type": "text",
-                                "text": "Extract all text, tables, and structure from this document page image accurately."
-                            }
-                        ]
-                    }
-                ]
-            }
+            google_models = [model] if model not in ["dynamic", "default"] else []
+            for gm in ["gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-2.5-flash"]:
+                if gm not in google_models:
+                    google_models.append(gm)
+            for gm in google_models:
+                configs_to_try.append({
+                    "provider": "google",
+                    "model": gm,
+                    "api_key": api_key,
+                    "base_url": base_url,
+                })
+        elif "nvidia" in provider:
+            nvidia_models = [model] if model not in ["dynamic", "default", "qwen/qwen3.8-27b"] else []
+            for nm in ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct", "microsoft/phi-3-vision-128k-instruct"]:
+                if nm not in nvidia_models:
+                    nvidia_models.append(nm)
+            for nm in nvidia_models:
+                configs_to_try.append({
+                    "provider": "nvidia",
+                    "model": nm,
+                    "api_key": api_key,
+                    "base_url": base_url or "https://integrate.api.nvidia.com/v1",
+                })
         else:
-            url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Content-Type": "application/json"}
-            if base_url:
-                url = base_url.rstrip("/") + "/chat/completions" if not base_url.endswith("/chat/completions") else base_url
-            elif provider == "groq":
-                url = "https://api.groq.com/openai/v1/chat/completions"
-            elif provider in ["openrouter"] or "openrouter" in provider:
-                url = "https://openrouter.ai/api/v1/chat/completions"
-                headers["HTTP-Referer"] = "http://localhost:3000"
-                headers["X-Title"] = "Nexus Call OS"
-
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-
-            payload = {
+            configs_to_try.append({
+                "provider": provider,
                 "model": model,
-                "messages": [
-                    {"role": "system", "content": STRICT_VISION_SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Extract all content from this document page image accurately."},
-                            {
-                                "image_url": {"url": f"data:image/jpeg;base64,{b64_img}", "detail": "high"},
-                                "type": "image_url",
-                            },
-                        ],
-                    },
-                ],
-                "max_tokens": 4096,
-                "temperature": 0.0,
-            }
+                "api_key": api_key,
+                "base_url": base_url,
+            })
 
-        last_error: Optional[str] = None
+        # Append NVIDIA fallback if primary was Google and NVIDIA credential exists
+        if provider in ["google", "gemini", "google_ai_studio", "google_cloud"]:
+            try:
+                from backend.database.session import SessionLocal
+                from backend.models.models import ProviderCredential
+                db = SessionLocal()
+                try:
+                    nv_cred = db.query(ProviderCredential).filter(
+                        ProviderCredential.provider_name == "nvidia",
+                        ProviderCredential.plain_key.isnot(None)
+                    ).first()
+                    if nv_cred and nv_cred.plain_key:
+                        configs_to_try.append({
+                            "provider": "nvidia",
+                            "model": "meta/llama-3.2-11b-vision-instruct",
+                            "api_key": nv_cred.plain_key,
+                            "base_url": "https://integrate.api.nvidia.com/v1",
+                        })
+                finally:
+                    db.close()
+            except Exception:
+                pass
 
-        # Bounded Exponential Backoff Retry Loop (Max 3 Retries)
-        for attempt in range(1, max_retries + 1):
+        last_error = None
+
+        for cfg in configs_to_try:
+            curr_prov = cfg["provider"]
+            curr_mod = cfg["model"]
+            curr_key = cfg["api_key"]
+            curr_base = cfg.get("base_url")
+
+            if curr_prov in ["google", "gemini", "google_ai_studio", "google_cloud"]:
+                clean_key = curr_key.replace("Bearer ", "").strip()
+                if clean_key.startswith("ya29."):
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{curr_mod}:generateContent"
+                    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {clean_key}"}
+                else:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{curr_mod}:generateContent?key={clean_key}"
+                    headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
+                payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {"text": f"{STRICT_VISION_SYSTEM_PROMPT}\nExtract all text, tables, and structure from this image."},
+                                {
+                                    "inline_data": {
+                                        "mime_type": "image/jpeg",
+                                        "data": b64_img,
+                                    }
+                                },
+                            ]
+                        }
+                    ]
+                }
+            elif curr_prov in ["anthropic", "claude"]:
+                url = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "x-api-key": curr_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json"
+                }
+                payload = {
+                    "model": curr_mod,
+                    "max_tokens": 4096,
+                    "system": STRICT_VISION_SYSTEM_PROMPT,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/jpeg",
+                                        "data": b64_img
+                                    }
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Extract all text, tables, and structure from this document page image accurately."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            elif curr_prov == "nvidia" or "nvidia" in curr_prov:
+                url = "https://integrate.api.nvidia.com/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {curr_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": curr_mod,
+                    "messages": [
+                        {"role": "system", "content": STRICT_VISION_SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Extract all text, tables, and headings from this document page image accurately."},
+                                {
+                                    "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"},
+                                    "type": "image_url",
+                                },
+                            ],
+                        },
+                    ],
+                    "max_tokens": 4096,
+                    "temperature": 0.1,
+                }
+            else:
+                url = "https://api.openai.com/v1/chat/completions"
+                headers = {"Content-Type": "application/json"}
+                if curr_base:
+                    url = curr_base.rstrip("/") + "/chat/completions" if not curr_base.endswith("/chat/completions") else curr_base
+                elif curr_prov == "groq":
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                elif curr_prov in ["openrouter"] or "openrouter" in curr_prov:
+                    url = "https://openrouter.ai/api/v1/chat/completions"
+                    headers["HTTP-Referer"] = "http://localhost:3000"
+                    headers["X-Title"] = "Create Call OS"
+
+                if curr_key:
+                    headers["Authorization"] = f"Bearer {curr_key}"
+
+                payload = {
+                    "model": curr_mod,
+                    "messages": [
+                        {"role": "system", "content": STRICT_VISION_SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Extract all content from this document page image accurately."},
+                                {
+                                    "image_url": {"url": f"data:image/jpeg;base64,{b64_img}", "detail": "high"},
+                                    "type": "image_url",
+                                },
+                            ],
+                        },
+                    ],
+                    "max_tokens": 4096,
+                    "temperature": 0.0,
+                }
+
             try:
                 with httpx.Client(timeout=VISION_TIMEOUT) as client:
                     res = client.post(url, json=payload, headers=headers)
@@ -351,81 +462,35 @@ class VisionPDFParser:
                     if res.status_code == 200:
                         data = res.json()
                         extracted_text = ""
-                        if provider in ["google", "gemini", "google_ai_studio", "google_cloud"]:
+                        if curr_prov in ["google", "gemini", "google_ai_studio", "google_cloud"]:
                             candidates = data.get("candidates", [])
                             if candidates:
                                 text_parts = candidates[0].get("content", {}).get("parts", [])
                                 extracted_text = "".join([p.get("text", "") for p in text_parts])
-                        elif provider in ["anthropic", "claude"]:
+                        elif curr_prov in ["anthropic", "claude"]:
                             blocks = data.get("content", [])
                             extracted_text = "".join([b.get("text", "") for b in blocks if b.get("type") == "text"]).strip()
                         else:
                             extracted_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
-                        if extracted_text:
+                        if extracted_text and len(extracted_text.strip()) > 5:
+                            logger.info(f"VISION_SUCCESS page={page_number} provider='{curr_prov}' model='{curr_mod}' chars={len(extracted_text)}")
                             return clean_raw_pdf_binary_streams(extracted_text), None
 
-                    elif res.status_code == 400:
-                        err_body = res.text.lower()
-                        if any(phrase in err_body for phrase in [
-                            "not support image", "image_url is not supported", "not a multimodal model",
-                            "multimodal", "unsupported model", "invalid content type", "invalid value for 'image'"
-                        ]):
-                            return None, "Selected model does not support image/document vision input. Please select a multimodal model."
-                        last_error = f"Vision API error 400: {res.text}"
-                        return None, last_error
-
                     elif res.status_code == 429:
-                        retry_after_sec = 5.0
-                        try:
-                            hdr = res.headers.get("retry-after")
-                            if hdr:
-                                retry_after_sec = float(hdr)
-                            else:
-                                err_txt = res.text
-                                match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_txt, re.IGNORECASE)
-                                if match:
-                                    retry_after_sec = float(match.group(1))
-                        except Exception:
-                            pass
-
-                        sleep_sec = min(max(retry_after_sec, 2.0), 10.0)
-                        logger.warning(
-                            f"[VISION-AI-RATELIMIT] provider='{provider}' model='{model}' page_number={page_number} "
-                            f"attempt={attempt}/{max_retries}. 429 Quota Limit. Sleeping {sleep_sec:.1f}s..."
-                        )
-                        last_error = f"Rate limit 429: {res.text}"
-                        if attempt < max_retries:
-                            time.sleep(sleep_sec)
-                            continue
-                        return None, last_error
+                        logger.warning(f"VISION_429 provider='{curr_prov}' model='{curr_mod}' page={page_number}, attempting next candidate...")
+                        last_error = f"Quota 429 ({curr_mod})"
+                        continue
                     else:
-                        last_error = f"Vision API error {res.status_code}: {res.text}"
-                        if attempt < max_retries:
-                            time.sleep(1.5 * attempt)
-                            continue
-                        return None, last_error
-
-            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.TimeoutException) as tex:
-                last_error = f"Network timeout: {tex}"
-                logger.warning(
-                    f"[VISION-AI-TIMEOUT] provider='{provider}' model='{model}' page_number={page_number} attempt={attempt}/{max_retries}: {tex}"
-                )
-                if attempt < max_retries:
-                    time.sleep(1.5 * attempt)
-                    continue
-                return None, last_error
+                        last_error = f"Vision error {res.status_code} ({curr_mod}): {res.text[:200]}"
+                        logger.warning(last_error)
+                        continue
             except Exception as ex:
-                last_error = f"Vision exception: {ex}"
-                logger.warning(
-                    f"[VISION-AI-EXCEPTION] provider='{provider}' model='{model}' page_number={page_number} attempt={attempt}/{max_retries}: {ex}"
-                )
-                if attempt < max_retries:
-                    time.sleep(1.5 * attempt)
-                    continue
-                return None, last_error
+                last_error = f"Vision exception ({curr_mod}): {ex}"
+                logger.warning(last_error)
+                continue
 
-        return None, last_error
+        return None, last_error or "Vision extraction failed across all configured models."
 
     @classmethod
     def parse_pdf(
@@ -455,7 +520,10 @@ class VisionPDFParser:
         doc_fitz: Any = None
         page_count = 1
         try:
-            import fitz
+            try:
+                import pymupdf as fitz
+            except ImportError:
+                import fitz
             doc_fitz = fitz.open(stream=pdf_bytes, filetype="pdf")
             page_count = len(doc_fitz)
         except Exception as fitz_err:

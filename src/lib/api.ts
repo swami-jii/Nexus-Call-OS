@@ -2,6 +2,7 @@ export const API_BASE_URL = '';
 
 export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   let token = localStorage.getItem('nexus_access_token') || sessionStorage.getItem('nexus_access_token');
+  const targetOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id');
   
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -10,6 +11,10 @@ export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
+  if (targetOrgId) {
+    headers.set('X-Target-Organization-Id', targetOrgId);
+  }
+
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);

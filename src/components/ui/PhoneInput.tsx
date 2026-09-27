@@ -135,17 +135,25 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
         {/* Dropdown Menu */}
         {isOpen && (
           <div className="absolute top-full left-0 mt-1 w-72 max-h-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col">
-            {/* Search Box */}
-            <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900/50">
-              <Search className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-              <input
-                type="text"
-                autoFocus
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search country or code..."
-                className="w-full text-xs bg-transparent border-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
-              />
+            {/* Search Box & Total Count Badge */}
+            <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 space-y-1.5 bg-zinc-50 dark:bg-zinc-900/50">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 font-mono">
+                  {ALL_COUNTRIES.length} Countries & Dial Codes
+                </span>
+                <span className="text-[10px] text-zinc-400 font-mono">Telephony Ready</span>
+              </div>
+              <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-750">
+                <Search className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search country name, ISO, or +dial code..."
+                  className="w-full text-xs bg-transparent border-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
+                />
+              </div>
             </div>
 
             {/* List */}

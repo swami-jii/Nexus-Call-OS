@@ -327,7 +327,10 @@ class VariableResolverService:
             # Tier 5b: Organization DB Entity + Workspace Settings + Workspace Overrides
             ws_name = None
             try:
-                ws_settings = db.query(WorkspaceSettings).first()
+                query = db.query(WorkspaceSettings)
+                if ctx.organization_id and ctx.organization_id not in ["global", "demo_org"]:
+                    query = query.filter(WorkspaceSettings.organization_id == ctx.organization_id)
+                ws_settings = query.first()
                 if ws_settings and ws_settings.features:
                     features_dict = json.loads(ws_settings.features) if isinstance(ws_settings.features, str) else ws_settings.features
                     if isinstance(features_dict, dict) and features_dict.get("workspaceName"):
@@ -341,8 +344,8 @@ class VariableResolverService:
             if not real_org:
                 real_org = db.query(Organization).first()
 
-            effective_org_name = ws_name or (real_org.name if real_org else "Nexus Europe Ltd.")
-            billing_email = (real_org.billing_email if real_org else None) or "billing@nexuscall.os"
+            effective_org_name = ws_name or (real_org.name if real_org else "Create Call OS Enterprise Workspace")
+            billing_email = (real_org.billing_email if real_org else None) or "billing@createcall.ai"
             plan_name = (real_org.plan if real_org else None) or "Enterprise"
 
             org_vars = {

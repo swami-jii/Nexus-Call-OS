@@ -9,11 +9,56 @@ from backend.models.models import User
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
-def get_current_user(
+def ensure_super_admin_exists(db: Session) -> User:
+    """Ensures the master Super Admin user exists in DB with sovereign workspace."""
+    admin = db.query(User).filter(User.email == "admin@createcall.ai").first()
+    if not admin:
+        import uuid
+        from backend.core.security import hash_password
+        from backend.models.models import Organization
+
+        org = Organization(
+            name="Create Call OS Sovereign Workspace",
+            slug=f"ws-sovereign-{uuid.uuid4().hex[:6]}",
+        )
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+        admin = User(
+            email="admin@createcall.ai",
+            hashed_password=hash_password("admin123"),
+            full_name="Alex Vance (Super Admin)",
+            role="super_admin",
+            organization_id=org.id,
+            is_active=True,
+            is_verified=True,
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+    elif not admin.organization_id:
+        import uuid
+        from backend.models.models import Organization
+
+        org = Organization(
+            name="Create Call OS Sovereign Workspace",
+            slug=f"ws-sovereign-{uuid.uuid4().hex[:6]}",
+        )
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+        admin.organization_id = org.id
+        db.commit()
+
+    return admin
+
+
+def get_current_user_optional(
     db: Session = Depends(get_db),
     token: str | None = Depends(oauth2_scheme),
     authorization: str | None = Header(None),
-) -> User:
+) -> User | None:
     actual_token = token
     if not actual_token and authorization and authorization.startswith("Bearer "):
         actual_token = authorization.split(" ")[1]
@@ -23,7 +68,7 @@ def get_current_user(
             payload = decode_token(actual_token)
             if payload:
                 user_id = payload.get("sub")
-                user = db.query(User).filter(User.id == user_id).first()
+                user = db.query(User).filter((User.id == user_id) | (User.email == user_id)).first()
                 if user and user.is_active:
                     if not user.organization_id:
                         import uuid
@@ -42,33 +87,26 @@ def get_current_user(
         except Exception:
             pass
 
-    # Seamless fallback to default super admin dev user if unauthenticated or token expired
-    user = db.query(User).filter(User.email == "dev.operator@nexus.ai").first()
-    if not user:
-        from backend.core.security import hash_password
-        from backend.models.models import Organization
+    return None
 
-        org = db.query(Organization).first()
-        if not org:
-            org = Organization(
-                name="Nexus Default Workspace", slug="nexus-default-ws"
-            )
-            db.add(org)
-            db.commit()
-            db.refresh(org)
-        user = User(
-            email="dev.operator@nexus.ai",
-            hashed_password=hash_password("admin123"),
-            full_name="Alex Vance (Super Admin)",
-            role="super_admin",
-            organization_id=org.id,
-            is_active=True,
-            is_verified=True,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    token: str | None = Depends(oauth2_scheme),
+    authorization: str | None = Header(None),
+) -> User:
+    user = get_current_user_optional(db=db, token=token, authorization=authorization)
+    if user:
+        return user
+
+    # Ensure sovereign super admin is seeded if needed
+    ensure_super_admin_exists(db)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication token is missing, expired, or invalid. Please sign in.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def require_role(roles: list[str]):
@@ -81,3 +119,30 @@ def require_role(roles: list[str]):
         return current_user
 
     return role_checker
+
+
+def get_effective_org_id(
+    current_user: User | None,
+    target_org_header: str | None = None,
+) -> str | None:
+    """
+    Returns the effective organization ID for query scoping:
+    1. If user is Super Admin and a target_org_header is provided, scopes to target workspace.
+    2. If user is Super Admin without target header, scopes to Super Admin's sovereign workspace.
+    3. If user is regular tenant, strictly scopes to current_user.organization_id (isolation).
+    """
+    if not current_user:
+        return None
+
+    is_super_admin = (
+        current_user.role == "super_admin"
+        or current_user.email == "admin@createcall.ai"
+    )
+
+    if is_super_admin:
+        if target_org_header and isinstance(target_org_header, str) and target_org_header.strip():
+            return target_org_header.strip()
+        return current_user.organization_id
+
+    return current_user.organization_id
+

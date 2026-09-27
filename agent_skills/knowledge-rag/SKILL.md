@@ -1,7 +1,7 @@
 ---
 name: knowledge_rag
-title: Knowledge Base & FAQ Search RAG
-description: Searches enterprise documents, policy guidelines, and clinical/business FAQs for grounded answers.
+title: Universal Multimodal Knowledge RAG & Live Grounding
+description: Searches enterprise documents, multi-page PDFs, spreadsheets, image OCR, video/audio transcripts, and web scrapes across 104+ languages with zero hallucination.
 category: support
 icon: BookOpen
 triggers:
@@ -14,18 +14,23 @@ triggers:
   - location
   - rules
   - guidelines
-sample_phrase: According to our policy documents, our services operate with 99.98% uptime and support 104+ global languages.
+  - specifications
+  - details
+  - terms
+  - information
+sample_phrase: Based on our verified knowledge base, our documented guidelines provide complete details and support across 104+ languages.
 ---
 
-# Knowledge Base & FAQ Search RAG Skill
+# Universal Multimodal Knowledge RAG & Live Grounding Skill
 
 ## Objective
-Retrieve accurate, factual grounded answers from the enterprise Vector Database and internal knowledge base articles to eliminate hallucination.
+Retrieve authoritative, factual grounded answers from the enterprise Vector Database, Multimodal RAG Pipeline, and internal knowledge assets (PDF, DOCX, CSV/XLSX, Image OCR, Audio/Video Transcripts, Web DOM) across any industry with zero hallucination.
 
 ## System Prompt Directive
-Answer the caller's query strictly using grounded knowledge base snippets. If information is not present in documents, politely clarify and offer to transfer to a human specialist.
+Answer the user or caller inquiry strictly using retrieved authoritative knowledge base context. Analyze the exact query intent across 104+ languages and dialects, preserve exact numerical values, dates, codes, and identifiers, and format responses cleanly with concise bullet points and bold key terms optimized for spoken telephony delivery.
 
 ## Conversational Guardrails
-1. Never guess unverified business policies or pricing.
-2. Quote relevant clinic/company policies accurately.
-3. Keep explanation concise and optimized for spoken speech.
+1. **Strict Evidence Anchoring**: Never guess, assume, or invent ungrounded facts, figures, procedures, or policies.
+2. **Universal Modality & Domain Agnosticism**: Seamlessly synthesize context regardless of whether the source is text, tabular, visual OCR, or transcribed speech.
+3. **Conversational Dialect Mirroring**: Always mirror the caller's language and dialect (Hindi, Hinglish, English, Spanish, Arabic, French, etc.) naturally.
+4. **Telephony Voice Excellence**: Keep answers clear, natural, and concise (under 25 words per sentence) for smooth text-to-speech audio delivery.

@@ -46,6 +46,8 @@ import {
   Search,
   Database,
   Target,
+  Crown,
+  Lock,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -55,7 +57,9 @@ import { useToast } from '../components/ui/Toast';
 import { CommandPaletteSelect, SelectOption } from '../components/ui/CommandPaletteSelect';
 import { useBusinessRules } from '../context/BusinessRulesContext';
 import { fetchAPI } from '../lib/api';
-import { DEFAULT_BUSINESS_RULES_ITEMS } from './IntegrationsView';
+import { DEFAULT_BUSINESS_RULES_ITEMS } from '../constants/defaultBusinessRules';
+import { usePlanEntitlements } from '../hooks/usePlanEntitlements';
+import { PlanGuardrailModal } from '../components/ui/PlanGuardrailModal';
 import { detectCountryFromPhone } from '../data/globalCountryCodesCatalog';
 import {
   GLOBAL_COUNTRY_CODES_CATALOG,
@@ -83,6 +87,37 @@ interface DemoCallStudioViewProps {
   onNavigate?: (screen: string) => void;
 }
 
+const KNOWN_VOICE_MAP: Record<string, { name: string; provider: string }> = {
+  'hpp4J3VqNfWAUOO0d1Us': { name: 'Bella', provider: 'ElevenLabs' },
+  'pNInz6obpgDQGcFmaJgB': { name: 'Adam', provider: 'ElevenLabs' },
+  '21m00Tcm4TlvDq8ikWAM': { name: 'Rachel', provider: 'ElevenLabs' },
+  'AZnzlk1XvdvUeBnXmlld': { name: 'Domi', provider: 'ElevenLabs' },
+  'EXAVITQu4vr4xnSDxMaL': { name: 'Bella', provider: 'ElevenLabs' },
+  'ErXwobaYiN019PkySvjV': { name: 'Antoni', provider: 'ElevenLabs' },
+  'MF3mGyEYCl7XYWbV9V6O': { name: 'Elli', provider: 'ElevenLabs' },
+  'TxGEqnHWrfWFTfGW9XjX': { name: 'Josh', provider: 'ElevenLabs' },
+  'VR6AewLTigWG4xSOukaG': { name: 'Arnold', provider: 'ElevenLabs' },
+  'YoZ06aMxZJJ28mfd3POQ': { name: 'Sam', provider: 'ElevenLabs' },
+  'XB0fDUnXU5powFXDhCwa': { name: 'Charlotte', provider: 'ElevenLabs' },
+  'JBFqnCBsd6RMkjVDRZzb': { name: 'George', provider: 'ElevenLabs' },
+};
+
+export const formatAgentVoice = (voice?: string): string => {
+  if (!voice) return 'Configured Voice';
+  if (KNOWN_VOICE_MAP[voice]) {
+    return `${KNOWN_VOICE_MAP[voice].name} (${KNOWN_VOICE_MAP[voice].provider})`;
+  }
+  if (voice.includes('(') && voice.includes(')')) return voice;
+  if (voice.includes('–') || voice.includes(' - ')) {
+    const parts = voice.split(/[–-]/).map((p) => p.trim());
+    if (parts.length >= 2) {
+      return `${parts[1]} (${parts[0]})`;
+    }
+    return voice;
+  }
+  return voice;
+};
+
 export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNavigate }) => {
   const { addToast } = useToast();
   const {
@@ -93,141 +128,299 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     isWithinWorkingHours,
   } = useBusinessRules();
 
+  // Plan Entitlements & Live Dynamic Governance Engine
+  const {
+    isSuperAdmin,
+    isUnlimited,
+    entitlements,
+    canAccessLlm,
+    canAccessStt,
+    canAccessTts,
+    canAccessCodec,
+    canAccessGsm,
+    canAccessWebhooks,
+    checkResourceQuota,
+    guardrailModal,
+    triggerGuardrail,
+    closeGuardrail,
+    refreshEntitlements,
+  } = usePlanEntitlements();
+
   // Mode Selection: "mic" (browser web mic) vs "android_gsm" (real phone SIM) vs "carrier" (Twilio/SIP)
   const [callMode, setCallMode] = useState<'mic' | 'android_gsm' | 'carrier'>('mic');
   const [isGsmHardwareExpanded, setIsGsmHardwareExpanded] = useState(true);
 
-  // Read REAL Centralized Registry Data directly from localStorage with DEFAULT_BUSINESS_RULES_ITEMS fallback
+  const handleSelectCallMode = (mode: 'mic' | 'android_gsm' | 'carrier') => {
+    if (mode === 'android_gsm' && !canAccessGsm()) {
+      triggerGuardrail(
+        'Android GSM SIM Telephony',
+        `Hardware GSM Gateway and Android SIM Telephony routing require Growth Pro or Business Enterprise plan. Your current active plan is ${entitlements.planName}.`,
+        'Pro Scale Plan'
+      );
+      return;
+    }
+    setCallMode(mode);
+  };
+
+  // Read REAL Centralized Registry Data directly from localStorage scoped to active tenant
   const [customRegistry, setCustomRegistry] = useState<Record<string, any[]>>(() => {
     try {
-      const saved = localStorage.getItem('nexus_custom_items');
-      const parsed = saved ? JSON.parse(saved) : {};
-      return { ...DEFAULT_BUSINESS_RULES_ITEMS, ...parsed };
+      const activeOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id') || 'primary';
+      const saved = localStorage.getItem(`nexus_custom_items_${activeOrgId}`) || localStorage.getItem('nexus_custom_items');
+      return saved ? JSON.parse(saved) : {};
     } catch {
-      return DEFAULT_BUSINESS_RULES_ITEMS;
+      return {};
     }
   });
 
   // Sync with registry on storage / custom event & Load Canonical SSOT from Backend
   useEffect(() => {
-    fetchAPI('/api/credentials')
+    const activeOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id') || 'primary';
+    fetchAPI('/api/credentials/all-categories')
       .then((data) => {
         if (data && typeof data === 'object') {
           setCustomRegistry((prev) => {
-            const merged: Record<string, any[]> = { ...DEFAULT_BUSINESS_RULES_ITEMS, ...prev, ...data };
+            const merged: Record<string, any[]> = { ...prev, ...data };
             try {
+              localStorage.setItem(`nexus_custom_items_${activeOrgId}`, JSON.stringify(merged));
               localStorage.setItem('nexus_custom_items', JSON.stringify(merged));
             } catch {}
             return merged;
           });
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        fetchAPI('/api/credentials')
+          .then((data) => {
+            if (data && typeof data === 'object') {
+              setCustomRegistry((prev) => ({ ...prev, ...data }));
+            }
+          })
+          .catch(() => {});
+      });
 
     const syncRegistry = () => {
       try {
-        const saved = localStorage.getItem('nexus_custom_items');
-        if (saved) setCustomRegistry({ ...DEFAULT_BUSINESS_RULES_ITEMS, ...JSON.parse(saved) });
+        const saved = localStorage.getItem(`nexus_custom_items_${activeOrgId}`) || localStorage.getItem('nexus_custom_items');
+        if (saved) setCustomRegistry(JSON.parse(saved));
       } catch (e) {
         console.error('Registry sync error', e);
       }
     };
     window.addEventListener('storage', syncRegistry);
     window.addEventListener('nexus_business_rules_updated', syncRegistry);
+    window.addEventListener('createcall:sovereign_target_changed', syncRegistry);
+    window.addEventListener('createcall:tenant_data_updated', syncRegistry);
     return () => {
       window.removeEventListener('storage', syncRegistry);
       window.removeEventListener('nexus_business_rules_updated', syncRegistry);
+      window.removeEventListener('createcall:sovereign_target_changed', syncRegistry);
+      window.removeEventListener('createcall:tenant_data_updated', syncRegistry);
     };
   }, []);
 
-  // Backend Dynamic Options
-  const [backendAgents, setBackendAgents] = useState<any[]>([]);
-  useEffect(() => {
-    fetchAPI('/api/agents?page_size=50')
-      .then((data) => {
-        if (data && Array.isArray(data.items)) setBackendAgents(data.items);
-      })
-      .catch(() => {});
+  // Backend Dynamic Options (Scoped strictly to Active Tenant / Sovereign Workspace)
+  const [backendAgents, setBackendAgents] = useState<any[]>(() => {
+    try {
+      const activeOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id') || 'primary';
+      const saved = localStorage.getItem(`nexus_agents_${activeOrgId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  const loadAgentsFromBackend = useCallback(async () => {
+    try {
+      const activeOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id') || 'primary';
+      const data = await fetchAPI('/api/agents?page_size=100');
+      if (data && Array.isArray(data.items)) {
+        setBackendAgents(data.items);
+        try {
+          localStorage.setItem(`nexus_agents_${activeOrgId}`, JSON.stringify(data.items));
+        } catch {}
+        if (data.items.length > 0) {
+          const storedAgentId = localStorage.getItem(`nexus_selected_agent_id_${activeOrgId}`);
+          const matched = data.items.find((a: any) => a.id === storedAgentId);
+          if (matched) {
+            setSelectedAgentId(matched.id);
+          } else {
+            setSelectedAgentId(data.items[0].id);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load agents in Live Studio:', e);
+    }
   }, []);
 
-  // Extract ONLY real configured items from Registry (with full canonical SSOT fallbacks)
+  // Backend Dynamic Knowledge Base Documents (Scoped strictly to Active Tenant)
+  const [backendKnowledgeDocs, setBackendKnowledgeDocs] = useState<any[]>([]);
+
+  const loadKnowledgeDocsFromBackend = useCallback(async () => {
+    try {
+      const data = await fetchAPI('/api/knowledge-base?page_size=100');
+      if (data && Array.isArray(data.items)) {
+        setBackendKnowledgeDocs(data.items);
+      }
+    } catch (e) {
+      console.error('Failed to load knowledge documents in Live Studio:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAgentsFromBackend();
+    loadKnowledgeDocsFromBackend();
+    const handleSync = () => {
+      loadAgentsFromBackend();
+      loadKnowledgeDocsFromBackend();
+    };
+    window.addEventListener('createcall:sovereign_target_changed', handleSync);
+    window.addEventListener('createcall-target-workspace-changed', handleSync);
+    window.addEventListener('nexus_agents_updated', handleSync);
+    window.addEventListener('nexus_knowledge_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('createcall:sovereign_target_changed', handleSync);
+      window.removeEventListener('createcall-target-workspace-changed', handleSync);
+      window.removeEventListener('nexus_agents_updated', handleSync);
+      window.removeEventListener('nexus_knowledge_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [loadAgentsFromBackend, loadKnowledgeDocsFromBackend]);
+
+  // Extract ONLY real configured items from Registry & Agents configured in API & Integrations
   const realLlmList = useMemo(() => {
-    const items = (customRegistry['llm'] && customRegistry['llm'].length > 0)
-      ? customRegistry['llm']
-      : (DEFAULT_BUSINESS_RULES_ITEMS.llm || [
-          { id: 'google', provider: 'google', name: 'Google AI Studio', model: 'gemini-2.5-flash-lite', category: 'Cloud AI' },
-          { id: 'groq', provider: 'groq', name: 'Groq Cloud Inference', model: 'llama-3.3-70b-versatile', category: 'Cloud AI' },
-          { id: 'openai', provider: 'openai', name: 'OpenAI GPT-4o Realtime', model: 'gpt-4o-mini', category: 'Cloud AI' },
-          { id: 'anthropic', provider: 'anthropic', name: 'Anthropic Claude 3.5', model: 'claude-3-5-sonnet', category: 'Cloud AI' },
-          { id: 'ollama', provider: 'ollama', name: 'Ollama Local LLM', model: 'qwen2.5:7b-instruct', category: 'Local LLM' },
-        ]);
-    return items.map((i: any) => ({
-      id: i.id || i.provider || i.name,
-      provider: i.provider || i.name,
-      name: i.display_name || i.name || i.provider || 'Google AI Studio',
-      category: i.category || (i.is_local ? 'Local LLM' : 'Cloud AI'),
-      model: i.selected_model_name || i.primary_model || i.model || 'Auto-Optimized',
-    }));
-  }, [customRegistry]);
+    const rawItems = customRegistry['llm'] || [];
+    const list: any[] = [];
+    rawItems.forEach((i: any) => {
+      list.push({
+        id: i.id || i.provider || i.name,
+        provider: i.provider || i.name,
+        name: i.display_name || i.name || i.provider || 'Configured LLM',
+        category: i.category || (i.is_local ? 'Local LLM' : 'Cloud AI'),
+        model: i.selected_model_name || i.primary_model || i.model || 'Auto-Optimized',
+      });
+    });
+    // Add models configured on active agents if not already in list
+    backendAgents.forEach((ag: any) => {
+      const model = ag.llm_model || ag.llmModel;
+      if (model && !list.some((l) => l.id === model || l.model === model)) {
+        list.push({
+          id: model,
+          provider: model.split('-')[0] || 'AI',
+          name: `${model.replace(/_/g, ' ').toUpperCase()}`,
+          category: 'Configured LLM',
+          model: model,
+        });
+      }
+    });
+    if (list.length === 0) {
+      list.push({
+        id: 'llm-configured',
+        provider: 'Cloud AI',
+        name: 'Active LLM Provider',
+        category: 'Cloud AI',
+        model: 'Dynamic LLM Engine',
+      });
+    }
+    return list;
+  }, [customRegistry, backendAgents]);
 
   const realSttList = useMemo(() => {
-    const items = (customRegistry['stt'] && customRegistry['stt'].length > 0)
-      ? customRegistry['stt']
-      : (DEFAULT_BUSINESS_RULES_ITEMS.stt || [
-          { id: 'faster_whisper', provider: 'faster_whisper', name: 'Faster Whisper (Local GPU)', category: 'Local STT' },
-          { id: 'deepgram', provider: 'deepgram', name: 'Deepgram Nova-2', category: 'Cloud STT' },
-          { id: 'openai_whisper', provider: 'openai_whisper', name: 'OpenAI Whisper API', category: 'Cloud STT' },
-          { id: 'assemblyai', provider: 'assemblyai', name: 'AssemblyAI Realtime', category: 'Cloud STT' },
-        ]);
-    return items.map((i: any) => ({
-      id: i.id || i.provider || i.name,
-      provider: i.provider || i.name,
-      name: i.display_name || i.name || i.provider || 'Faster Whisper',
-      category: i.category || 'Real-Time STT',
-    }));
+    const rawItems = customRegistry['stt'] || [];
+    const list: any[] = [];
+    rawItems.forEach((i: any) => {
+      list.push({
+        id: i.id || i.provider || i.name,
+        provider: i.provider || i.name,
+        name: i.display_name || i.name || i.provider || 'Configured STT',
+        category: i.category || 'Real-Time STT',
+      });
+    });
+    if (list.length === 0) {
+      list.push({
+        id: 'stt-configured',
+        provider: 'Real-Time STT',
+        name: 'Continuous Speech STT',
+        category: 'Real-Time STT',
+      });
+    }
+    return list;
   }, [customRegistry]);
 
   const realVoiceList = useMemo(() => {
-    const items = (customRegistry['voice'] && customRegistry['voice'].length > 0)
-      ? customRegistry['voice']
-      : ((customRegistry['voice_profiles'] && customRegistry['voice_profiles'].length > 0)
-          ? customRegistry['voice_profiles']
-          : (DEFAULT_BUSINESS_RULES_ITEMS.voice || [
-              { id: 'elevenlabs', provider: 'elevenlabs', name: 'ElevenLabs Conversational TTS', category: 'Neural Voice' },
-              { id: 'cartesia', provider: 'cartesia', name: 'Cartesia Sonic (Ultra-Fast)', category: 'Neural Voice' },
-              { id: 'azure_speech', provider: 'azure_speech', name: 'Microsoft Azure Neural Voice', category: 'Cloud Voice' },
-              { id: 'openai_tts', provider: 'openai_tts', name: 'OpenAI TTS HD', category: 'Cloud Voice' },
-            ]));
-    return items.map((i: any) => ({
-      id: i.id || i.provider || i.name,
-      provider: i.provider || i.name,
-      name: i.display_name || i.name || i.provider || 'ElevenLabs Neural',
-      category: i.category || 'Voice Engine',
-    }));
-  }, [customRegistry]);
-
-  const realKnowledgeList = useMemo(() => {
-    const items = (customRegistry['knowledge_collections'] && customRegistry['knowledge_collections'].length > 0)
-      ? customRegistry['knowledge_collections']
-      : (DEFAULT_BUSINESS_RULES_ITEMS.knowledge_collections || [
-          { id: 'kb_1', name: 'Clinical FAQ & Pricing Docs', chunk_count: 142 },
-          { id: 'kb_2', name: 'Company Policy & SLA Handbook', chunk_count: 89 },
-          { id: 'kb_3', name: 'Sales Catalog & Inventory Guide', chunk_count: 210 },
-        ]);
+    const rawItems = customRegistry['voice'] || customRegistry['voice_profiles'] || [];
     const list: any[] = [];
-    items.forEach((i: any) => {
-      let title = i.display_name || i.name || i.title || '';
-      if (!title || !isNaN(Number(title))) {
-        title = title ? `Clinical Knowledge #${title}` : 'Clinical FAQ & Pricing';
-      }
+    rawItems.forEach((i: any) => {
       list.push({
-        id: i.id || i.name,
-        name: title,
-        chunkCount: i.chunk_count ?? i.chunkCount ?? 142,
+        id: i.id || i.provider || i.name,
+        provider: i.provider || i.name,
+        name: i.display_name || i.name || i.provider || 'Neural Voice',
+        category: i.category || 'Voice Engine',
       });
     });
+    // Add voices configured on active agents if not already in list
+    backendAgents.forEach((ag: any) => {
+      const v = ag.voice_id || ag.voice;
+      if (v && !list.some((x) => x.id === v || x.name === v)) {
+        list.push({
+          id: v,
+          provider: 'Voice Engine',
+          name: formatAgentVoice(v),
+          category: 'Voice Engine',
+        });
+      }
+    });
+    if (list.length === 0) {
+      list.push({
+        id: 'voice-configured',
+        provider: 'Neural Voice',
+        name: 'Neural Voice Synthesizer',
+        category: 'Voice Engine',
+      });
+    }
     return list;
-  }, [customRegistry]);
+  }, [customRegistry, backendAgents]);
+
+  const realKnowledgeList = useMemo(() => {
+    const map = new Map<string, any>();
+
+    // 1. Prioritize real uploaded knowledge base documents from DB
+    backendKnowledgeDocs.forEach((d: any) => {
+      const id = d.id || d.title;
+      map.set(id, {
+        id: d.id,
+        name: d.title || d.name || 'Knowledge Document',
+        chunkCount: d.chunk_count ?? d.chunks_count ?? d.chunkCount ?? 0,
+        fileType: d.file_type || 'PDF',
+        status: d.status || 'Indexed',
+      });
+    });
+
+    // 2. Custom registry items if any
+    const rawItems = customRegistry['knowledge_collections'] || customRegistry['knowledge_documents'] || [];
+    rawItems.forEach((i: any) => {
+      const id = i.id || i.display_name || i.name || i.title;
+      if (id && !map.has(id)) {
+        let title = i.display_name || i.name || i.title || '';
+        if (!title && i.id) title = `Knowledge Store #${i.id}`;
+        map.set(id, {
+          id: i.id || title,
+          name: title || 'Workspace Knowledge Base',
+          chunkCount: i.chunk_count ?? i.chunks_count ?? i.chunkCount ?? 0,
+          fileType: i.file_type || 'Collection',
+          status: i.status || 'Indexed',
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [backendKnowledgeDocs, customRegistry]);
 
   // Dynamic GSM Gateway Devices Hook from Real Backend
   const [apiGsmDevices, setApiGsmDevices] = useState<any[]>([]);
@@ -323,48 +516,16 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     return () => window.removeEventListener('nexus_gsm_bound_updated', syncBound);
   }, []);
 
-  const KNOWN_VOICE_MAP: Record<string, { name: string; provider: string }> = {
-    'hpp4J3VqNfWAUOO0d1Us': { name: 'Bella', provider: 'ElevenLabs' },
-    'pNInz6obpgDQGcFmaJgB': { name: 'Adam', provider: 'ElevenLabs' },
-    '21m00Tcm4TlvDq8ikWAM': { name: 'Rachel', provider: 'ElevenLabs' },
-    'AZnzlk1XvdvUeBnXmlld': { name: 'Domi', provider: 'ElevenLabs' },
-    'EXAVITQu4vr4xnSDxMaL': { name: 'Bella', provider: 'ElevenLabs' },
-    'ErXwobaYiN019PkySvjV': { name: 'Antoni', provider: 'ElevenLabs' },
-    'MF3mGyEYCl7XYWbV9V6O': { name: 'Elli', provider: 'ElevenLabs' },
-    'TxGEqnHWrfWFTfGW9XjX': { name: 'Josh', provider: 'ElevenLabs' },
-    'VR6AewLTigWG4xSOukaG': { name: 'Arnold', provider: 'ElevenLabs' },
-    'YoZ06aMxZJJ28mfd3POQ': { name: 'Sam', provider: 'ElevenLabs' },
-    'XB0fDUnXU5powFXDhCwa': { name: 'Charlotte', provider: 'ElevenLabs' },
-    'JBFqnCBsd6RMkjVDRZzb': { name: 'George', provider: 'ElevenLabs' },
-  };
-
-  const formatAgentVoice = (voice?: string): string => {
-    if (!voice) return 'Bella (ElevenLabs)';
-    if (KNOWN_VOICE_MAP[voice]) {
-      return `${KNOWN_VOICE_MAP[voice].name} (${KNOWN_VOICE_MAP[voice].provider})`;
-    }
-    if (voice.includes('(') && voice.includes(')')) return voice;
-    if (voice.includes('–') || voice.includes(' - ')) {
-      const parts = voice.split(/[–-]/).map((p) => p.trim());
-      if (parts.length >= 2) {
-        return `${parts[1]} (${parts[0]})`;
-      }
-      return voice;
-    }
-    if (voice.length > 20) return `${voice.slice(0, 10)}... (Voice)`;
-    return `${voice} (ElevenLabs)`;
-  };
-
   const getDeviceAppliedSettings = (device: any) => {
     // 1. If explicit bound entry exists in map
     if (boundDeviceMap[device.id]) {
       const bound = boundDeviceMap[device.id];
       return {
-        agentName: bound.agentName || 'Nikita',
-        agentRole: bound.agentRole || 'Customer Support Specialist',
-        language: bound.language || 'Hindi (हिन्दी)',
-        voiceName: formatAgentVoice(bound.voiceName || bound.voice_id),
-        llmName: bound.llmName || bound.llm_model || 'gemini-2.5-flash-lite',
+        agentName: bound.agentName || (activeAgentObj?.name || (backendAgents.length > 0 ? backendAgents[0].name : 'AI Agent')),
+        agentRole: bound.agentRole || activeAgentObj?.role || activeAgentObj?.description || 'Voice Agent',
+        language: bound.language || activeAgentObj?.language || 'en-US',
+        voiceName: formatAgentVoice(bound.voiceName || bound.voice_id || activeAgentObj?.voice_id || activeAgentObj?.voice),
+        llmName: bound.llmName || bound.llm_model || activeAgentObj?.llm_model || activeAgentObj?.llmModel || 'Configured LLM',
       };
     }
 
@@ -375,10 +536,10 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       if (agent) {
         return {
           agentName: agent.name,
-          agentRole: agent.description || agent.role || 'Customer Support Specialist',
-          language: agent.language || 'English',
+          agentRole: agent.description || agent.role || 'Voice Agent',
+          language: agent.language || 'en-US',
           voiceName: formatAgentVoice(agent.voice_id || agent.voice),
-          llmName: agent.llm_model || agent.llmModel || 'gemini-2.5-flash-lite',
+          llmName: agent.llm_model || agent.llmModel || 'Configured LLM',
         };
       }
     }
@@ -389,64 +550,55 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       if (agent) {
         return {
           agentName: agent.name,
-          agentRole: agent.description || agent.role || 'Customer Support Specialist',
-          language: agent.language || speechLang || 'हिन्दी',
+          agentRole: agent.description || agent.role || 'Voice Agent',
+          language: agent.language || speechLang || 'en-US',
           voiceName: formatAgentVoice(agent.voice_id || agent.voice || selectedVoiceId),
-          llmName: agent.llm_model || agent.llmModel || 'gemini-2.5-flash-lite',
+          llmName: agent.llm_model || agent.llmModel || 'Configured LLM',
         };
       }
     }
 
-    // 4. Fallback based on real backend agents roster (maps multiple devices across available agents)
+    // 4. Fallback based on real backend agents roster
     if (backendAgents.length > 0) {
       const deviceIndex = realAndroidDevices.findIndex((d) => d.id === device.id);
       const agentIndex = deviceIndex >= 0 ? deviceIndex % backendAgents.length : 0;
       const agent = backendAgents[agentIndex];
       return {
         agentName: agent.name,
-        agentRole: agent.description || agent.role || 'Customer Support Specialist',
-        language: agent.language || 'English',
+        agentRole: agent.description || agent.role || 'Voice Agent',
+        language: agent.language || 'en-US',
         voiceName: formatAgentVoice(agent.voice_id || agent.voice),
-        llmName: agent.llm_model || agent.llmModel || 'gemini-2.5-flash-lite',
+        llmName: agent.llm_model || agent.llmModel || 'Configured LLM',
       };
     }
 
     return {
-      agentName: 'Nikita',
-      agentRole: 'Customer Support Specialist',
-      language: 'हिन्दी',
-      voiceName: 'Bella (ElevenLabs)',
-      llmName: 'gemini-2.5-flash-lite',
+      agentName: activeAgentObj?.name || 'AI Agent',
+      agentRole: activeAgentObj?.description || activeAgentObj?.role || 'Voice Agent',
+      language: activeAgentObj?.language || 'en-US',
+      voiceName: formatAgentVoice(activeAgentObj?.voice_id || activeAgentObj?.voice),
+      llmName: activeAgentObj?.llm_model || activeAgentObj?.llmModel || 'Configured LLM',
     };
   };
 
   const cloudAndSipCarriers = useMemo(() => {
     const carriers = (customRegistry['telephony_providers'] && customRegistry['telephony_providers'].length > 0)
       ? customRegistry['telephony_providers']
-      : ((customRegistry['telephony_carriers'] && customRegistry['telephony_carriers'].length > 0)
-          ? customRegistry['telephony_carriers']
-          : (DEFAULT_BUSINESS_RULES_ITEMS.telephony_providers || [
-              { id: 'tel_twilio_01', name: 'Twilio Primary Cloud Carrier', display_name: 'Twilio Primary Cloud Carrier', cost_per_min: '$0.014/min', country: 'Global (+1)' },
-              { id: 'tel_airtel_02', name: 'Bharti Airtel IQ Direct', display_name: 'Bharti Airtel IQ Direct', cost_per_min: '₹0.70/min', country: 'India (+91)' },
-            ]));
+      : (customRegistry['telephony_carriers'] || []);
     const sips = (customRegistry['sip_providers'] && customRegistry['sip_providers'].length > 0)
       ? customRegistry['sip_providers']
-      : ((customRegistry['sip_trunks'] && customRegistry['sip_trunks'].length > 0)
-          ? customRegistry['sip_trunks']
-          : (DEFAULT_BUSINESS_RULES_ITEMS.sip_providers || [
-              { id: 'sip_direct_01', name: 'Telnyx Private Cloud SIP Trunk', display_name: 'Telnyx Private Cloud SIP Trunk', cost_per_min: '$0.0035/min', country: 'Global' },
-            ]));
+      : (customRegistry['sip_trunks'] || []);
     const list: any[] = [];
 
     carriers.forEach((c: any) => {
       list.push({
         id: c.id,
         name: c.display_name || c.name || 'Cloud Telephony Carrier',
-        cost_per_min: c.cost_per_min || '$0.014',
-        pricing_mode: c.pricing_mode || 'Paid',
-        country: c.country || 'Global (+1)',
+        cost_per_min: c.cost_per_min || '$0.000',
+        pricing_mode: c.pricing_mode || 'Carrier',
+        country: c.country || 'Global',
         type: 'carrier',
-        caller_id: c.api_key || c.phone_number || c.caller_id || '+1 (800) 555-0199',
+        caller_id: c.api_key || c.phone_number || c.caller_id || '',
       });
     });
 
@@ -458,7 +610,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         pricing_mode: s.pricing_mode || 'SIP Trunk',
         country: s.country || 'SIP Trunk',
         type: 'sip',
-        caller_id: s.outbound_cli || s.sip_host || '+1 (800) 555-0100',
+        caller_id: s.outbound_cli || s.sip_host || '',
       });
     });
 
@@ -511,7 +663,21 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   }, [customRegistry, realAndroidDevices]);
 
   // Selected State
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => {
+    try {
+      const activeOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id') || 'primary';
+      const stored = localStorage.getItem(`nexus_selected_agent_id_${activeOrgId}`);
+      if (stored) return stored;
+      const savedAgents = localStorage.getItem(`nexus_agents_${activeOrgId}`);
+      if (savedAgents) {
+        const parsed = JSON.parse(savedAgents);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  });
   const [selectedBusinessTypeId, setSelectedBusinessTypeId] = useState<string>('');
   const [selectedLlmId, setSelectedLlmId] = useState<string>('');
   const [selectedSttId, setSelectedSttId] = useState<string>('');
@@ -712,9 +878,9 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     if (list.length === 0) {
       list.push({
         id: 'carrier-default',
-        name: 'Twilio Cloud Voice ($0.014/min • Global)',
-        rate: '$0.014/min',
-        cost_per_min: '$0.014',
+        name: 'Direct Telephony Line ($0.000/min)',
+        rate: '$0.000/min',
+        cost_per_min: '$0.000',
       });
     }
     return list;
@@ -820,22 +986,58 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
 
   // Set default selected items
   useEffect(() => {
-    if (!selectedDepartmentId && realDepartmentsList.length > 0) {
-      setSelectedDepartmentId(realDepartmentsList[0].id);
+    if (realDepartmentsList.length > 0) {
+      const isValid = realDepartmentsList.some((d) => d.id === selectedDepartmentId);
+      if (!isValid || !selectedDepartmentId) {
+        setSelectedDepartmentId(realDepartmentsList[0].id);
+      }
     }
-    if (!selectedPolicyId && realPoliciesList.length > 0) {
-      setSelectedPolicyId(realPoliciesList[0].id);
+    if (realPoliciesList.length > 0) {
+      const isValid = realPoliciesList.some((p) => p.id === selectedPolicyId);
+      if (!isValid || !selectedPolicyId) {
+        setSelectedPolicyId(realPoliciesList[0].id);
+      }
     }
-    if (!selectedDispositionId && realDispositionsList.length > 0) {
-      setSelectedDispositionId(realDispositionsList[0].id);
+    if (realDispositionsList.length > 0) {
+      const isValid = realDispositionsList.some((d) => d.id === selectedDispositionId);
+      if (!isValid || !selectedDispositionId) {
+        setSelectedDispositionId(realDispositionsList[0].id);
+      }
     }
-    if (!selectedWebhookId && realWebhooksList.length > 0) {
-      setSelectedWebhookId(realWebhooksList[0].id);
+    if (realWebhooksList.length > 0) {
+      const isValid = realWebhooksList.some((w) => w.id === selectedWebhookId);
+      if (!isValid || !selectedWebhookId) {
+        setSelectedWebhookId(realWebhooksList[0].id);
+      }
     }
-    if ((!selectedKbId || selectedKbId === '2') && realKnowledgeList.length > 0) {
-      setSelectedKbId(realKnowledgeList[0].id);
+    if (realKnowledgeList.length > 0) {
+      const isValid = realKnowledgeList.some((k) => k.id === selectedKbId);
+      if (!isValid || !selectedKbId || selectedKbId === 'kb_1' || selectedKbId === '2' || selectedKbId === 'kb-default') {
+        setSelectedKbId(realKnowledgeList[0].id);
+      }
     }
-  }, [realDepartmentsList, realPoliciesList, realDispositionsList, realWebhooksList, realKnowledgeList, selectedDepartmentId, selectedPolicyId, selectedDispositionId, selectedWebhookId, selectedKbId]);
+    const allBt = [...businessTypes, ...(customRegistry['business_types'] || [])];
+    if (allBt.length > 0) {
+      const isValid = allBt.some((b) => b.id === selectedBusinessTypeId || b.name === selectedBusinessTypeId);
+      if (!isValid || !selectedBusinessTypeId) {
+        setSelectedBusinessTypeId(allBt[0]?.id || '');
+      }
+    }
+  }, [
+    realDepartmentsList,
+    realPoliciesList,
+    realDispositionsList,
+    realWebhooksList,
+    realKnowledgeList,
+    businessTypes,
+    customRegistry,
+    selectedDepartmentId,
+    selectedPolicyId,
+    selectedDispositionId,
+    selectedWebhookId,
+    selectedKbId,
+    selectedBusinessTypeId,
+  ]);
 
   // Searchable CommandPaletteSelect Options Arrays (with sleek Lucide icons & clean labels)
   const agentSelectOptions: SelectOption[] = useMemo(() => {
@@ -849,24 +1051,65 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   }, [backendAgents]);
 
   const businessTypeSelectOptions: SelectOption[] = useMemo(() => {
-    return businessTypes.map((bt) => ({
+    const fromRegistry = customRegistry['business_types'] || [];
+    const combined: any[] = [];
+    businessTypes.forEach((bt) => {
+      combined.push({
+        id: bt.id,
+        name: bt.name || bt.display_name,
+        category: bt.category || 'Business Vertical',
+        default_greeting: bt.default_greeting || '',
+      });
+    });
+    fromRegistry.forEach((bt: any) => {
+      if (!combined.some((x) => x.id === bt.id || x.name?.toLowerCase() === (bt.name || bt.display_name || '').toLowerCase())) {
+        combined.push({
+          id: bt.id,
+          name: bt.name || bt.display_name,
+          category: bt.category || 'Business Vertical',
+          default_greeting: bt.default_greeting || '',
+        });
+      }
+    });
+
+    if (combined.length === 0) {
+      return [
+        {
+          value: 'bt-default',
+          label: 'Customer Support & Inbound Services',
+          icon: <Building2 className="h-3.5 w-3.5 text-blue-500" />,
+          description: 'General Business Vertical',
+          group: 'Business Types (Business Tab)',
+        },
+      ];
+    }
+
+    return combined.map((bt) => ({
       value: bt.id,
-      label: bt.name || bt.display_name,
+      label: bt.name,
       icon: <Building2 className="h-3.5 w-3.5 text-blue-500" />,
-      description: `${bt.category || 'Industry'} • Greeting: "${(bt.default_greeting || '').slice(0, 50)}..."`,
+      description: `${bt.category || 'Industry'}${bt.default_greeting ? ` • Greeting: "${bt.default_greeting.slice(0, 50)}..."` : ''}`,
       group: 'Business Types (Business Tab)',
     }));
-  }, [businessTypes]);
+  }, [businessTypes, customRegistry]);
 
   const knowledgeSelectOptions: SelectOption[] = useMemo(() => {
     if (realKnowledgeList.length === 0) {
-      return [{ value: 'kb-default', label: 'Global Workspace Knowledge', icon: <Database className="h-3.5 w-3.5 text-emerald-500" />, description: 'Default workspace RAG memory', group: 'Knowledge & RAG (Data Tab)' }];
+      return [
+        {
+          value: 'no-kb',
+          label: 'No Knowledge Document Uploaded',
+          icon: <Database className="h-3.5 w-3.5 text-zinc-400" />,
+          description: 'Upload documents in Knowledge Base tab to enable RAG grounding',
+          group: 'Knowledge & RAG (Data Tab)',
+        },
+      ];
     }
     return realKnowledgeList.map((kb) => ({
       value: kb.id,
       label: kb.name,
       icon: <Database className="h-3.5 w-3.5 text-emerald-500" />,
-      description: kb.chunkCount ? `${String(kb.chunkCount).replace(/chunks/gi, '').trim()} Vector Chunks indexed in RAG Store` : 'Vector RAG Knowledge Source',
+      description: `${kb.chunkCount || 0} Vector Chunks indexed in RAG Store • ${kb.fileType || 'PDF'}`,
       group: 'Knowledge & RAG (Data Tab)',
     }));
   }, [realKnowledgeList]);
@@ -1224,6 +1467,8 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
   // Synchronize Agent Configuration across LLM, Voice Engine, and Language
   const handleAgentSelectChange = (agentId: string) => {
     setSelectedAgentId(agentId);
+    const activeOrgId = localStorage.getItem('createcall_target_org_id') || sessionStorage.getItem('createcall_target_org_id') || 'primary';
+    localStorage.setItem(`nexus_selected_agent_id_${activeOrgId}`, agentId);
     localStorage.setItem('nexus_selected_agent_id', agentId);
     const agent = backendAgents.find((a) => a.id === agentId);
     if (!agent) return;
@@ -1397,31 +1642,31 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     { id: 'stt', label: 'STT Audio', latency: '42ms', sub: 'Faster Whisper', status: 'idle', icon: '🎧' },
     { id: 'brain', label: 'Reasoning', latency: '155ms', sub: 'Gemini 2.5 Flash', status: 'idle', icon: '🧠' },
     { id: 'rag', label: 'RAG Ground', latency: '18ms', sub: 'Clinical FAQ RAG', status: 'idle', icon: '📚' },
-    { id: 'ssml', label: 'Humanizer', latency: '10ms', sub: 'Nikita Prosody', status: 'idle', icon: '✨' },
+    { id: 'ssml', label: 'Humanizer', latency: '10ms', sub: 'Adaptive Prosody', status: 'idle', icon: '✨' },
     { id: 'tts', label: 'TTS Audio', latency: '68ms', sub: 'ElevenLabs Neural', status: 'idle', icon: '🔊' },
   ]);
 
   // Synchronize pipeline stages dynamically with active selected / bound settings
   useEffect(() => {
-    const llmLabel = activeLlmObj?.name?.replace(/—.*/, '').trim() || activeLlmObj?.model || 'Gemini 2.5 Flash';
-    const sttLabel = activeSttObj?.name?.replace(/\(.*/, '').trim() || 'Faster Whisper';
-    const voiceLabel = activeVoiceObj?.name?.replace(/\(.*/, '').trim() || 'ElevenLabs Neural';
+    const llmLabel = activeLlmObj?.name?.replace(/—.*/, '').trim() || activeLlmObj?.model || (activeAgentObj?.llm_model || 'Reasoning LLM');
+    const sttLabel = activeSttObj?.name?.replace(/\(.*/, '').trim() || 'Speech-to-Text';
+    const voiceLabel = activeVoiceObj?.name?.replace(/\(.*/, '').trim() || formatAgentVoice(activeAgentObj?.voice_id || activeAgentObj?.voice);
     let rawKbName = activeKbObj?.name || '';
     if (!rawKbName || !isNaN(Number(rawKbName))) {
-      rawKbName = rawKbName ? `Clinical Knowledge #${rawKbName}` : 'Clinical FAQ RAG';
+      rawKbName = rawKbName ? `Knowledge Store #${rawKbName}` : 'Knowledge Base RAG';
     }
     const kbLabel = rawKbName.length > 20 ? `${rawKbName.slice(0, 18)}...` : rawKbName;
-    const agentName = activeAgentObj?.name || 'Nikita';
+    const agentName = activeAgentObj?.name || (backendAgents.length > 0 ? backendAgents[0].name : 'AI Voice Agent');
 
     setPipelineStages([
-      { id: 'vad', label: 'Mic VAD', latency: isCallActive ? '4ms' : '6ms', sub: 'Silero 4.0 Gated', status: (aiSpeechState !== 'speaking' && isMicListening) ? 'active' : 'idle', icon: '🎙️' },
+      { id: 'vad', label: 'Mic VAD', latency: isCallActive ? '4ms' : '6ms', sub: 'Adaptive VAD', status: (aiSpeechState !== 'speaking' && isMicListening) ? 'active' : 'idle', icon: '🎙️' },
       { id: 'stt', label: 'STT Audio', latency: isCallActive ? '39ms' : '42ms', sub: sttLabel, status: 'idle', icon: '🎧' },
       { id: 'brain', label: 'Reasoning', latency: isCallActive ? `${currentLatencyMs}ms` : '155ms', sub: llmLabel, status: 'idle', icon: '🧠' },
       { id: 'rag', label: 'RAG Ground', latency: isCallActive ? '16ms' : '18ms', sub: kbLabel, status: 'idle', icon: '📚' },
       { id: 'ssml', label: 'Humanizer', latency: isCallActive ? '9ms' : '10ms', sub: `${agentName} Prosody`, status: aiSpeechState === 'speaking' ? 'active' : 'idle', icon: '✨' },
       { id: 'tts', label: 'TTS Audio', latency: isCallActive ? '62ms' : '68ms', sub: voiceLabel, status: aiSpeechState === 'speaking' ? 'active' : 'idle', icon: '🔊' },
     ]);
-  }, [activeLlmObj, activeSttObj, activeVoiceObj, activeKbObj, activeAgentObj, isCallActive, aiSpeechState, isMicListening, currentLatencyMs]);
+  }, [activeLlmObj, activeSttObj, activeVoiceObj, activeKbObj, activeAgentObj, backendAgents, isCallActive, aiSpeechState, isMicListening, currentLatencyMs]);
 
   // Real-time live dynamic latency micro-variations during active call
   useEffect(() => {
@@ -1870,12 +2115,12 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
     setCallingState('dialing');
 
     const matchedBt = businessTypes.find((b) => b.id === selectedBusinessTypeId) || businessTypes[0];
-    const selectedAgentObj = backendAgents.find((a) => a.id === selectedAgentId);
+    const selectedAgentObj = backendAgents.find((a) => a.id === selectedAgentId) || activeAgentObj;
     const greetingText =
+      selectedAgentObj?.initial_greeting ||
+      selectedAgentObj?.greeting ||
       matchedBt?.default_greeting ||
-      (selectedAgentObj?.language?.toLowerCase().includes('hindi') || selectedAgentObj?.language?.includes('हिन्दी')
-        ? `नमस्ते! मैं ${selectedAgentObj?.name || 'निकिता'} हूँ। बताइए आज मैं आपकी क्या सहायता कर सकती हूँ?`
-        : `Hello! Thank you for calling. I am ${selectedAgentObj?.name || 'Nikita'}. How can I assist you today?`);
+      (selectedAgentObj?.name ? `Hello! Thank you for calling. I am ${selectedAgentObj.name}. How can I assist you today?` : 'Hello! Thank you for calling. How can I assist you today?');
 
     addLog(`Initiating ${callMode.toUpperCase()} call session to ${dialed}...`);
 
@@ -2247,11 +2492,11 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
       deviceId: selectedDevice?.id,
       deviceName: selectedDevice?.name,
       agentId: selectedAgentId,
-      agentName: agent?.name || 'Nikita',
-      agentRole: agent?.description || agent?.role || 'Customer Support Specialist',
-      llmName: agent?.llm_model || agent?.llmModel || 'gemini-2.5-flash-lite',
+      agentName: agent?.name || activeAgentObj?.name || (backendAgents[0]?.name || 'AI Agent'),
+      agentRole: agent?.description || agent?.role || 'Voice Agent',
+      llmName: agent?.llm_model || agent?.llmModel || selectedLlmId || realLlmList[0]?.model || 'Configured LLM',
       voiceName: formatAgentVoice(agent?.voice_id || agent?.voice || selectedVoiceId),
-      language: agent?.language || speechLang || 'Hindi (हिन्दी)',
+      language: agent?.language || speechLang || 'en-US',
       timestamp: Date.now(),
     };
 
@@ -2646,7 +2891,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
           phone_number: effPhone,
           contact_name: effContactName,
           agent_id: selectedAgentId,
-          agent_name: activeAgent?.name || 'Nikita',
+          agent_name: activeAgentObj?.name || (backendAgents[0]?.name || 'AI Voice Assistant'),
           call_mode: callMode,
           device_name: effDevice,
           carrier_name: effCarrier,
@@ -2665,10 +2910,22 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
         setPostCallReport(data.post_call_report);
         setIsReportAudioPlaying(false);
         setReportAudioProgress(0);
-        addToast('Call ended. Intelligence report generated.', 'info');
+        addToast({
+          type: 'success',
+          title: 'Call Saved to History',
+          description: `Call #${data.post_call_report.call_id || 'new'} recorded and analytics generated.`,
+        });
       }
+      // Instantly notify Call History & Voice Analytics
+      window.dispatchEvent(new CustomEvent('createcall-call-history-updated'));
+      window.dispatchEvent(new CustomEvent('createcall:tenant_data_updated'));
     } catch {
-      addToast('Call ended.', 'info');
+      addToast({
+        type: 'info',
+        title: 'Call Session Ended',
+        description: 'Voice session cleared.',
+      });
+      window.dispatchEvent(new CustomEvent('createcall-call-history-updated'));
     }
   };
 
@@ -2678,103 +2935,223 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
 
   return (
     <div className="space-y-5 pb-16">
-      {/* 1. Header (Clean Text Heading at Top) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-4">
-        <div>
-          <div className="flex items-center space-x-2.5">
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+      {/* 1. Header (Clean 2-Row Balanced Header) */}
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0">
+        {/* ROW 1: Title on Left + Plan & Concurrency Badges on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
               Live Call Studio
             </h1>
-            <Badge variant="blue" className="text-[11px] font-mono px-2 py-0.5">
+            <Badge variant="blue" className="text-[11px] font-mono px-2 py-0.5 shadow-2xs whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5 inline-block"></span>
               REAL-TIME VOICE ENGINE
             </Badge>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            Test AI voice agents via Browser Microphone, Android SIM Dialer, or SIP Cloud Telephony.
-          </p>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Badge
+              variant="outline"
+              className="text-xs font-semibold border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-0.5 flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer hover:bg-amber-500/20 transition-all"
+              onClick={() =>
+                triggerGuardrail(
+                  'custom',
+                  'Live Call Studio Plan Governance',
+                  `Active plan "${entitlements.planName}" includes ${entitlements.concurrencyLimit} concurrent line streams and ${entitlements.maxCallDurationMins === 'unlimited' ? 'unlimited' : `${entitlements.maxCallDurationMins} minutes`} per call limit.`
+                )
+              }
+              title="Click to view subscription plan entitlements"
+            >
+              <Crown className="h-3 w-3 text-amber-500" />
+              <span>Plan: {entitlements.planName}</span>
+            </Badge>
+
+            <Badge
+              variant="outline"
+              className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 px-2 py-0.5 shadow-2xs whitespace-nowrap"
+            >
+              <span>Max Lines: {isSuperAdmin ? '∞' : entitlements.concurrencyLimit} Concurrency</span>
+            </Badge>
+
+            <Badge
+              variant="outline"
+              className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 px-2 py-0.5 shadow-2xs whitespace-nowrap"
+            >
+              <span>Cap: {entitlements.maxCallDurationMins === 'unlimited' ? 'Unlimited' : `${entitlements.maxCallDurationMins}m / call`}</span>
+            </Badge>
+
+            {!isSuperAdmin && entitlements.planKey === 'starter_pilot' && onNavigate && (
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => onNavigate('billing')}
+                className="h-6 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/40 hover:bg-amber-500/20 cursor-pointer shadow-2xs"
+              >
+                <Zap className="h-3 w-3 mr-1 text-amber-500" />
+                Upgrade Tier
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Badge variant="outline" className="text-xs font-medium text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span>SIP Trunk: 99.98% Operational</span>
-          </Badge>
+        {/* ROW 2: Description on Left + SIP Status on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Test AI voice agents via Browser Microphone, Android SIM Dialer, or SIP Cloud Telephony.
+          </p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="outline" className="text-xs font-medium text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 flex items-center gap-1.5 shadow-2xs whitespace-nowrap">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span>SIP Trunk: 99.98% Operational</span>
+            </Badge>
+          </div>
         </div>
       </div>
 
-      {/* 2. Dedicated Mode Selection, Live Language & Device Row */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm">
-        {/* Left: Mode Selector Tabs */}
-        <div className="flex items-center gap-1 bg-zinc-200/70 dark:bg-zinc-800 p-1 rounded-xl border border-zinc-300/60 dark:border-zinc-700 shrink-0">
-          <button
-            onClick={() => setCallMode('mic')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 shrink-0 ${
-              callMode === 'mic'
-                ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs border border-blue-500/30'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Mic className="h-4 w-4 text-blue-500" />
-            <span>Browser Mic</span>
-          </button>
+      {/* 2. Dedicated Mode Selection, Live Language & Origin Indicators Row */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm">
+          {/* Left: Mode Selector Tabs */}
+          <div className="flex items-center gap-1 bg-zinc-200/70 dark:bg-zinc-800 p-1 rounded-xl border border-zinc-300/60 dark:border-zinc-700 shrink-0">
+            <button
+              onClick={() => handleSelectCallMode('mic')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 shrink-0 cursor-pointer ${
+                callMode === 'mic'
+                  ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs border border-blue-500/30'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              <Mic className="h-4 w-4 text-blue-500" />
+              <span>Browser Mic</span>
+            </button>
 
-          <button
-            onClick={() => setCallMode('android_gsm')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 shrink-0 ${
-              callMode === 'android_gsm'
-                ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-emerald-500/30'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Smartphone className="h-4 w-4 text-emerald-500" />
-            <span>Android SIM (Free)</span>
-          </button>
+            <button
+              onClick={() => handleSelectCallMode('android_gsm')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 shrink-0 cursor-pointer ${
+                callMode === 'android_gsm'
+                  ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-emerald-500/30'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              <Smartphone className="h-4 w-4 text-emerald-500" />
+              <span>Android SIM (Free)</span>
+              {!canAccessGsm() && !isSuperAdmin && (
+                <Lock className="h-3 w-3 text-amber-500 ml-0.5" />
+              )}
+            </button>
 
-          <button
-            onClick={() => setCallMode('carrier')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 shrink-0 ${
-              callMode === 'carrier'
-                ? 'bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs border border-purple-500/30'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Radio className="h-4 w-4 text-purple-500" />
-            <span>Cloud / SIP</span>
-          </button>
-        </div>
-
-        {/* Right: Live Auto-Detected Language Pill & Android Gateway Button */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Automatic Live Detected Language (Updates dynamically as user speaks) */}
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xs transition-all ${detectedLiveLanguage.badgeClass}`}>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Live Language:
-            </span>
-            <div className="flex items-center gap-1 font-bold">
-              <span>{detectedLiveLanguage.flag}</span>
-              <span>{detectedLiveLanguage.name}</span>
-            </div>
+            <button
+              onClick={() => handleSelectCallMode('carrier')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-2 shrink-0 cursor-pointer ${
+                callMode === 'carrier'
+                  ? 'bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs border border-purple-500/30'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              <Radio className="h-4 w-4 text-purple-500" />
+              <span>Cloud / SIP</span>
+            </button>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (onNavigate) {
-                onNavigate('android-gateway');
-              } else {
-                localStorage.setItem('nexus_current_screen', 'android-gateway');
-                window.dispatchEvent(new CustomEvent('nexus_screen_navigate', { detail: 'android-gateway' }));
-              }
-            }}
-            className="text-xs flex items-center gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold h-8 shrink-0 cursor-pointer shadow-2xs"
-            title="Open Pair & Apps GSM Gateway"
-          >
-            <Smartphone className="h-3.5 w-3.5 text-emerald-500" />
-            <span>Pair & Apps</span>
-          </Button>
+          {/* Right: Live Auto-Detected Language Pill & Quick Handoff Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Automatic Live Detected Language (Updates dynamically as user speaks) */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xs transition-all ${detectedLiveLanguage.badgeClass}`}>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                Live Language:
+              </span>
+              <div className="flex items-center gap-1 font-bold">
+                <span>{detectedLiveLanguage.flag}</span>
+                <span>{detectedLiveLanguage.name}</span>
+              </div>
+            </div>
+
+            {callMode === 'android_gsm' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (onNavigate) {
+                    onNavigate('android-gateway');
+                  } else {
+                    localStorage.setItem('nexus_current_screen', 'android-gateway');
+                    window.dispatchEvent(new CustomEvent('nexus_screen_navigate', { detail: 'android-gateway' }));
+                  }
+                }}
+                className="text-xs flex items-center gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold h-8 shrink-0 cursor-pointer shadow-2xs"
+                title="Manage Android SIM Gateways in Pair & Apps"
+              >
+                <Smartphone className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Pair & Apps</span>
+              </Button>
+            )}
+
+            {callMode === 'carrier' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (onNavigate) {
+                    onNavigate('phone-numbers');
+                  } else {
+                    localStorage.setItem('nexus_current_screen', 'phone-numbers');
+                    window.dispatchEvent(new CustomEvent('nexus_screen_navigate', { detail: 'phone-numbers' }));
+                  }
+                }}
+                className="text-xs flex items-center gap-1.5 border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 font-semibold h-8 shrink-0 cursor-pointer shadow-2xs"
+                title="Manage Phone Numbers & SIP Carrier Trunks"
+              >
+                <Radio className="h-3.5 w-3.5 text-purple-500" />
+                <span>SIP Trunks</span>
+              </Button>
+            )}
+
+            {callMode === 'mic' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (onNavigate) {
+                    onNavigate('agents');
+                  } else {
+                    localStorage.setItem('nexus_current_screen', 'agents');
+                    window.dispatchEvent(new CustomEvent('nexus_screen_navigate', { detail: 'agents' }));
+                  }
+                }}
+                className="text-xs flex items-center gap-1.5 border-blue-500/40 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-semibold h-8 shrink-0 cursor-pointer shadow-2xs"
+                title="Configure AI Voice Agents"
+              >
+                <Brain className="h-3.5 w-3.5 text-blue-500" />
+                <span>Voice Agents</span>
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Dynamic Mode Origin & Functionality Indicator Bar */}
+        <div className="px-3.5 py-2 bg-zinc-100/90 dark:bg-zinc-900/80 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-300">
+          <div className="flex items-center gap-2">
+            {callMode === 'mic' && (
+              <>
+                <span className="p-1 px-2 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shrink-0">🎙️ Browser Mic</span>
+                <span>Direct WebRTC duplex audio testing in browser. Uses prompt & stack from <strong>AI Voice Agents</strong> without cellular telephony charges.</span>
+              </>
+            )}
+            {callMode === 'android_gsm' && (
+              <>
+                <span className="p-1 px-2 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">📱 Android SIM (Free)</span>
+                <span>Zero-carrier-cost dialing via paired Android phone SIMs. Hardware & pairing managed in <strong>Pair & Apps (GSM Gateway)</strong>.</span>
+              </>
+            )}
+            {callMode === 'carrier' && (
+              <>
+                <span className="p-1 px-2 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold shrink-0">🌐 Cloud / SIP</span>
+                <span>Production telecom carrier & PSTN routing (Twilio, Telnyx, Private SIP). Trunks & DID numbers managed in <strong>Phone Numbers & SIP Trunks</strong>.</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -3344,7 +3721,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                 </div>
                 <div className="min-w-0">
                   <div className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <span>Active Voice Engine Matrix: {backendAgents.find((a: any) => a.id === selectedAgentId)?.name || 'Nikita'} ({realLanguagesList.find((l: any) => l.id === selectedLanguageId)?.name?.split('(')[0]?.trim() || 'Multilingual'})</span>
+                    <span>Active Voice Engine Matrix: {activeAgentObj?.name || (backendAgents[0]?.name || 'AI Voice Assistant')} ({realLanguagesList.find((l: any) => l.id === selectedLanguageId)?.name?.split('(')[0]?.trim() || 'Multilingual'})</span>
                     <Badge variant={isPresetBound ? 'emerald' : 'blue'} size="sm" className="text-[10px] py-0 font-bold flex items-center gap-1">
                       {isPresetBound ? <Zap className="h-3 w-3 text-emerald-500 fill-emerald-500" /> : <Sparkles className="h-3 w-3 text-blue-500" />}
                       <span>{isPresetBound ? 'Preset Bound & Active' : 'Ready to Bind'}</span>
@@ -3388,13 +3765,13 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                 </div>
                 <div className="min-w-0">
                   <div className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <span>Target Phone: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Samsung SM-A507FN'}</span>
+                    <span>Target Phone: {realAndroidDevices.find((d: any) => d.id === selectedLineId)?.name || 'Android GSM Device'}</span>
                     <Badge variant="emerald" size="sm" className="text-[10px] py-0">
                       SIM Linked
                     </Badge>
                   </div>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
-                    Syncs AI Agent ({backendAgents.find((a: any) => a.id === selectedAgentId)?.name || 'Nikita'}), Voice ({realVoiceList.find((v: any) => v.id === selectedVoiceId)?.name || 'ElevenLabs'}), and Language to handle all inbound/outbound calls on this physical phone.
+                    Syncs AI Agent ({activeAgentObj?.name || (backendAgents[0]?.name || 'AI Voice Assistant')}), Voice ({realVoiceList.find((v: any) => v.id === selectedVoiceId)?.name || formatAgentVoice(activeAgentObj?.voice_id || activeAgentObj?.voice)}), and Language to handle all inbound/outbound calls on this physical phone.
                   </p>
                 </div>
               </div>
@@ -3543,7 +3920,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                             <Brain className="h-3.5 w-3.5 text-purple-500 shrink-0" /> AI Agent:
                           </span>
                           <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                            {backendAgents.find((a) => a.id === selectedAgentId)?.name || 'Nikita'}
+                            {activeAgentObj?.name || (backendAgents[0]?.name || 'AI Voice Assistant')}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[11px] gap-2">
@@ -3551,7 +3928,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                             <Mic className="h-3 w-3 text-blue-500 shrink-0" /> Voice Engine:
                           </span>
                           <span className="font-semibold text-zinc-700 dark:text-zinc-300 truncate">
-                            {realVoiceList.find((v) => v.id === selectedVoiceId)?.name || 'ElevenLabs'}
+                            {realVoiceList.find((v) => v.id === selectedVoiceId)?.name || formatAgentVoice(activeAgentObj?.voice_id || activeAgentObj?.voice)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[10.5px] gap-2">
@@ -3559,7 +3936,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                             <Cpu className="h-3 w-3 text-emerald-500 shrink-0" /> Model:
                           </span>
                           <span className="font-mono font-semibold text-zinc-600 dark:text-zinc-300 truncate">
-                            {realLlmList.find((l) => l.id === selectedLlmId)?.name || 'Google AI Studio'}
+                            {realLlmList.find((l) => l.id === selectedLlmId)?.name || activeAgentObj?.llm_model || activeAgentObj?.llmModel || 'Configured LLM'}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[10.5px] pt-1 border-t border-zinc-100 dark:border-zinc-800 gap-2">
@@ -3732,20 +4109,20 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                   {/* Agent & Setup Info */}
                   <div className="space-y-1.5 max-w-md">
                     <h3 className="text-lg font-extrabold text-zinc-900 dark:text-zinc-100">
-                      {backendAgents.find((a) => a.id === selectedAgentId)?.name || 'Nikita'}
+                      {activeAgentObj?.name || (backendAgents[0]?.name || 'AI Voice Assistant')}
                     </h3>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {backendAgents.find((a) => a.id === selectedAgentId)?.role || 'AI Voice Assistant'} • {activeBt?.name || 'Dental Clinic'}
+                      {activeAgentObj?.role || activeAgentObj?.description || 'AI Voice Assistant'} {activeBt?.name ? `• ${activeBt.name}` : ''}
                     </p>
                     <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1">
                       <Badge variant="outline" size="sm" className="text-[10px]">
-                        🧠 {realLlmList.find((l) => l.id === selectedLlmId)?.name || 'Google AI Studio'}
+                        🧠 {realLlmList.find((l) => l.id === selectedLlmId)?.name || activeAgentObj?.llm_model || activeAgentObj?.llmModel || 'Configured LLM'}
                       </Badge>
                       <Badge variant="outline" size="sm" className="text-[10px]">
-                        🔊 {realVoiceList.find((v) => v.id === selectedVoiceId)?.name || 'ElevenLabs'}
+                        🔊 {realVoiceList.find((v) => v.id === selectedVoiceId)?.name || formatAgentVoice(activeAgentObj?.voice_id || activeAgentObj?.voice)}
                       </Badge>
                       <Badge variant="outline" size="sm" className="text-[10px]">
-                        🎙️ Zero-Lag WebRTC
+                        🎙️ {callMode === 'android_gsm' ? 'Cellular GSM SIM' : callMode === 'carrier' ? 'Cloud PSTN Trunk' : 'Zero-Lag WebRTC'}
                       </Badge>
                     </div>
                   </div>
@@ -3829,7 +4206,7 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
                     <div className="text-right hidden md:block">
                       <div className="text-[9.5px] text-zinc-400 font-bold uppercase">AI Agent Stack</div>
                       <div className="text-xs font-bold text-zinc-200 truncate max-w-[140px]">
-                        {backendAgents.find((a) => a.id === selectedAgentId)?.name || 'Nikita'} • {realVoiceList.find((v) => v.id === selectedVoiceId)?.name || 'ElevenLabs'}
+                        {activeAgentObj?.name || (backendAgents[0]?.name || 'AI Voice Assistant')} • {realVoiceList.find((v) => v.id === selectedVoiceId)?.name || formatAgentVoice(activeAgentObj?.voice_id || activeAgentObj?.voice)}
                       </div>
                     </div>
                     <div className="px-3 py-1.5 rounded-xl bg-zinc-800 border border-zinc-700 font-mono text-xs text-emerald-400 font-bold shadow-inner">
@@ -5090,6 +5467,17 @@ export const DemoCallStudioView: React.FC<DemoCallStudioViewProps> = ({ onNaviga
           </div>
         </Modal>
       )}
+
+      {/* Plan Entitlements & Guardrail Upgrade Modal */}
+      <PlanGuardrailModal
+        isOpen={guardrailModal.isOpen}
+        onClose={closeGuardrail}
+        featureTitle={guardrailModal.featureTitle}
+        featureDescription={guardrailModal.featureDescription}
+        requiredTier={guardrailModal.requiredTier}
+        currentPlanName={guardrailModal.currentPlanName || entitlements.planName}
+        onNavigateToBilling={() => (onNavigate ? onNavigate('billing') : undefined)}
+      />
     </div>
   );
 };

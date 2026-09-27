@@ -1,11 +1,16 @@
 import os
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import (
+    get_current_user,
+    get_current_user_optional,
+    ensure_super_admin_exists,
+    get_effective_org_id,
+)
 from backend.database.session import get_db
 from backend.models.models import User
 from backend.repositories.repositories import contact_repo
@@ -30,12 +35,16 @@ class BulkDeleteRequest(BaseModel):
 async def import_contacts_csv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ) -> Dict[str, Any]:
     """
     Upload any lead document (CSV, TSV, TXT, XLSX, XLS, JSON),
     save into uploads/contacts/, and bulk insert contacts with 100% dynamic variable preservation.
     """
+    effective_user = current_user or ensure_super_admin_exists(db)
+    org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
     filename = file.filename or "contacts_import.csv"
     if not DocumentLeadParser.is_supported_file(filename):
         raise HTTPException(
@@ -50,6 +59,7 @@ async def import_contacts_csv(
         category="contacts",
         filename=filename,
         content_bytes=content_bytes,
+        organization_id=org_id,
     )
 
     # 2. Universal parse rows & auto-extract 100% of columns into custom_variables
@@ -73,7 +83,7 @@ async def import_contacts_csv(
         contact_data = {
             **record,
             "custom_variables": custom_vars,
-            "organization_id": current_user.organization_id,
+            "organization_id": org_id,
         }
         try:
             created = contact_repo.create(db, contact_data)
@@ -93,13 +103,17 @@ async def import_contacts_csv(
 def sync_contacts_from_uploaded_file(
     filename: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ) -> Dict[str, Any]:
     """
     Read an existing lead file from uploads/contacts/ and import rows into the active workspace,
     automatically preserving 100% of all column fields as custom variables and tagging source_file.
     """
-    file_path = UploadStorageService.get_file_path(category="contacts", filename=filename)
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
+    file_path = UploadStorageService.get_file_path(category="contacts", filename=filename, organization_id=effective_org_id)
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -127,8 +141,8 @@ def sync_contacts_from_uploaded_file(
         )
 
     filters = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
     existing_contacts = contact_repo.get_multi(db, limit=10000, filters=filters)
     
     # Isolate deduplication to contacts belonging to THIS specific file
@@ -142,8 +156,7 @@ def sync_contacts_from_uploaded_file(
         for c in this_file_contacts if c.phone
     }
 
-    created_contacts: List[Any] = []
-    updated_contacts: List[Any] = []
+    synced_contacts: List[Any] = []
 
     for record in parsed_records:
         custom_vars = dict(record.get("custom_variables") or {})
@@ -162,54 +175,55 @@ def sync_contacts_from_uploaded_file(
             }
             try:
                 updated = contact_repo.update(db, existing_c, update_payload)
-                updated_contacts.append(ContactOut.model_validate(updated))
+                synced_contacts.append(ContactOut.model_validate(updated))
             except Exception:
-                pass
+                continue
         else:
             contact_data = {
                 **record,
                 "custom_variables": custom_vars,
-                "organization_id": current_user.organization_id,
+                "organization_id": effective_org_id,
             }
             try:
                 created = contact_repo.create(db, contact_data)
-                created_contacts.append(ContactOut.model_validate(created))
-                if created.phone:
-                    phone_to_file_contact[(created.phone or "").replace(" ", "").replace("-", "")] = created
+                synced_contacts.append(ContactOut.model_validate(created))
             except Exception:
                 continue
 
-    total_synced = len(created_contacts) + len(updated_contacts)
     return {
         "success": True,
-        "imported_count": total_synced,
-        "created_count": len(created_contacts),
-        "updated_count": len(updated_contacts),
-        "message": f"Successfully synced {total_synced} contact(s) from '{filename}' into Contact Directory.",
+        "synced_count": len(synced_contacts),
+        "filename": filename,
+        "message": f"Successfully synced {len(synced_contacts)} contact(s) from '{filename}' into active workspace.",
     }
 
 
-@router.post("/unimport-file/{filename}")
-@router.delete("/unimport-file/{filename}")
-def unimport_contacts_from_file(
+@router.delete("/remove-file-data/{filename}")
+def remove_contacts_imported_from_file(
     filename: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ) -> Dict[str, Any]:
     """
     Remove all contacts imported from this specific lead file from the active Directory,
     reverting the import while keeping the physical uploaded file intact in uploads/contacts/.
     """
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
     filters = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
 
     contacts = contact_repo.get_multi(db, limit=10000, filters=filters)
 
     # Collect phones and names from the file in case contacts were imported before explicit source_file tagging
     file_phones = set()
     file_names = set()
-    file_path = UploadStorageService.get_file_path(category="contacts", filename=filename)
+    file_path = UploadStorageService.get_file_path(
+        category="contacts", filename=filename, organization_id=effective_org_id
+    )
     if file_path and os.path.exists(file_path):
         try:
             with open(file_path, "rb") as fp:
@@ -253,12 +267,17 @@ def list_contacts(
     page_size: int = Query(20, ge=1, le=1000),
     search: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id)
     skip = (page - 1) * page_size
     filters = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
+    elif effective_user.organization_id:
+        filters["organization_id"] = effective_user.organization_id
 
     items = contact_repo.get_multi(
         db,
@@ -289,10 +308,13 @@ def list_contacts(
 def create_contact(
     contact_in: ContactCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
     data = contact_in.model_dump()
-    data["organization_id"] = current_user.organization_id
+    data["organization_id"] = effective_org_id
     created_contact = contact_repo.create(db, data)
 
     try:
@@ -306,7 +328,7 @@ def create_contact(
                 "status": created_contact.status,
                 "tags": created_contact.tags,
             },
-            organization_id=str(current_user.organization_id) if current_user.organization_id is not None else None,
+            organization_id=str(effective_org_id) if effective_org_id is not None else None,
         )
     except Exception:
         pass
@@ -317,13 +339,19 @@ def create_contact(
 @router.get("/uploaded-files")
 def list_uploaded_contact_files(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ) -> List[Dict[str, Any]]:
     """List all CSV lead files stored in uploads/contacts/ with live Directory sync status."""
-    files = UploadStorageService.list_files(category="contacts")
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
+    files = UploadStorageService.list_files(
+        category="contacts", organization_id=effective_org_id
+    )
     filters = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
 
     contacts = contact_repo.get_multi(db, limit=10000, filters=filters)
 
@@ -341,7 +369,9 @@ def list_uploaded_contact_files(
 
         # Fallback phone check for legacy imports without source_file tag
         if imported_cnt == 0:
-            file_path = UploadStorageService.get_file_path(category="contacts", filename=fname)
+            file_path = UploadStorageService.get_file_path(
+                category="contacts", filename=fname, organization_id=effective_org_id
+            )
             if file_path and os.path.exists(file_path):
                 try:
                     with open(file_path, "rb") as fp:
@@ -374,12 +404,20 @@ def list_uploaded_contact_files(
 def get_contact(
     contact_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
     contact = contact_repo.get_by_id(db, contact_id)
     if not contact:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
+        )
+    if effective_org_id and contact.organization_id and contact.organization_id != effective_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this contact"
         )
     return contact
 
@@ -390,13 +428,22 @@ def update_contact(
     contact_id: str,
     contact_in: ContactUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
     contact = contact_repo.get_by_id(db, contact_id)
     if not contact:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
         )
+    if effective_org_id and contact.organization_id and contact.organization_id != effective_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this contact"
+        )
+
     update_data = contact_in.model_dump(exclude_unset=True)
     if "first_name" in update_data or "last_name" in update_data:
         fn = update_data.pop("first_name", "") or ""
@@ -444,7 +491,7 @@ def update_contact(
                 "status": updated_contact.status,
                 "tags": updated_contact.tags,
             },
-            organization_id=str(current_user.organization_id) if current_user.organization_id is not None else None,
+            organization_id=str(effective_org_id) if effective_org_id is not None else None,
         )
     except Exception:
         pass
@@ -457,14 +504,20 @@ def update_contact(
 def bulk_delete_contacts(
     payload: BulkDeleteRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
     """Delete multiple contacts by their IDs."""
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
     deleted_count = 0
     for cid in payload.ids:
         try:
             contact = contact_repo.get_by_id(db, cid)
             if contact:
+                if effective_org_id and contact.organization_id and contact.organization_id != effective_org_id:
+                    continue
                 contact_repo.delete(db, cid)
                 deleted_count += 1
         except Exception:
@@ -480,12 +533,16 @@ def bulk_delete_contacts(
 @router.post("/clear-all/all")
 def clear_all_contacts(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
     """Clear all contacts from the database for the active workspace."""
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
     filters = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
 
     all_contacts = contact_repo.get_multi(db, limit=10000, filters=filters)
     count = len(all_contacts)
@@ -499,18 +556,25 @@ def clear_all_contacts(
     }
 
 
-
-
 @router.delete("/{contact_id}")
 def delete_contact(
     contact_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
+
     contact = contact_repo.get_by_id(db, contact_id)
     if not contact:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
         )
+    if effective_org_id and contact.organization_id and contact.organization_id != effective_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this contact"
+        )
     contact_repo.delete(db, contact_id)
     return {"message": "Contact deleted successfully", "id": contact_id}
+

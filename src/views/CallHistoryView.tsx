@@ -20,19 +20,42 @@ import {
   Clock,
   DollarSign,
   Sparkles,
+  RefreshCw,
+  Crown,
+  ShieldCheck,
+  Layers,
+  Activity,
+  HardDrive,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { DataTable, Column } from '../components/ui/DataTable';
-import { CallLog } from '../types';
+import { CallLog, ScreenId } from '../types';
 import { callHistoryRepository } from '../repository';
 import { useToast } from '../components/ui/Toast';
+import { usePlanEntitlements } from '../hooks/usePlanEntitlements';
+import { PlanGuardrailModal } from '../components/ui/PlanGuardrailModal';
 
-export const CallHistoryView: React.FC = () => {
+interface CallHistoryViewProps {
+  onNavigate?: (screen: ScreenId) => void;
+}
+
+export const CallHistoryView: React.FC<CallHistoryViewProps> = ({ onNavigate }) => {
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Plan Entitlements & Guardrails SSOT
+  const {
+    entitlements,
+    isUnlimited,
+    isSuperAdmin,
+    guardrailModal,
+    triggerGuardrail,
+    closeGuardrail,
+  } = usePlanEntitlements();
 
   // Inspection Drawer State
   const [selectedCall, setSelectedCall] = useState<CallLog | null>(null);
@@ -49,6 +72,7 @@ export const CallHistoryView: React.FC = () => {
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState('');
 
+  const historyAudioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<any>(null);
   const { addToast } = useToast();
 
@@ -65,11 +89,38 @@ export const CallHistoryView: React.FC = () => {
     }
   };
 
+  const handleManualRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await loadLogs();
+      addToast({
+        type: 'success',
+        title: 'Call History Refreshed',
+        description: 'Successfully loaded the latest call logs and transcripts.',
+      });
+    } catch {
+      // error handled in loadLogs
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     loadLogs();
+    const handleRefresh = () => {
+      loadLogs();
+    };
+    window.addEventListener('createcall-target-workspace-changed', handleRefresh);
+    window.addEventListener('createcall-call-history-updated', handleRefresh);
+    window.addEventListener('createcall:sovereign_target_changed', handleRefresh);
+    window.addEventListener('createcall:tenant_data_updated', handleRefresh);
+    return () => {
+      window.removeEventListener('createcall-target-workspace-changed', handleRefresh);
+      window.removeEventListener('createcall-call-history-updated', handleRefresh);
+      window.removeEventListener('createcall:sovereign_target_changed', handleRefresh);
+      window.removeEventListener('createcall:tenant_data_updated', handleRefresh);
+    };
   }, []);
-
-  const historyAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (selectedCall) {
@@ -86,6 +137,29 @@ export const CallHistoryView: React.FC = () => {
     }
   }, [selectedCall?.id]);
 
+  const formatTimestamp = (rawTs?: string) => {
+    if (!rawTs) return 'Just now';
+    try {
+      const d = new Date(rawTs);
+      if (isNaN(d.getTime())) return rawTs;
+      return (
+        d.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }) +
+        ' · ' +
+        d.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      );
+    } catch {
+      return rawTs;
+    }
+  };
+
   // Audio Playback & Progress handler
   const toggleHistoryAudioPlay = () => {
     if (!selectedCall) return;
@@ -94,13 +168,33 @@ export const CallHistoryView: React.FC = () => {
       if (historyAudioRef.current) {
         historyAudioRef.current.pause();
       }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       setIsPlaying(false);
       return;
     }
 
-    let recUrl = (selectedCall as any).recording_url || selectedCall.recordingUrl;
-    if (!recUrl || recUrl.includes('api.nexuscalling.com')) {
-      recUrl = `/api/demo/recordings/${selectedCall.id}.mp3`;
+    const recUrl = (selectedCall as any).recording_url || selectedCall.recordingUrl;
+    if (!recUrl || !recUrl.startsWith('http')) {
+      // Simulate playback progress for audio visualization
+      setIsPlaying(true);
+      const totalSec = selectedCall.durationSeconds || 30;
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setCurrentTimeSec((prev) => {
+          if (prev >= totalSec) {
+            clearInterval(timerRef.current);
+            setIsPlaying(false);
+            return 0;
+          }
+          const next = prev + 1;
+          setAudioProgress((next / totalSec) * 100);
+          return next;
+        });
+      }, 1000);
+      return;
     }
 
     try {
@@ -111,6 +205,7 @@ export const CallHistoryView: React.FC = () => {
 
       const audio = new Audio(recUrl);
       historyAudioRef.current = audio;
+      audio.volume = isMuted ? 0 : volume / 100;
       setIsPlaying(true);
 
       audio.ontimeupdate = () => {
@@ -119,78 +214,31 @@ export const CallHistoryView: React.FC = () => {
           setAudioProgress((audio.currentTime / audio.duration) * 100);
         }
       };
+
       audio.onended = () => {
         setIsPlaying(false);
         setAudioProgress(0);
         setCurrentTimeSec(0);
-        historyAudioRef.current = null;
-      };
-      audio.onerror = () => {
-        console.warn('Real recording audio not reachable, falling back to visual playback timer');
       };
 
-      audio.play().catch(() => {});
+      audio.play().catch(() => {
+        setIsPlaying(false);
+      });
     } catch {
-      setIsPlaying(true);
+      setIsPlaying(false);
     }
   };
-
-  // Fallback timer when real audio element is buffering or unavailable
-  useEffect(() => {
-    if (isPlaying && selectedCall && !historyAudioRef.current) {
-      const duration = selectedCall.durationSeconds || 60;
-      timerRef.current = setInterval(() => {
-        setCurrentTimeSec((prev) => {
-          if (prev >= duration) {
-            setIsPlaying(false);
-            setAudioProgress(100);
-            return duration;
-          }
-          const next = prev + 1;
-          setAudioProgress((next / duration) * 100);
-          return next;
-        });
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isPlaying, selectedCall]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = Number(e.target.value);
-    setAudioProgress(val);
-    if (selectedCall) {
-      const dur = selectedCall.durationSeconds || 60;
-      const targetSec = Math.floor((val / 100) * dur);
-      setCurrentTimeSec(targetSec);
-      if (historyAudioRef.current && historyAudioRef.current.duration) {
-        historyAudioRef.current.currentTime = (val / 100) * historyAudioRef.current.duration;
-      }
+    const newProgress = parseFloat(e.target.value);
+    setAudioProgress(newProgress);
+    const duration = selectedCall?.durationSeconds || 60;
+    const newTime = (newProgress / 100) * duration;
+    setCurrentTimeSec(Math.floor(newTime));
+
+    if (historyAudioRef.current && historyAudioRef.current.duration) {
+      historyAudioRef.current.currentTime = (newProgress / 100) * historyAudioRef.current.duration;
     }
-  };
-
-  const handleDownloadMp3 = () => {
-    if (!selectedCall) return;
-    let recUrl = (selectedCall as any).recording_url || selectedCall.recordingUrl;
-    if (!recUrl || recUrl.includes('api.nexuscalling.com')) {
-      recUrl = `/api/demo/recordings/${selectedCall.id}.mp3`;
-    }
-
-    const a = document.createElement('a');
-    a.href = recUrl;
-    a.download = `call_recording_${selectedCall.id}.mp3`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    addToast({
-      type: 'success',
-      title: 'Downloading Recording',
-      description: `Downloading call_recording_${selectedCall.id}.mp3`,
-    });
   };
 
   const handleOpenInspect = (log: CallLog) => {
@@ -201,6 +249,16 @@ export const CallHistoryView: React.FC = () => {
   const handleCloseInspect = () => {
     setIsInspectDrawerOpen(false);
     setIsPlaying(false);
+    if (historyAudioRef.current) {
+      try {
+        historyAudioRef.current.pause();
+      } catch {}
+      historyAudioRef.current = null;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   };
 
   const handleSaveNotes = async () => {
@@ -222,10 +280,28 @@ export const CallHistoryView: React.FC = () => {
     }
   };
 
+  const handleDownloadMp3 = () => {
+    if (!selectedCall) return;
+    const recUrl = (selectedCall as any).recording_url || selectedCall.recordingUrl;
+    if (recUrl && recUrl.startsWith('http')) {
+      const a = document.createElement('a');
+      a.href = recUrl;
+      a.download = `call_recording_${selectedCall.id}.mp3`;
+      a.target = '_blank';
+      a.click();
+    } else {
+      addToast({
+        type: 'info',
+        title: 'HD Recording Stream',
+        description: `Exporting synthetic audio stream for Call #${selectedCall.id} (${entitlements.planName} Tier).`,
+      });
+    }
+  };
+
   const handleDownloadTranscript = () => {
     if (!selectedCall) return;
     const content =
-      `CALL TRANSCRIPT #${selectedCall.id}\nContact: ${selectedCall.contactName} (${selectedCall.contactPhone})\nAgent: ${selectedCall.agentName}\nDate: ${selectedCall.timestamp}\nDuration: ${selectedCall.durationSeconds}s\n\nSUMMARY:\n${selectedCall.summary}\n\nTRANSCRIPT:\n` +
+      `CALL TRANSCRIPT #${selectedCall.id}\nPlan Tier: ${entitlements.planName}\nContact: ${selectedCall.contactName} (${selectedCall.contactPhone})\nAgent: ${selectedCall.agentName}\nDate: ${selectedCall.timestamp}\nDuration: ${selectedCall.durationSeconds}s\n\nSUMMARY:\n${selectedCall.summary}\n\nTRANSCRIPT:\n` +
       selectedCall.transcript.map((t) => `[${t.time}] ${t.speaker}: ${t.text}`).join('\n');
 
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -274,7 +350,11 @@ export const CallHistoryView: React.FC = () => {
         setIsInspectDrawerOpen(false);
         setSelectedCall(null);
       }
-      addToast({ type: 'success', title: 'Bulk Delete Complete', description: `Deleted ${ids.length} call records.` });
+      addToast({
+        type: 'success',
+        title: 'Bulk Delete Complete',
+        description: `Deleted ${ids.length} call records.`,
+      });
     } catch (err: any) {
       addToast({ type: 'error', title: 'Bulk Delete Failed', description: err.message });
     }
@@ -287,30 +367,33 @@ export const CallHistoryView: React.FC = () => {
       header: 'Contact & Phone',
       sortable: true,
       render: (log) => {
-        const isMicTest =
-          log.contactName?.toLowerCase().includes('browser mic') ||
+        const isStudioAudio =
+          log.contactName?.toLowerCase().includes('studio') ||
+          log.contactPhone?.toLowerCase().includes('studio') ||
           log.contactPhone?.toUpperCase().includes('MIC') ||
           log.contactPhone?.toUpperCase().includes('BROWSER');
         return (
           <div className="flex items-center gap-3 whitespace-nowrap min-w-[200px]">
-            <div className={`h-8 w-8 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
-              isMicTest
-                ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800'
-                : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
-            }`}>
+            <div
+              className={`h-8 w-8 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
+                isStudioAudio
+                  ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                  : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+              }`}
+            >
               <PhoneCall className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 font-extrabold text-xs text-zinc-900 dark:text-zinc-100 whitespace-nowrap truncate">
-                <span>{log.contactName || (isMicTest ? 'Test Browser Mic 1' : 'Direct Caller')}</span>
-                {isMicTest && (
+                <span>{log.contactName || (isStudioAudio ? 'Studio Audio Call' : 'Direct Caller')}</span>
+                {isStudioAudio && (
                   <Badge variant="blue" size="sm" className="text-[9px] py-0 px-1 font-semibold">
-                    Web Mic
+                    Studio Audio
                   </Badge>
                 )}
               </div>
               <div className="text-[11px] font-mono text-zinc-400 font-semibold whitespace-nowrap">
-                {log.contactPhone || (isMicTest ? 'TEST-BROWSER-MIC-01' : '+18005550199')}
+                {log.contactPhone || 'Direct Line'}
               </div>
             </div>
           </div>
@@ -322,10 +405,10 @@ export const CallHistoryView: React.FC = () => {
       header: 'AI Agent Stack',
       sortable: true,
       render: (log) => (
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
+        <div className="flex items-center gap-1.5 whitespace-nowrap min-w-[140px]">
           <Brain className="h-3.5 w-3.5 text-purple-500 shrink-0" />
-          <span className="font-bold text-xs text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
-            {log.agentName || 'Nikita (AI Voice)'}
+          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate">
+            {log.agentName || 'AI Voice Agent'}
           </span>
         </div>
       ),
@@ -336,14 +419,18 @@ export const CallHistoryView: React.FC = () => {
       sortable: true,
       render: (log) => (
         <span
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap border ${
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${
             log.direction === 'inbound'
-              ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800'
-              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+              ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+              : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
           }`}
         >
-          {log.direction === 'inbound' ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-          <span className="capitalize">{log.direction}</span>
+          {log.direction === 'inbound' ? (
+            <ArrowDownLeft className="h-3 w-3" />
+          ) : (
+            <ArrowUpRight className="h-3 w-3" />
+          )}
+          <span>{log.direction || 'outbound'}</span>
         </span>
       ),
     },
@@ -351,19 +438,22 @@ export const CallHistoryView: React.FC = () => {
       key: 'sentiment',
       header: 'Sentiment',
       sortable: true,
-      render: (log) => (
-        <span
-          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap border ${
-            log.sentiment === 'positive'
-              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-              : log.sentiment === 'negative'
-              ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
-              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
-          }`}
-        >
-          <span className="capitalize">{log.sentiment}</span>
-        </span>
-      ),
+      render: (log) => {
+        const sentiment = log.sentiment || 'neutral';
+        const colorClass =
+          sentiment === 'positive'
+            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+            : sentiment === 'negative'
+            ? 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
+            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700';
+        return (
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap border ${colorClass}`}
+          >
+            {sentiment}
+          </span>
+        );
+      },
     },
     {
       key: 'durationSeconds',
@@ -384,7 +474,7 @@ export const CallHistoryView: React.FC = () => {
       sortable: true,
       render: (log) => (
         <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-          ${log.cost.toFixed(3)}
+          ${(log.cost || 0).toFixed(3)}
         </span>
       ),
     },
@@ -421,16 +511,74 @@ export const CallHistoryView: React.FC = () => {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  // Retention days based on plan
+  const getRetentionDays = () => {
+    if (isUnlimited || isSuperAdmin) return 'Unlimited (Infinite)';
+    if (entitlements.planKey?.includes('starter')) return '7 Days Retention';
+    if (entitlements.planKey?.includes('growth')) return '30 Days Retention';
+    if (entitlements.planKey?.includes('pro')) return '90 Days Retention';
+    return '365 Days Retention';
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-          Call History & AI Transcripts
-        </h2>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-          Review processed calls, sentiment ratings, audio recordings, and speaker turn-by-turn transcripts.
-        </p>
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0">
+        {/* ROW 1: Heading on Left + Badges on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
+              Call History & AI Transcripts
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Badge variant="blue" className="text-[11px] font-mono px-2 py-0.5 shadow-2xs whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5 inline-block"></span>
+              LIVE DATABASE SYNC
+            </Badge>
+            <Badge
+              variant="outline"
+              className="text-xs font-semibold px-2 py-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer hover:bg-amber-500/20 transition-all"
+              onClick={() =>
+                triggerGuardrail(
+                  'custom',
+                  'Plan Governance & Call History Retention',
+                  `Active plan "${entitlements.planName}" includes ${getRetentionDays()} call history & transcript retention.`
+                )
+              }
+              title="Click to view subscription plan entitlements"
+            >
+              <Crown className="w-3 h-3 text-amber-500" />
+              <span>Plan: {entitlements.planName}</span>
+            </Badge>
+          </div>
+        </div>
+
+        {/* ROW 2: Description on Left + Action Button on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-2 flex-wrap">
+            <span>Review processed calls, sentiment ratings, audio recordings, and speaker turn-by-turn transcripts.</span>
+            <span className="text-zinc-300 dark:text-zinc-700">•</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+              <HardDrive className="w-3 h-3" />
+              Storage: {getRetentionDays()}
+            </span>
+          </p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="xs"
+              variant="outline"
+              className="h-7.5 px-3 text-xs font-bold gap-1.5 cursor-pointer shadow-2xs border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 text-zinc-700 dark:text-zinc-200 transition-all"
+              onClick={handleManualRefresh}
+              disabled={isLoading || isRefreshing}
+            >
+              <RefreshCw className={`h-3 w-3 text-emerald-500 ${isRefreshing || isLoading ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh History'}</span>
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* 100% Full-Width Clean Table (Zero Horizontal Squeeze) */}
@@ -458,9 +606,7 @@ export const CallHistoryView: React.FC = () => {
           }}
           className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 p-2 sm:p-4"
         >
-          <div
-            className="w-full max-w-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl h-full shadow-2xl border border-zinc-200/90 dark:border-zinc-800/90 rounded-3xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right-8 duration-300 ease-out"
-          >
+          <div className="w-full max-w-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl h-full shadow-2xl border border-zinc-200/90 dark:border-zinc-800/90 rounded-3xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right-8 duration-300 ease-out">
             {/* Drawer Header */}
             <div className="p-4.5 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-3 bg-gradient-to-r from-zinc-50/90 to-white/90 dark:from-zinc-900/90 dark:to-zinc-950">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -472,11 +618,23 @@ export const CallHistoryView: React.FC = () => {
                     <span className="font-mono text-xs font-extrabold text-zinc-900 dark:text-zinc-100">
                       Call #{selectedCall.id}
                     </span>
-                    <Badge variant={selectedCall.sentiment === 'positive' ? 'success' : 'outline'} size="sm" className="text-[9px] py-0 uppercase font-bold">
-                      {selectedCall.sentiment}
+                    <Badge
+                      variant={
+                        selectedCall.sentiment === 'positive'
+                          ? 'success'
+                          : selectedCall.sentiment === 'negative'
+                          ? 'danger'
+                          : 'outline'
+                      }
+                      size="sm"
+                      className="text-[9px] py-0 uppercase font-bold"
+                    >
+                      {selectedCall.sentiment || 'neutral'}
                     </Badge>
                   </div>
-                  <span className="text-[11px] text-zinc-400 font-mono block truncate">{selectedCall.timestamp}</span>
+                  <span className="text-[11px] text-zinc-400 font-mono block truncate">
+                    {formatTimestamp(selectedCall.timestamp)}
+                  </span>
                 </div>
               </div>
 
@@ -499,8 +657,12 @@ export const CallHistoryView: React.FC = () => {
                     <User className="h-3.5 w-3.5 text-blue-500" />
                     <span>Caller Profile & Telemetry</span>
                   </span>
-                  <Badge variant={selectedCall.direction === 'inbound' ? 'outline' : 'emerald'} size="sm" className="text-[9.5px] uppercase font-mono font-bold">
-                    {selectedCall.direction} Call
+                  <Badge
+                    variant={selectedCall.direction === 'inbound' ? 'outline' : 'emerald'}
+                    size="sm"
+                    className="text-[9.5px] uppercase font-mono font-bold"
+                  >
+                    {selectedCall.direction || 'outbound'} Call
                   </Badge>
                 </div>
 
@@ -511,10 +673,10 @@ export const CallHistoryView: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <div className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 truncate">
-                        {selectedCall.contactName || 'Unknown Contact'}
+                        {selectedCall.contactName || 'Direct Caller'}
                       </div>
                       <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
-                        {selectedCall.contactPhone || 'Number Unavailable'}
+                        {selectedCall.contactPhone || 'Direct Line'}
                       </div>
                     </div>
                   </div>
@@ -522,7 +684,7 @@ export const CallHistoryView: React.FC = () => {
                   <div className="text-right shrink-0">
                     <div className="text-[10px] text-zinc-400 uppercase font-bold">Duration</div>
                     <div className="font-mono font-extrabold text-xs text-zinc-800 dark:text-zinc-200">
-                      {Math.floor(selectedCall.durationSeconds / 60)}m {selectedCall.durationSeconds % 60}s
+                      {Math.floor((selectedCall.durationSeconds || 0) / 60)}m {(selectedCall.durationSeconds || 0) % 60}s
                     </div>
                   </div>
                 </div>
@@ -530,20 +692,25 @@ export const CallHistoryView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/80 text-[11px]">
                   <div className="flex items-center gap-1.5 text-zinc-500 truncate">
                     <Brain className="h-3.5 w-3.5 text-purple-500 shrink-0" />
-                    <span className="truncate">Agent: <strong className="text-zinc-800 dark:text-zinc-200">{selectedCall.agentName}</strong></span>
+                    <span className="truncate">
+                      Agent: <strong className="text-zinc-800 dark:text-zinc-200">{selectedCall.agentName || 'AI Voice Agent'}</strong>
+                    </span>
                   </div>
                   <div className="flex items-center justify-end gap-1 text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                    <span>Cost: ${selectedCall.cost.toFixed(3)}</span>
+                    <span>Cost: ${(selectedCall.cost || 0).toFixed(3)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Studio Recording Player Chassis */}
               <div className="p-4.5 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 text-zinc-100 rounded-3xl space-y-3.5 shadow-xl border border-zinc-800">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-xs font-bold text-zinc-200 flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
                     <span>HD 16kHz Call Audio Stream</span>
+                    <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 ml-1">
+                      {entitlements.planName}
+                    </Badge>
                   </span>
                   <Button
                     size="sm"
@@ -600,7 +767,7 @@ export const CallHistoryView: React.FC = () => {
                       }`}
                       style={{
                         height: isPlaying
-                           ? `${Math.max(20, (Math.sin(i * 0.8 + currentTimeSec) + 1) * 50)}%`
+                          ? `${Math.max(20, (Math.sin(i * 0.8 + currentTimeSec) + 1) * 50)}%`
                           : '25%',
                       }}
                     />
@@ -667,8 +834,8 @@ export const CallHistoryView: React.FC = () => {
                       const isAi =
                         spkLower === 'ai' ||
                         spkLower.includes('agent') ||
-                        spkLower.includes('nikita') ||
-                        spkLower.includes('mukesh') ||
+                        spkLower.includes('bot') ||
+                        spkLower.includes('assistant') ||
                         (selectedCall.agentName && spkLower.includes(selectedCall.agentName.toLowerCase()));
 
                       return (
@@ -682,7 +849,7 @@ export const CallHistoryView: React.FC = () => {
                         >
                           <div className="flex items-center justify-between mb-1 text-[10px] font-extrabold opacity-75">
                             <span className="flex items-center gap-1">
-                              {isAi ? `🤖 ${selectedCall.agentName || 'AI Agent'}` : `👤 ${selectedCall.contactName || 'Caller'}`}
+                              {isAi ? `🎙️ ${selectedCall.agentName || 'Voice Specialist'}` : `👤 ${selectedCall.contactName || 'Caller'}`}
                             </span>
                             <span className="font-mono text-[9px]">{t.time}</span>
                           </div>
@@ -721,6 +888,20 @@ export const CallHistoryView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Plan Guardrail Modal */}
+      <PlanGuardrailModal
+        isOpen={guardrailModal.isOpen}
+        title={guardrailModal.title}
+        message={guardrailModal.message}
+        featureKey={guardrailModal.featureKey}
+        requiredTier={guardrailModal.requiredTier}
+        currentUsage={guardrailModal.currentUsage}
+        maxQuota={guardrailModal.maxQuota}
+        upgradeBenefit={guardrailModal.upgradeBenefit}
+        onClose={closeGuardrail}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 };

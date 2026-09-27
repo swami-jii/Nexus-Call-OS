@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard,
-  Bot,
+  Headphones,
   PhoneCall,
   BarChart3,
   Megaphone,
@@ -12,6 +12,7 @@ import {
   Blocks,
   Terminal,
   CreditCard,
+  Landmark,
   Settings,
   User,
   Bell,
@@ -25,20 +26,22 @@ import {
   Wrench,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
-  ShieldCheck,
-  Building2,
   Lock,
   Cpu,
   PlayCircle,
   Smartphone,
   HardDrive,
   Trash2,
+  Brain,
+  ShieldAlert,
 } from 'lucide-react';
 import { ScreenId } from '../../types';
-import { Badge } from '../ui/Badge';
 import { fetchAPI } from '../../lib/api';
 import { useNotifications } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
+import { clearNavigationHandoff } from '../../lib/handoffNavigation';
+import { BrandSocialIcon } from '../ui/BrandSocialIcon';
+import { detectSocialPlatform, getPlatformMeta, formatSocialUrl } from '../../data/globalSocialPlatformsCatalog';
 
 export interface SidebarProps {
   activeScreen: ScreenId;
@@ -83,72 +86,187 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => clearInterval(interval);
   }, [activeScreen]);
 
-  const navGroups: NavGroup[] = [
-    {
-      title: 'OPERATING SYSTEM',
-      items: [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
-        { id: 'demo-studio', label: 'Live Call Studio', icon: <PlayCircle className="h-4 w-4" />, badge: 'Studio' },
-        {
-          id: 'agents',
-          label: 'AI Voice Agents',
-          icon: <Bot className="h-4 w-4" />,
-          badge: activeAgentCount !== null ? `${activeAgentCount} Active` : undefined
-        },
-        { id: 'call-history', label: 'Call History', icon: <PhoneCall className="h-4 w-4" /> },
-        { id: 'analytics', label: 'Voice Analytics', icon: <BarChart3 className="h-4 w-4" /> },
-      ],
-    },
-    {
-      title: 'CAMPAIGN & TELEPHONY',
-      items: [
-        { id: 'campaigns', label: 'AI Campaigns', icon: <Megaphone className="h-4 w-4" /> },
-        { id: 'contacts', label: 'Contacts', icon: <Users className="h-4 w-4" /> },
-        { id: 'phone-numbers', label: 'Phone Numbers', icon: <Phone className="h-4 w-4" /> },
-        { id: 'android-gateway', label: 'Pair & Apps GSM Gateway', icon: <Smartphone className="h-4 w-4" />, badge: 'Free' },
-        { id: 'workflows', label: 'Voice Workflows', icon: <GitFork className="h-4 w-4" /> },
-      ],
-    },
-    {
-      title: 'KNOWLEDGE & REALTIME',
-      items: [
-        { id: 'knowledge-base', label: 'Knowledge Base (RAG)', icon: <BookOpen className="h-4 w-4" /> },
-        { id: 'storage', label: 'File Storage Hub', icon: <HardDrive className="h-4 w-4" />, badge: 'Uploads' },
-        { id: 'integrations', label: 'API & Integrations', icon: <Blocks className="h-4 w-4" /> },
-        { id: 'conversation-engine', label: 'Conversation Engine', icon: <Cpu className="h-4 w-4" />, badge: 'Brain' },
-        { id: 'logs', label: 'Realtime Terminal Logs', icon: <Terminal className="h-4 w-4" /> },
-      ],
-    },
-    {
-      title: 'ACCOUNT & SYSTEM',
-      items: [
-        { id: 'billing', label: 'Billing & Usage', icon: <CreditCard className="h-4 w-4" /> },
-        { id: 'api-keys', label: 'API Keys', icon: <Key className="h-4 w-4" /> },
-        { id: 'settings', label: 'OS Settings', icon: <Settings className="h-4 w-4" /> },
-        { id: 'profile', label: 'User Profile', icon: <User className="h-4 w-4" /> },
-        {
-          id: 'notifications',
-          label: 'Notifications',
-          icon: <Bell className="h-4 w-4" />,
-          badge: unreadCount > 0 ? String(unreadCount) : undefined,
-        },
-        { id: 'activity', label: 'Audit Activity', icon: <Activity className="h-4 w-4" /> },
-        { id: 'recycle-bin', label: 'Recycle Bin', icon: <Trash2 className="h-4 w-4" />, badge: 'Trash' },
-      ],
-    },
-    {
-      title: 'UTILITIES & SYSTEM STATES',
-      items: [
-        { id: 'auth', label: 'Auth Flow Screens', icon: <Lock className="h-4 w-4" /> },
-        { id: 'help-center', label: 'Help Center & Docs', icon: <HelpCircle className="h-4 w-4" /> },
-        { id: 'empty-state-demo', label: 'Empty State Demo', icon: <Layers className="h-4 w-4" /> },
-        { id: 'loading-state-demo', label: 'Loading State Demo', icon: <Loader2 className="h-4 w-4" /> },
-        { id: 'maintenance', label: 'Maintenance Mode', icon: <Wrench className="h-4 w-4" /> },
-        { id: '404', label: '404 Page Preview', icon: <AlertTriangle className="h-4 w-4" /> },
-        { id: '500', label: '500 Page Preview', icon: <ServerCrash className="h-4 w-4" /> },
-      ],
-    },
-  ];
+  const { user } = useAuth();
+  const isSuperAdmin = Boolean(
+    user?.role === 'super_admin' || user?.email === 'admin@createcall.ai'
+  );
+
+  const activeSidebarChannels = useMemo(() => {
+    if (!user || user.showSocialInUI === false) return [];
+    if (user.socialPlacement !== 'sidebar' && user.socialPlacement !== 'all') return [];
+
+    const list: { id: string; name: string; url: string; iconId: string; customIconUrl?: string }[] = [];
+
+    if (user.socialLinks && typeof user.socialLinks === 'object') {
+      Object.entries(user.socialLinks).forEach(([key, val]) => {
+        const rawVal = typeof val === 'string' ? val.trim() : '';
+        if (rawVal) {
+          const detected = detectSocialPlatform(rawVal);
+          const meta = getPlatformMeta(key);
+          list.push({
+            id: key,
+            name: detected.id !== 'website' ? detected.name : (meta?.name || key),
+            url: formatSocialUrl(rawVal, meta?.prefixUrl),
+            iconId: detected.id !== 'website' ? detected.id : (meta?.id || key),
+          });
+        }
+      });
+    }
+
+    if (Array.isArray((user as any).customSocialChannels)) {
+      (user as any).customSocialChannels.forEach((custom: any) => {
+        if (custom && custom.enabled !== false && custom.url && typeof custom.url === 'string' && custom.url.trim()) {
+          const detected = detectSocialPlatform(custom.url);
+          list.push({
+            id: custom.id,
+            name: custom.platform || detected.name,
+            url: formatSocialUrl(custom.url),
+            iconId: custom.icon ? custom.icon.toLowerCase() : detected.id,
+            customIconUrl: custom.customIconUrl,
+          });
+        }
+      });
+    }
+
+    return list;
+  }, [user]);
+
+  const navGroups: NavGroup[] = useMemo(() => {
+    const accountItems: { id: ScreenId; label: string; icon: React.ReactNode; badge?: string }[] = [
+      {
+        id: 'billing' as ScreenId,
+        label: isSuperAdmin ? 'Platform Finance' : 'Billing & Usage',
+        icon: isSuperAdmin ? <Landmark className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />,
+      },
+      { id: 'api-keys' as ScreenId, label: 'API Keys', icon: <Key className="h-4 w-4" /> },
+    ];
+
+    if (isSuperAdmin) {
+      accountItems.push({
+        id: 'settings' as ScreenId,
+        label: 'OS Settings',
+        icon: <Settings className="h-4 w-4" />,
+      });
+    }
+
+    accountItems.push(
+      { id: 'profile' as ScreenId, label: 'User Profile', icon: <User className="h-4 w-4" /> },
+      {
+        id: 'notifications' as ScreenId,
+        label: 'Notifications',
+        icon: <Bell className="h-4 w-4" />,
+        badge: unreadCount > 0 ? String(unreadCount) : undefined,
+      }
+    );
+
+    if (isSuperAdmin) {
+      accountItems.push({
+        id: 'activity' as ScreenId,
+        label: 'Audit Activity',
+        icon: <Activity className="h-4 w-4" />,
+      });
+    }
+
+    accountItems.push({
+      id: 'recycle-bin' as ScreenId,
+      label: 'Recycle Bin',
+      icon: <Trash2 className="h-4 w-4" />,
+      badge: 'Trash',
+    });
+
+    if (!isSuperAdmin) {
+      accountItems.push({
+        id: 'help-center' as ScreenId,
+        label: 'Help & Docs',
+        icon: <HelpCircle className="h-4 w-4" />,
+      });
+    }
+
+    const groups: NavGroup[] = [];
+
+    if (isSuperAdmin) {
+      groups.push({
+        title: 'SUPER ADMIN SUITE',
+        items: [
+          {
+            id: 'super-admin' as ScreenId,
+            label: 'Admin Control Center',
+            icon: <ShieldAlert className="h-4 w-4 text-emerald-500" />,
+            badge: 'Sovereign',
+          },
+        ],
+      });
+    }
+
+    groups.push(
+      {
+        title: 'OPERATING SYSTEM',
+        items: [
+          { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
+          { id: 'demo-studio', label: 'Live Call Studio', icon: <PlayCircle className="h-4 w-4" />, badge: 'Studio' },
+          {
+            id: 'agents',
+            label: 'AI Voice Agents',
+            icon: <Headphones className="h-4 w-4" />,
+            badge: activeAgentCount !== null ? `${activeAgentCount} Active` : undefined,
+          },
+          { id: 'call-history', label: 'Call History', icon: <PhoneCall className="h-4 w-4" /> },
+          { id: 'analytics', label: 'Voice Analytics', icon: <BarChart3 className="h-4 w-4" /> },
+        ],
+      },
+      {
+        title: 'CAMPAIGN & TELEPHONY',
+        items: [
+          { id: 'campaigns', label: 'AI Campaigns', icon: <Megaphone className="h-4 w-4" /> },
+          { id: 'contacts', label: 'Contacts', icon: <Users className="h-4 w-4" /> },
+          { id: 'phone-numbers', label: 'Phone Numbers', icon: <Phone className="h-4 w-4" /> },
+          { id: 'android-gateway', label: 'Pair & Apps GSM Gateway', icon: <Smartphone className="h-4 w-4" />, badge: 'Free' },
+          { id: 'workflows', label: 'Voice Workflows', icon: <GitFork className="h-4 w-4" /> },
+        ],
+      },
+      {
+        title: 'KNOWLEDGE & REALTIME',
+        items: [
+          { id: 'memory', label: 'Agent Memory Brain', icon: <Brain className="h-4 w-4" />, badge: 'Memory' },
+          { id: 'knowledge-base', label: 'Knowledge Base (RAG)', icon: <BookOpen className="h-4 w-4" /> },
+          { id: 'storage', label: 'File Storage Hub', icon: <HardDrive className="h-4 w-4" />, badge: 'Uploads' },
+          { id: 'integrations', label: 'API & Integrations', icon: <Blocks className="h-4 w-4" /> },
+          { id: 'logs', label: 'Realtime Terminal Logs', icon: <Terminal className="h-4 w-4" /> },
+        ],
+      },
+      {
+        title: 'ACCOUNT & SYSTEM',
+        items: accountItems,
+      }
+    );
+
+    if (isSuperAdmin) {
+      groups.push({
+        title: 'UTILITIES & SYSTEM STATES',
+        items: [
+          { id: 'auth', label: 'Auth Flow Screens', icon: <Lock className="h-4 w-4" /> },
+          { id: 'help-center', label: 'Help Center & Docs', icon: <HelpCircle className="h-4 w-4" /> },
+          { id: 'empty-state-demo', label: 'Empty State Demo', icon: <Layers className="h-4 w-4" /> },
+          { id: 'loading-state-demo', label: 'Loading State Demo', icon: <Loader2 className="h-4 w-4" /> },
+          { id: 'maintenance', label: 'Maintenance Mode', icon: <Wrench className="h-4 w-4" /> },
+          { id: '404', label: '404 Page Preview', icon: <AlertTriangle className="h-4 w-4" /> },
+          { id: '500', label: '500 Page Preview', icon: <ServerCrash className="h-4 w-4" /> },
+        ],
+      });
+    }
+
+    return groups;
+  }, [isSuperAdmin, activeAgentCount, unreadCount]);
+
+  const handleNavClick = (screenId: ScreenId) => {
+    try {
+      clearNavigationHandoff();
+      localStorage.removeItem('nexus_campaign_handoff_active');
+      localStorage.removeItem('nexus_campaign_resume_wizard');
+      sessionStorage.removeItem('nexus_wizard_is_open_in_session');
+    } catch {}
+    onNavigate(screenId);
+  };
 
   return (
     <aside
@@ -179,7 +297,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 <div className="flex items-center select-none w-full -mt-1 pl-1">
                   <span className="text-[8px] font-bold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase whitespace-nowrap leading-tight">
-                    Crafting Digital Possibilities
+                    AI Voice Operating System
                   </span>
                 </div>
               </div>
@@ -228,7 +346,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => handleNavClick(item.id)}
                   title={isCollapsed ? item.label : undefined}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${isActive
                     ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-semibold border border-teal-200/70 dark:border-teal-800/60 shadow-xs'
@@ -257,6 +375,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Sidebar Social Presence Strip */}
+      {activeSidebarChannels.length > 0 && (
+        <div className={`p-2.5 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50 flex items-center ${isCollapsed ? 'justify-center flex-col gap-1.5' : 'justify-start gap-1.5 overflow-x-auto scrollbar-none'}`}>
+          {activeSidebarChannels.map((ch) => (
+            <a
+              key={ch.id}
+              href={ch.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${ch.name} - ${ch.url}`}
+              className="p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all hover:scale-115 shrink-0 cursor-pointer"
+            >
+              {ch.customIconUrl ? (
+                <img src={ch.customIconUrl} alt={ch.name} className="h-4 w-4 rounded object-cover" />
+              ) : (
+                <BrandSocialIcon platformId={ch.iconId} className="h-4 w-4 shrink-0 rounded" />
+              )}
+            </a>
+          ))}
+        </div>
+      )}
 
       {/* Footer Health Indicator */}
       {!isCollapsed && (

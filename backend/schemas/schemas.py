@@ -18,8 +18,20 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
     full_name: str
+    company: str | None = None
     phone_number: str | None = None
     role: str | None = "operator"
+
+
+class UserRegisterResponse(BaseModel):
+    requires_verification: bool = True
+    email: str
+    message: str
+
+
+class RegisterVerifyRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
 
 
 class UserLogin(BaseModel):
@@ -29,11 +41,21 @@ class UserLogin(BaseModel):
 
 
 class Token(BaseModel):
-    access_token: str
-    refresh_token: str
+    access_token: str | None = None
+    refresh_token: str | None = None
     token_type: str = "bearer"
-    expires_in: int
-    user: dict[str, Any]
+    expires_in: int = 86400
+    user: dict[str, Any] | None = None
+    requires_2fa: bool | None = False
+    two_fa_type: str | None = None
+    email: str | None = None
+    message: str | None = None
+
+
+class TwoFALoginRequest(BaseModel):
+    email: EmailStr
+    code: str
+    remember_me: bool | None = False
 
 
 class RefreshTokenRequest(BaseModel):
@@ -59,6 +81,17 @@ class OTPVerifyRequest(BaseModel):
     otp_code: str
 
 
+class SSOLoginRequest(BaseModel):
+    provider: str = Field("google", description="google | github | microsoft | sso")
+    email: EmailStr | None = None
+    full_name: str | None = None
+    avatar_url: str | None = None
+    access_token: str | None = None
+    id_token: str | None = None
+    credential: str | None = None
+    code: str | None = None
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,6 +103,7 @@ class UserOut(BaseModel):
     organization_id: str | None = None
     is_active: bool = True
     is_verified: bool = True
+    avatar_url: str | None = None
     profile_data: str | None = None
     created_at: datetime | None = None
 
@@ -78,8 +112,14 @@ class UserUpdate(BaseModel):
     email: EmailStr | None = None
     full_name: str | None = None
     phone_number: str | None = None
+    avatar_url: str | None = None
     profile_data: str | None = None
     password: str | None = Field(None, min_length=6)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str | None = None
+    new_password: str = Field(..., min_length=6)
 
 
 # Agent Schemas
@@ -87,7 +127,7 @@ class AgentBase(BaseModel):
     name: str
     description: str | None = None
     system_prompt: str | None = None
-    voice_id: str | None = "ElevenLabs Turbo v2.5"
+    voice_id: str | None = None
     llm_model: str | None = None
     language: str | None = "en-US"
     temperature: float | None = 0.7

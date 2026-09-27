@@ -384,7 +384,9 @@ class DeviceRegistry:
         self._load_from_db()
         devices = sorted(self._devices.values(), key=lambda d: d.priority)
         if organization_id:
-            devices = [d for d in devices if d.organization_id == organization_id or d.organization_id is None]
+            devices = [d for d in devices if d.organization_id == organization_id]
+        else:
+            devices = [d for d in devices if d.organization_id is None]
         return [d.to_dict() for d in devices]
 
     def set_auto_answer(self, device_id: str, auto_answer: bool) -> bool:

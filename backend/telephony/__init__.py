@@ -1,6 +1,6 @@
 """
 Universal Telephony Gateway Subsystem
-Nexus Call OS v2.4 Enterprise
+Create Call OS v2.4 Enterprise
 
 Provider-agnostic single entry point for incoming and outgoing phone calls.
 Decouples carrier transport protocols (Twilio, Plivo, Exotel, SignalWire, SIP, LiveKit, WebRTC) from Core AI Logic.

@@ -27,6 +27,17 @@ import {
   Eye,
   ChevronDown,
   Check,
+  Headphones,
+  PhoneCall,
+  Brain,
+  Mic,
+  Smartphone,
+  Sparkles,
+  HelpCircle,
+  Globe,
+  Megaphone,
+  Video,
+  Crown,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -35,6 +46,8 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { ScreenId } from '../types';
+import { triggerNavigationHandoff } from '../lib/handoffNavigation';
+import { usePlanEntitlements } from '../hooks/usePlanEntitlements';
 import {
   uploadRepository,
   UploadedFileItem,
@@ -43,10 +56,42 @@ import {
 } from '../repository';
 import { FilePreviewModal, PreviewableFile } from '../components/ui/FilePreviewModal';
 
-const CATEGORY_CONFIG: Record<
+export const OFFICIAL_CATEGORIES: Record<
   string,
   { label: string; icon: any; color: string; bg: string; borderColor: string; desc: string }
 > = {
+  agent_memory_brain: {
+    label: 'Agent Memory Brain',
+    icon: Brain,
+    color: 'text-violet-600 dark:text-violet-400',
+    bg: 'bg-violet-50 dark:bg-violet-950/40',
+    borderColor: 'border-violet-200 dark:border-violet-800',
+    desc: 'Multi-device session context graphs, dialogue memory, and cognitive facts',
+  },
+  ai_voice_agents: {
+    label: 'AI Voice Agents',
+    icon: Headphones,
+    color: 'text-purple-600 dark:text-purple-400',
+    bg: 'bg-purple-50 dark:bg-purple-950/40',
+    borderColor: 'border-purple-200 dark:border-purple-800',
+    desc: 'Voice clone samples, custom IVR audio & sound prompts',
+  },
+  call_history: {
+    label: 'Call History',
+    icon: PhoneCall,
+    color: 'text-rose-600 dark:text-rose-400',
+    bg: 'bg-rose-50 dark:bg-rose-950/40',
+    borderColor: 'border-rose-200 dark:border-rose-800',
+    desc: 'Recorded call audio streams and live test media',
+  },
+  contacts: {
+    label: 'Contacts',
+    icon: Users,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-950/40',
+    borderColor: 'border-blue-200 dark:border-blue-800',
+    desc: 'Imported CSV spreadsheets & lead directory files',
+  },
   knowledge_base: {
     label: 'Knowledge Base (RAG)',
     icon: BookOpen,
@@ -55,23 +100,15 @@ const CATEGORY_CONFIG: Record<
     borderColor: 'border-cyan-200 dark:border-cyan-800',
     desc: 'PDF manuals, documentation, and RAG knowledge vectors',
   },
-  contacts: {
-    label: 'Contacts & Leads',
-    icon: Users,
-    color: 'text-blue-600 dark:text-blue-400',
-    bg: 'bg-blue-50 dark:bg-blue-950/40',
-    borderColor: 'border-blue-200 dark:border-blue-800',
-    desc: 'Imported CSV spreadsheets & lead directory files',
+  user_profile: {
+    label: 'User Profile',
+    icon: User,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    borderColor: 'border-emerald-200 dark:border-emerald-800',
+    desc: 'User profile avatar images and cover headers',
   },
-  audio: {
-    label: 'Audio & Voice Prompts',
-    icon: Music,
-    color: 'text-purple-600 dark:text-purple-400',
-    bg: 'bg-purple-50 dark:bg-purple-950/40',
-    borderColor: 'border-purple-200 dark:border-purple-800',
-    desc: 'Voice clone samples, custom IVR audio & sound prompts',
-  },
-  workflows: {
+  voice_workflows: {
     label: 'Voice Workflows',
     icon: GitFork,
     color: 'text-amber-600 dark:text-amber-400',
@@ -79,29 +116,798 @@ const CATEGORY_CONFIG: Record<
     borderColor: 'border-amber-200 dark:border-amber-800',
     desc: 'Visual canvas workflow JSON templates & pipelines',
   },
-  profiles: {
-    label: 'Profile Media',
-    icon: User,
-    color: 'text-emerald-600 dark:text-emerald-400',
-    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
-    borderColor: 'border-emerald-200 dark:border-emerald-800',
-    desc: 'User profile avatar images and cover headers',
+};
+
+export const CATEGORY_CONFIG: Record<
+  string,
+  { label: string; icon: any; color: string; bg: string; borderColor: string; desc: string }
+> = {
+  ...OFFICIAL_CATEGORIES,
+  memory: OFFICIAL_CATEGORIES.agent_memory_brain,
+  audio: OFFICIAL_CATEGORIES.ai_voice_agents,
+  recordings: OFFICIAL_CATEGORIES.call_history,
+  profiles: OFFICIAL_CATEGORIES.user_profile,
+  workflows: OFFICIAL_CATEGORIES.voice_workflows,
+};
+
+export interface CategorySubTab {
+  id: string;
+  label: string;
+  icon: any;
+  color: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  desc: string;
+  matcher: (item: UploadedFileItem) => boolean;
+}
+
+export interface CategorySubNavConfig {
+  title: string;
+  desc: string;
+  icon: any;
+  tabs: CategorySubTab[];
+}
+
+const officialSubNav: Record<string, CategorySubNavConfig> = {
+  agent_memory_brain: {
+    title: 'Agent Memory Brain Sub-Departments',
+    desc: 'Filter stored memory by dedicated AI engine modality (Zero data mashup)',
+    icon: Brain,
+    tabs: [
+      {
+        id: 'all',
+        label: 'All Memory Records',
+        icon: Brain,
+        color: 'text-violet-600 dark:text-violet-400',
+        badgeBg: 'bg-violet-50 dark:bg-violet-950/50',
+        badgeText: 'text-violet-700 dark:text-violet-300',
+        badgeBorder: 'border-violet-200 dark:border-violet-800',
+        desc: 'All unified agent sessions, knowledge grounding, facts & dialogs',
+        matcher: () => true,
+      },
+      {
+        id: 'rag_knowledge',
+        label: 'Knowledge Base (RAG)',
+        icon: BookOpen,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+        desc: 'Grounding vaults, PDF chunks & vector semantic memory',
+        matcher: (item) =>
+          item.filename.toLowerCase().includes('grounding') ||
+          item.filename.toLowerCase().includes('rag') ||
+          item.filename.toLowerCase().endsWith('.pdf') ||
+          item.filename.toLowerCase().includes('doc'),
+      },
+      {
+        id: 'workflows',
+        label: 'Voice Workflows',
+        icon: GitFork,
+        color: 'text-amber-600 dark:text-amber-400',
+        badgeBg: 'bg-amber-50 dark:bg-amber-950/50',
+        badgeText: 'text-amber-700 dark:text-amber-300',
+        badgeBorder: 'border-amber-200 dark:border-amber-800',
+        desc: 'Multi-branch decision logic, customer support flows & triggers',
+        matcher: (item) => item.filename.toLowerCase().includes('workflow') || item.filename.toLowerCase().includes('wf'),
+      },
+      {
+        id: 'demo_studio',
+        label: 'Live Call Studio',
+        icon: Mic,
+        color: 'text-purple-600 dark:text-purple-400',
+        badgeBg: 'bg-purple-50 dark:bg-purple-950/50',
+        badgeText: 'text-purple-700 dark:text-purple-300',
+        badgeBorder: 'border-purple-200 dark:border-purple-800',
+        desc: 'Live mic speech tests & simulated dialogue conversation turns',
+        matcher: (item) =>
+          item.filename.toLowerCase().includes('dialogue') ||
+          item.filename.toLowerCase().includes('live') ||
+          item.filename.toLowerCase().includes('studio'),
+      },
+      {
+        id: 'gsm_gateway',
+        label: 'Pair & Apps GSM Gateway',
+        icon: Smartphone,
+        color: 'text-cyan-600 dark:text-cyan-400',
+        badgeBg: 'bg-cyan-50 dark:bg-cyan-950/50',
+        badgeText: 'text-cyan-700 dark:text-cyan-300',
+        badgeBorder: 'border-cyan-200 dark:border-cyan-800',
+        desc: 'Android GSM companion, WebRTC paired device call memory',
+        matcher: (item) =>
+          item.filename.toLowerCase().includes('gsm') ||
+          item.filename.toLowerCase().includes('android') ||
+          item.filename.toLowerCase().includes('sim'),
+      },
+      {
+        id: 'voice_agents',
+        label: 'AI Voice Agents',
+        icon: Headphones,
+        color: 'text-blue-600 dark:text-blue-400',
+        badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        desc: 'Persona-specific conversational memory & assistant sessions',
+        matcher: (item) =>
+          item.filename.toLowerCase().includes('agent') ||
+          item.filename.toLowerCase().includes('persona'),
+      },
+      {
+        id: 'facts',
+        label: 'Extracted Knowledge Facts',
+        icon: Sparkles,
+        color: 'text-fuchsia-600 dark:text-fuchsia-400',
+        badgeBg: 'bg-fuchsia-50 dark:bg-fuchsia-950/50',
+        badgeText: 'text-fuchsia-700 dark:text-fuchsia-300',
+        badgeBorder: 'border-fuchsia-200 dark:border-fuchsia-800',
+        desc: 'Caller profiling facts, preferences & learned knowledge statements',
+        matcher: (item) => item.filename.toLowerCase().includes('fact'),
+      },
+    ],
   },
-  integrations: {
-    label: 'API & Integrations',
-    icon: Blocks,
-    color: 'text-indigo-600 dark:text-indigo-400',
-    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
-    borderColor: 'border-indigo-200 dark:border-indigo-800',
-    desc: 'Integration schemas, API configuration payloads & docs',
+  knowledge_base: {
+    title: 'Knowledge Base (RAG) Document Sources',
+    desc: 'Filter knowledge documents by exact RAG indexing format & source',
+    icon: BookOpen,
+    tabs: [
+      {
+        id: 'all',
+        label: 'All Knowledge Base Docs',
+        icon: BookOpen,
+        color: 'text-cyan-600 dark:text-cyan-400',
+        badgeBg: 'bg-cyan-50 dark:bg-cyan-950/50',
+        badgeText: 'text-cyan-700 dark:text-cyan-300',
+        badgeBorder: 'border-cyan-200 dark:border-cyan-800',
+        desc: 'All indexed documents, manuals, spreadsheets, images, audio, video and vectors',
+        matcher: () => true,
+      },
+      {
+        id: 'pdf_docs',
+        label: 'PDF Docs',
+        icon: FileText,
+        color: 'text-rose-600 dark:text-rose-400',
+        badgeBg: 'bg-rose-50 dark:bg-rose-950/50',
+        badgeText: 'text-rose-700 dark:text-rose-300',
+        badgeBorder: 'border-rose-200 dark:border-rose-800',
+        desc: 'PDF manuals, SLA documents, and legal policy files',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          const t = item.file_type.toUpperCase();
+          return t.includes('PDF') || f.endsWith('.pdf');
+        },
+      },
+      {
+        id: 'docx_txt',
+        label: 'DOCX & TXT',
+        icon: FileCode,
+        color: 'text-blue-600 dark:text-blue-400',
+        badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        desc: 'Word documents, Markdown files, RTF, and plain text notes',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          const t = item.file_type.toUpperCase();
+          return (
+            t.includes('DOC') ||
+            t.includes('TXT') ||
+            t.includes('MD') ||
+            t.includes('RTF') ||
+            f.endsWith('.docx') ||
+            f.endsWith('.doc') ||
+            f.endsWith('.txt') ||
+            f.endsWith('.md')
+          );
+        },
+      },
+      {
+        id: 'csv_excel',
+        label: 'CSV / Excel',
+        icon: FileSpreadsheet,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+        desc: 'Spreadsheets, tabulated knowledge data, CSV and XLSX files',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          const t = item.file_type.toUpperCase();
+          return t.includes('CSV') || t.includes('XLS') || f.endsWith('.csv') || f.endsWith('.xlsx') || f.endsWith('.xls');
+        },
+      },
+      {
+        id: 'vision_images',
+        label: 'Vision Images',
+        icon: ImageIcon,
+        color: 'text-amber-600 dark:text-amber-400',
+        badgeBg: 'bg-amber-50 dark:bg-amber-950/50',
+        badgeText: 'text-amber-700 dark:text-amber-300',
+        badgeBorder: 'border-amber-200 dark:border-amber-800',
+        desc: 'OCR diagrams, product catalog photos, PNG, JPG and WEBP media',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          const t = item.file_type.toUpperCase();
+          return (
+            t.includes('PNG') ||
+            t.includes('JPG') ||
+            t.includes('JPEG') ||
+            t.includes('WEBP') ||
+            t.includes('BMP') ||
+            t.includes('TIFF') ||
+            f.endsWith('.png') ||
+            f.endsWith('.jpg') ||
+            f.endsWith('.jpeg') ||
+            f.endsWith('.webp')
+          );
+        },
+      },
+      {
+        id: 'audio_stt',
+        label: 'Audio & STT',
+        icon: Music,
+        color: 'text-pink-600 dark:text-pink-400',
+        badgeBg: 'bg-pink-50 dark:bg-pink-950/50',
+        badgeText: 'text-pink-700 dark:text-pink-300',
+        badgeBorder: 'border-pink-200 dark:border-pink-800',
+        desc: 'Audio speech recordings, transcribed podcasts, MP3 and WAV files',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          const t = item.file_type.toUpperCase();
+          return (
+            t.includes('MP3') ||
+            t.includes('WAV') ||
+            t.includes('M4A') ||
+            t.includes('OGG') ||
+            t.includes('FLAC') ||
+            f.endsWith('.mp3') ||
+            f.endsWith('.wav') ||
+            f.endsWith('.m4a') ||
+            f.endsWith('.ogg')
+          );
+        },
+      },
+      {
+        id: 'video_rag',
+        label: 'Video-RAG',
+        icon: Video,
+        color: 'text-purple-600 dark:text-purple-400',
+        badgeBg: 'bg-purple-50 dark:bg-purple-950/50',
+        badgeText: 'text-purple-700 dark:text-purple-300',
+        badgeBorder: 'border-purple-200 dark:border-purple-800',
+        desc: 'Video manuals, webinar recordings, MP4 and MOV files',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          const t = item.file_type.toUpperCase();
+          return (
+            t.includes('MP4') ||
+            t.includes('MOV') ||
+            t.includes('AVI') ||
+            t.includes('MKV') ||
+            t.includes('WEBM') ||
+            f.endsWith('.mp4') ||
+            f.endsWith('.mov') ||
+            f.endsWith('.avi')
+          );
+        },
+      },
+      {
+        id: 'web_crawler',
+        label: 'Website Crawler & URLs',
+        icon: Globe,
+        color: 'text-sky-600 dark:text-sky-400',
+        badgeBg: 'bg-sky-50 dark:bg-sky-950/50',
+        badgeText: 'text-sky-700 dark:text-sky-300',
+        badgeBorder: 'border-sky-200 dark:border-sky-800',
+        desc: 'Scraped website URLs, crawled documentation pages and HTML knowledge',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('web') || f.includes('url') || f.includes('http') || f.includes('crawl') || f.endsWith('.html');
+        },
+      },
+      {
+        id: 'faq_collections',
+        label: 'FAQ & Collections',
+        icon: HelpCircle,
+        color: 'text-indigo-600 dark:text-indigo-400',
+        badgeBg: 'bg-indigo-50 dark:bg-indigo-950/50',
+        badgeText: 'text-indigo-700 dark:text-indigo-300',
+        badgeBorder: 'border-indigo-200 dark:border-indigo-800',
+        desc: 'Customer Q&A question-answer collections and knowledge cards',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('faq') || f.includes('qa') || f.includes('question') || f.includes('card');
+        },
+      },
+    ],
+  },
+  contacts: {
+    title: 'Contacts & Directory Data Sources',
+    desc: 'Filter contact sheets, campaign audience leads, caller lists, and CSVs',
+    icon: Users,
+    tabs: [
+      {
+        id: 'all',
+        label: 'All Contact Lists',
+        icon: Users,
+        color: 'text-blue-600 dark:text-blue-400',
+        badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        desc: 'All customer directories, campaign lists and lead spreadsheets',
+        matcher: () => true,
+      },
+      {
+        id: 'csv_sheets',
+        label: 'Lead Spreadsheets (CSV/XLSX)',
+        icon: FileSpreadsheet,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+        desc: 'Imported CSV and Excel lead spreadsheets',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          const t = item.file_type.toLowerCase();
+          return t.includes('csv') || t.includes('xls') || f.endsWith('.csv') || f.endsWith('.xlsx');
+        },
+      },
+      {
+        id: 'campaign_leads',
+        label: 'AI Campaign Audiences',
+        icon: Megaphone,
+        color: 'text-purple-600 dark:text-purple-400',
+        badgeBg: 'bg-purple-50 dark:bg-purple-950/50',
+        badgeText: 'text-purple-700 dark:text-purple-300',
+        badgeBorder: 'border-purple-200 dark:border-purple-800',
+        desc: 'Campaign outbound call lists and outreach audience cohorts',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('campaign') || f.includes('lead') || f.includes('audience') || f.includes('outreach');
+        },
+      },
+      {
+        id: 'caller_directory',
+        label: 'Verified Caller Records',
+        icon: PhoneCall,
+        color: 'text-cyan-600 dark:text-cyan-400',
+        badgeBg: 'bg-cyan-50 dark:bg-cyan-950/50',
+        badgeText: 'text-cyan-700 dark:text-cyan-300',
+        badgeBorder: 'border-cyan-200 dark:border-cyan-800',
+        desc: 'Individual customer caller profiles, vCard contacts and directory cards',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('contact') || f.includes('caller') || f.includes('phone') || f.endsWith('.vcf') || f.endsWith('.json');
+        },
+      },
+    ],
+  },
+  ai_voice_agents: {
+    title: 'AI Voice Agents Audio & Modalities',
+    desc: 'Filter voice clone samples, IVR audio prompts, greetings, and speech assets',
+    icon: Headphones,
+    tabs: [
+      {
+        id: 'all',
+        label: 'All Voice Agent Assets',
+        icon: Headphones,
+        color: 'text-purple-600 dark:text-purple-400',
+        badgeBg: 'bg-purple-50 dark:bg-purple-950/50',
+        badgeText: 'text-purple-700 dark:text-purple-300',
+        badgeBorder: 'border-purple-200 dark:border-purple-800',
+        desc: 'All studio voice clones, IVR speech clips and agent audio assets',
+        matcher: () => true,
+      },
+      {
+        id: 'voice_samples',
+        label: 'Voice Clone WAV Samples',
+        icon: Mic,
+        color: 'text-rose-600 dark:text-rose-400',
+        badgeBg: 'bg-rose-50 dark:bg-rose-950/50',
+        badgeText: 'text-rose-700 dark:text-rose-300',
+        badgeBorder: 'border-rose-200 dark:border-rose-800',
+        desc: 'Voice synthesis training samples, speaker WAVs and clone audio',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('voice') || f.includes('clone') || f.includes('sample') || f.includes('speech') || f.endsWith('.wav');
+        },
+      },
+      {
+        id: 'ivr_greetings',
+        label: 'IVR Speech Prompts & Greetings',
+        icon: Headphones,
+        color: 'text-indigo-600 dark:text-indigo-400',
+        badgeBg: 'bg-indigo-50 dark:bg-indigo-950/50',
+        badgeText: 'text-indigo-700 dark:text-indigo-300',
+        badgeBorder: 'border-indigo-200 dark:border-indigo-800',
+        desc: 'Pre-recorded operator greetings, IVR menu cues and speech clips',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('greeting') || f.includes('prompt') || f.includes('ivr') || f.includes('welcome') || f.includes('intro');
+        },
+      },
+      {
+        id: 'ambient_music',
+        label: 'Hold Music & Sound FX',
+        icon: Music,
+        color: 'text-amber-600 dark:text-amber-400',
+        badgeBg: 'bg-amber-50 dark:bg-amber-950/50',
+        badgeText: 'text-amber-700 dark:text-amber-300',
+        badgeBorder: 'border-amber-200 dark:border-amber-800',
+        desc: 'Call hold music, DTMF ringers and background ambiance MP3s',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('music') || f.includes('tone') || f.includes('hold') || f.includes('ring') || f.endsWith('.mp3');
+        },
+      },
+      {
+        id: 'persona_configs',
+        label: 'Agent Personas & Blueprints',
+        icon: FileCode,
+        color: 'text-blue-600 dark:text-blue-400',
+        badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        desc: 'Agent persona definition JSONs, system prompts and voice settings',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('persona') || f.includes('agent') || f.includes('prompt') || f.endsWith('.json') || f.endsWith('.txt');
+        },
+      },
+    ],
+  },
+  voice_workflows: {
+    title: 'Voice Workflows Flow Categories',
+    desc: 'Filter visual flow templates, IVR decision trees, SDR scripts, and routing graphs',
+    icon: GitFork,
+    tabs: [
+      {
+        id: 'all',
+        label: 'All Voice Workflows',
+        icon: GitFork,
+        color: 'text-amber-600 dark:text-amber-400',
+        badgeBg: 'bg-amber-50 dark:bg-amber-950/50',
+        badgeText: 'text-amber-700 dark:text-amber-300',
+        badgeBorder: 'border-amber-200 dark:border-amber-800',
+        desc: 'All visual workflow graphs, branching paths and logic triggers',
+        matcher: () => true,
+      },
+      {
+        id: 'inbound_flows',
+        label: 'Inbound IVR & Reception Flows',
+        icon: PhoneCall,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+        desc: 'Customer helpline, IVR routing and multi-branch reception workflows',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('inbound') || f.includes('ivr') || f.includes('reception') || f.includes('routing') || f.includes('support');
+        },
+      },
+      {
+        id: 'outbound_sdr',
+        label: 'Outbound SDR Cold Calling',
+        icon: Megaphone,
+        color: 'text-blue-600 dark:text-blue-400',
+        badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        desc: 'Outbound lead qualification, sales scripts and cold calling trees',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('outbound') || f.includes('sdr') || f.includes('sales') || f.includes('cold');
+        },
+      },
+      {
+        id: 'json_templates',
+        label: 'Visual Graph JSON Blueprints',
+        icon: FileCode,
+        color: 'text-purple-600 dark:text-purple-400',
+        badgeBg: 'bg-purple-50 dark:bg-purple-950/50',
+        badgeText: 'text-purple-700 dark:text-purple-300',
+        badgeBorder: 'border-purple-200 dark:border-purple-800',
+        desc: 'React-flow node graphs, edge configurations and JSON export blueprints',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.endsWith('.json') || f.includes('flow') || f.includes('workflow') || f.includes('template');
+        },
+      },
+    ],
+  },
+  user_profile: {
+    title: 'User Profile & Brand Media',
+    desc: 'Filter user avatar images, AI agent photos, banners, and logos',
+    icon: User,
+    tabs: [
+      {
+        id: 'all',
+        label: 'All Profile Media',
+        icon: User,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+        desc: 'All profile pictures, agent avatars and branding assets',
+        matcher: () => true,
+      },
+      {
+        id: 'avatars',
+        label: 'User & Agent Avatars',
+        icon: User,
+        color: 'text-blue-600 dark:text-blue-400',
+        badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        desc: 'Human operator photos and AI agent profile avatar images',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('avatar') || f.includes('user') || f.includes('agent') || f.includes('photo') || f.includes('profile');
+        },
+      },
+      {
+        id: 'brand_assets',
+        label: 'Brand Logos & Header Banners',
+        icon: Sparkles,
+        color: 'text-amber-600 dark:text-amber-400',
+        badgeBg: 'bg-amber-50 dark:bg-amber-950/50',
+        badgeText: 'text-amber-700 dark:text-amber-300',
+        badgeBorder: 'border-amber-200 dark:border-amber-800',
+        desc: 'Workspace logos, app icons and header banner graphic media',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('logo') || f.includes('banner') || f.includes('cover') || f.includes('brand') || f.includes('icon');
+        },
+      },
+    ],
+  },
+  call_history: {
+    title: 'Call History Recordings & Sources',
+    desc: 'Filter live studio demo audio, outbound AI campaign recordings, and customer calls',
+    icon: PhoneCall,
+    tabs: [
+      {
+        id: 'all',
+        label: 'All Call Recordings',
+        icon: PhoneCall,
+        color: 'text-rose-600 dark:text-rose-400',
+        badgeBg: 'bg-rose-50 dark:bg-rose-950/50',
+        badgeText: 'text-rose-700 dark:text-rose-300',
+        badgeBorder: 'border-rose-200 dark:border-rose-800',
+        desc: 'All studio mic tests, telephony records and AI customer dialogues',
+        matcher: () => true,
+      },
+      {
+        id: 'live_studio',
+        label: 'Live Call Studio Demos',
+        icon: Mic,
+        color: 'text-purple-600 dark:text-purple-400',
+        badgeBg: 'bg-purple-50 dark:bg-purple-950/50',
+        badgeText: 'text-purple-700 dark:text-purple-300',
+        badgeBorder: 'border-purple-200 dark:border-purple-800',
+        desc: 'Interactive browser microphone & simulated caller test sessions',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('studio') || f.includes('demo') || f.includes('test') || f.includes('mic');
+        },
+      },
+      {
+        id: 'campaign_calls',
+        label: 'AI Campaign Outbound Calls',
+        icon: Megaphone,
+        color: 'text-blue-600 dark:text-blue-400',
+        badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-200 dark:border-blue-800',
+        desc: 'Automated outbound campaign dials and conversational agent sessions',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('camp') || f.includes('campaign') || f.includes('outbound') || f.includes('broadcast');
+        },
+      },
+      {
+        id: 'inbound_telephony',
+        label: 'Inbound Telephony & GSM SIM Calls',
+        icon: PhoneCall,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+        desc: 'Inbound customer hotline, GSM SIM paired gateway call audio',
+        matcher: (item) => {
+          const f = item.filename.toLowerCase();
+          return f.includes('inbound') || f.includes('call') || f.includes('sim') || f.includes('gsm') || f.includes('pstn');
+        },
+      },
+    ],
+  },
+};
+
+export const CATEGORY_SUBNAV: Record<string, CategorySubNavConfig> = {
+  ...officialSubNav,
+  memory: officialSubNav.agent_memory_brain,
+  audio: officialSubNav.ai_voice_agents,
+  recordings: officialSubNav.call_history,
+  profiles: officialSubNav.user_profile,
+  workflows: officialSubNav.voice_workflows,
+};
+
+export const ALL_FORMAT_SUBNAV: CategorySubNavConfig = {
+  title: 'All Uploaded Formats & Types',
+  desc: 'Quickly filter all server-stored files across categories by document format',
+  icon: Layers,
+  tabs: [
+    {
+      id: 'all',
+      label: 'All Storage Files',
+      icon: Layers,
+      color: 'text-blue-600 dark:text-blue-400',
+      badgeBg: 'bg-blue-50 dark:bg-blue-950/50',
+      badgeText: 'text-blue-700 dark:text-blue-300',
+      badgeBorder: 'border-blue-200 dark:border-blue-800',
+      desc: 'All physical files stored across all 7 server folders',
+      matcher: () => true,
+    },
+    {
+      id: 'pdf',
+      label: 'PDF Documents',
+      icon: FileText,
+      color: 'text-rose-600 dark:text-rose-400',
+      badgeBg: 'bg-rose-50 dark:bg-rose-950/50',
+      badgeText: 'text-rose-700 dark:text-rose-300',
+      badgeBorder: 'border-rose-200 dark:border-rose-800',
+      desc: 'PDF manuals, documentation, and policy files',
+      matcher: (item) => item.file_type.toUpperCase().includes('PDF') || item.filename.toLowerCase().endsWith('.pdf'),
+    },
+    {
+      id: 'sheets',
+      label: 'Spreadsheets (CSV/XLSX)',
+      icon: FileSpreadsheet,
+      color: 'text-emerald-600 dark:text-emerald-400',
+      badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+      badgeText: 'text-emerald-700 dark:text-emerald-300',
+      badgeBorder: 'border-emerald-200 dark:border-emerald-800',
+      desc: 'Tabulated leads, contact lists, CSV and XLSX files',
+      matcher: (item) => {
+        const t = item.file_type.toUpperCase();
+        const f = item.filename.toLowerCase();
+        return t.includes('CSV') || t.includes('XLS') || f.endsWith('.csv') || f.endsWith('.xlsx');
+      },
+    },
+    {
+      id: 'audio',
+      label: 'Audio & Speech',
+      icon: Music,
+      color: 'text-purple-600 dark:text-purple-400',
+      badgeBg: 'bg-purple-50 dark:bg-purple-950/50',
+      badgeText: 'text-purple-700 dark:text-purple-300',
+      badgeBorder: 'border-purple-200 dark:border-purple-800',
+      desc: 'Recorded calls, voice clones, and MP3/WAV/WEBM media',
+      matcher: (item) => {
+        const t = item.file_type.toUpperCase();
+        const f = item.filename.toLowerCase();
+        return t.includes('MP3') || t.includes('WAV') || t.includes('WEBM') || f.endsWith('.mp3') || f.endsWith('.wav') || f.endsWith('.webm');
+      },
+    },
+    {
+      id: 'code_json',
+      label: 'JSON & Workflows',
+      icon: FileCode,
+      color: 'text-amber-600 dark:text-amber-400',
+      badgeBg: 'bg-amber-50 dark:bg-amber-950/50',
+      badgeText: 'text-amber-700 dark:text-amber-300',
+      badgeBorder: 'border-amber-200 dark:border-amber-800',
+      desc: 'Workflow graphs, JSON blueprints, and extracted data',
+      matcher: (item) => item.file_type.toUpperCase().includes('JSON') || item.filename.toLowerCase().endsWith('.json'),
+    },
+    {
+      id: 'images',
+      label: 'Images & Photos',
+      icon: ImageIcon,
+      color: 'text-cyan-600 dark:text-cyan-400',
+      badgeBg: 'bg-cyan-50 dark:bg-cyan-950/50',
+      badgeText: 'text-cyan-700 dark:text-cyan-300',
+      badgeBorder: 'border-cyan-200 dark:border-cyan-800',
+      desc: 'Avatars, logos, diagrams, and image files',
+      matcher: (item) => {
+        const t = item.file_type.toUpperCase();
+        const f = item.filename.toLowerCase();
+        return t.includes('PNG') || t.includes('JPG') || t.includes('JPEG') || t.includes('WEBP') || f.endsWith('.png') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.webp');
+      },
+    },
+    {
+      id: 'docs',
+      label: 'DOCX & Text Notes',
+      icon: File,
+      color: 'text-indigo-600 dark:text-indigo-400',
+      badgeBg: 'bg-indigo-50 dark:bg-indigo-950/50',
+      badgeText: 'text-indigo-700 dark:text-indigo-300',
+      badgeBorder: 'border-indigo-200 dark:border-indigo-800',
+      desc: 'Word documents, Markdown files, and text notes',
+      matcher: (item) => {
+        const t = item.file_type.toUpperCase();
+        const f = item.filename.toLowerCase();
+        return t.includes('DOC') || t.includes('TXT') || t.includes('MD') || f.endsWith('.docx') || f.endsWith('.txt') || f.endsWith('.md');
+      },
+    },
+  ],
+};
+
+export const SUBNAV_THEMES: Record<
+  string,
+  {
+    gradient: string;
+    border: string;
+    headerText: string;
+    iconBg: string;
+    activeTab: string;
+    hoverTab: string;
+  }
+> = {
+  memory: {
+    gradient: 'from-violet-500/10 via-purple-500/5 to-transparent dark:from-violet-950/40 dark:via-purple-950/20',
+    border: 'border-violet-200/80 dark:border-violet-800/60',
+    headerText: 'text-violet-900 dark:text-violet-200',
+    iconBg: 'bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300',
+    activeTab: 'bg-violet-600 text-white shadow-sm shadow-violet-500/30 border-violet-600',
+    hoverTab: 'hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-700 dark:hover:text-violet-300',
+  },
+  knowledge_base: {
+    gradient: 'from-cyan-500/10 via-teal-500/5 to-transparent dark:from-cyan-950/40 dark:via-teal-950/20',
+    border: 'border-cyan-200/80 dark:border-cyan-800/60',
+    headerText: 'text-cyan-900 dark:text-cyan-200',
+    iconBg: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/60 dark:text-cyan-300',
+    activeTab: 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/30 border-cyan-600',
+    hoverTab: 'hover:border-cyan-300 dark:hover:border-cyan-700 hover:text-cyan-700 dark:hover:text-cyan-300',
+  },
+  contacts: {
+    gradient: 'from-blue-500/10 via-indigo-500/5 to-transparent dark:from-blue-950/40 dark:via-indigo-950/20',
+    border: 'border-blue-200/80 dark:border-blue-800/60',
+    headerText: 'text-blue-900 dark:text-blue-200',
+    iconBg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300',
+    activeTab: 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 border-blue-600',
+    hoverTab: 'hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-700 dark:hover:text-blue-300',
+  },
+  audio: {
+    gradient: 'from-purple-500/10 via-pink-500/5 to-transparent dark:from-purple-950/40 dark:via-pink-950/20',
+    border: 'border-purple-200/80 dark:border-purple-800/60',
+    headerText: 'text-purple-900 dark:text-purple-200',
+    iconBg: 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300',
+    activeTab: 'bg-purple-600 text-white shadow-sm shadow-purple-500/30 border-purple-600',
+    hoverTab: 'hover:border-purple-300 dark:hover:border-purple-700 hover:text-purple-700 dark:hover:text-purple-300',
+  },
+  workflows: {
+    gradient: 'from-amber-500/10 via-orange-500/5 to-transparent dark:from-amber-950/40 dark:via-orange-950/20',
+    border: 'border-amber-200/80 dark:border-amber-800/60',
+    headerText: 'text-amber-900 dark:text-amber-200',
+    iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300',
+    activeTab: 'bg-amber-600 text-white shadow-sm shadow-amber-500/30 border-amber-600',
+    hoverTab: 'hover:border-amber-300 dark:hover:border-amber-700 hover:text-amber-700 dark:hover:text-amber-300',
+  },
+  profiles: {
+    gradient: 'from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-950/40 dark:via-teal-950/20',
+    border: 'border-emerald-200/80 dark:border-emerald-800/60',
+    headerText: 'text-emerald-900 dark:text-emerald-200',
+    iconBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300',
+    activeTab: 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/30 border-emerald-600',
+    hoverTab: 'hover:border-emerald-300 dark:hover:border-emerald-700 hover:text-emerald-700 dark:hover:text-emerald-300',
   },
   recordings: {
-    label: 'Call Recordings',
-    icon: PlayCircle,
-    color: 'text-rose-600 dark:text-rose-400',
-    bg: 'bg-rose-50 dark:bg-rose-950/40',
-    borderColor: 'border-rose-200 dark:border-rose-800',
-    desc: 'Recorded call audio streams and live test media',
+    gradient: 'from-rose-500/10 via-red-500/5 to-transparent dark:from-rose-950/40 dark:via-red-950/20',
+    border: 'border-rose-200/80 dark:border-rose-800/60',
+    headerText: 'text-rose-900 dark:text-rose-200',
+    iconBg: 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300',
+    activeTab: 'bg-rose-600 text-white shadow-sm shadow-rose-500/30 border-rose-600',
+    hoverTab: 'hover:border-rose-300 dark:hover:border-rose-700 hover:text-rose-700 dark:hover:text-rose-300',
+  },
+  ALL: {
+    gradient: 'from-blue-500/10 via-indigo-500/5 to-transparent dark:from-blue-950/40 dark:via-indigo-950/20',
+    border: 'border-blue-200/80 dark:border-blue-800/60',
+    headerText: 'text-blue-900 dark:text-blue-200',
+    iconBg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300',
+    activeTab: 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 border-blue-600',
+    hoverTab: 'hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-700 dark:hover:text-blue-300',
   },
 };
 
@@ -111,14 +917,20 @@ export interface FileStorageViewProps {
 
 export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) => {
   const { addToast } = useToast();
+  const { entitlements, triggerGuardrail } = usePlanEntitlements();
   const [stats, setStats] = useState<UploadStorageStats | null>(null);
   const [trashStats, setTrashStats] = useState<TrashStats | null>(null);
   const [files, setFiles] = useState<UploadedFileItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [selectedSubFilter, setSelectedSubFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  
+  // Target Upload destination state (Auto-synced with Directory Navigator & Sub-Tabs)
   const [uploadCategory, setUploadCategory] = useState<string>('knowledge_base');
+  const [uploadSubTarget, setUploadSubTarget] = useState<string>('all');
+  
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   // Custom Searchable Dropdown State
@@ -172,6 +984,17 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
 
   useEffect(() => {
     loadData();
+
+    const handleTargetChange = () => {
+      loadData();
+    };
+
+    window.addEventListener('createcall:sovereign_target_changed', handleTargetChange);
+    window.addEventListener('createcall:tenant_data_updated', handleTargetChange);
+    return () => {
+      window.removeEventListener('createcall:sovereign_target_changed', handleTargetChange);
+      window.removeEventListener('createcall:tenant_data_updated', handleTargetChange);
+    };
   }, [selectedCategory]);
 
   // Handle direct file upload
@@ -233,133 +1056,194 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
     }
   };
 
-  // Handle permanent delete immediately
-  const handlePermanentDelete = async () => {
-    if (!fileToDelete) return;
-    setIsDeleting(true);
-    try {
-      await uploadRepository.deleteFile(fileToDelete.category, fileToDelete.filename, true);
-      addToast({
-        type: 'success',
-        title: 'File Deleted Permanently',
-        description: `Permanently removed "${fileToDelete.filename}" from disk & database.`,
-      });
-      setDeleteModalOpen(false);
-      setFileToDelete(null);
-      await loadData();
-    } catch (err: any) {
-      addToast({
-        type: 'error',
-        title: 'Permanent Delete Failed',
-        description: err.message || 'Could not delete file permanently',
-      });
-    } finally {
-      setIsDeleting(false);
+  // Compute count for each subtab
+  const getSubTabCount = (categoryKey: string, subTabId: string): number => {
+    if (categoryKey === 'ALL') {
+      const tabDef = ALL_FORMAT_SUBNAV.tabs.find((t) => t.id === subTabId);
+      if (!tabDef) return 0;
+      return files.filter(tabDef.matcher).length;
     }
+
+    const catSubNav = CATEGORY_SUBNAV[categoryKey];
+    if (!catSubNav) return 0;
+    const tabDef = catSubNav.tabs.find((t) => t.id === subTabId);
+    if (!tabDef) return 0;
+    return files.filter((f) => f.category === categoryKey && tabDef.matcher(f)).length;
   };
 
-  // Filtered files
+  // Filtered files by Category, SubNav Filter, and Search
   const filteredFiles = useMemo(() => {
     return files.filter((f) => {
+      // 1. Category Filter
+      if (selectedCategory !== 'ALL' && f.category !== selectedCategory) {
+        return false;
+      }
+
+      // 2. SubNav Filter
+      if (selectedCategory !== 'ALL') {
+        const catSubNav = CATEGORY_SUBNAV[selectedCategory];
+        if (catSubNav && selectedSubFilter !== 'all') {
+          const tab = catSubNav.tabs.find((t) => t.id === selectedSubFilter);
+          if (tab && !tab.matcher(f)) {
+            return false;
+          }
+        }
+      } else {
+        // In ALL view, filter by format subtab
+        if (selectedSubFilter !== 'all') {
+          const tab = ALL_FORMAT_SUBNAV.tabs.find((t) => t.id === selectedSubFilter);
+          if (tab && !tab.matcher(f)) {
+            return false;
+          }
+        }
+      }
+
+      // 3. Search Filter
       const matchesSearch =
         !searchTerm ||
         f.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
         f.category_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         f.file_type.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCat = selectedCategory === 'ALL' || f.category === selectedCategory;
-      return matchesSearch && matchesCat;
+
+      return matchesSearch;
     });
-  }, [files, searchTerm, selectedCategory]);
+  }, [files, selectedCategory, selectedSubFilter, searchTerm]);
 
-  const getFileIcon = (fileType: string) => {
-    const ext = fileType.toUpperCase();
-    if (ext.includes('PDF')) return <FileText className="h-5 w-5 text-rose-500" />;
-    if (ext.includes('CSV') || ext.includes('XLS')) return <FileSpreadsheet className="h-5 w-5 text-emerald-500" />;
-    if (ext.includes('JSON') || ext.includes('YAML') || ext.includes('TXT') || ext.includes('MD'))
-      return <FileCode className="h-5 w-5 text-amber-500" />;
-    if (ext.includes('MP3') || ext.includes('WAV') || ext.includes('OGG'))
-      return <Music className="h-5 w-5 text-purple-500" />;
-    if (ext.includes('PNG') || ext.includes('JPG') || ext.includes('JPEG') || ext.includes('WEBP'))
-      return <ImageIcon className="h-5 w-5 text-blue-500" />;
-    return <File className="h-5 w-5 text-zinc-500" />;
-  };
-
+  // Open file preview modal
   const handleOpenFilePreview = (file: UploadedFileItem) => {
     setPreviewFile({
+      id: file.id,
       filename: file.filename,
       category: file.category,
       category_name: file.category_name,
-      url: file.download_url,
       file_type: file.file_type,
       size_formatted: file.size_formatted,
-      created_at: file.created_at,
+      download_url: file.download_url,
+      is_trash: false,
     });
   };
 
+  const getFileIcon = (fileType: string) => {
+    const t = fileType.toUpperCase();
+    if (t.includes('PDF')) return <FileText className="h-5 w-5 text-rose-500" />;
+    if (t.includes('CSV') || t.includes('XLS')) return <FileSpreadsheet className="h-5 w-5 text-emerald-500" />;
+    if (t.includes('JSON') || t.includes('TS') || t.includes('JS') || t.includes('PY'))
+      return <FileCode className="h-5 w-5 text-amber-500" />;
+    if (t.includes('MP3') || t.includes('WAV') || t.includes('AUDIO') || t.includes('WEBM'))
+      return <Music className="h-5 w-5 text-purple-500" />;
+    if (t.includes('PNG') || t.includes('JPG') || t.includes('JPEG') || t.includes('IMAGE'))
+      return <ImageIcon className="h-5 w-5 text-blue-500" />;
+    return <File className="h-5 w-5 text-zinc-400" />;
+  };
+
+  // Determine current active subnav & theme
+  const currentSubNav = selectedCategory !== 'ALL' ? CATEGORY_SUBNAV[selectedCategory] : ALL_FORMAT_SUBNAV;
+  const currentTheme = selectedCategory !== 'ALL' ? SUBNAV_THEMES[selectedCategory] || SUBNAV_THEMES.ALL : SUBNAV_THEMES.ALL;
+
+  // Active target label helper
+  const targetCategoryMeta = CATEGORY_CONFIG[uploadCategory] || CATEGORY_CONFIG.knowledge_base;
+  const targetSubTabMeta = uploadSubTarget !== 'all' ? CATEGORY_SUBNAV[uploadCategory]?.tabs.find((t) => t.id === uploadSubTarget) : null;
+  const targetDisplayTitle = targetSubTabMeta ? `${targetCategoryMeta.label} (${targetSubTabMeta.label})` : targetCategoryMeta.label;
+
   return (
-    <div className="p-4 sm:p-5 max-w-7xl mx-auto space-y-4">
+    <div className="space-y-4 pb-12 w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <HardDrive className="h-5 w-5" />
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0">
+        {/* ROW 1: Heading on Left + Badges on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-lg bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
+              <HardDrive className="h-3.5 w-3.5" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-                File Storage & Uploads Hub
-              </h1>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Organized directory structure for all system imports, knowledge docs, voice assets, and leads
-              </p>
-            </div>
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
+              File Storage &amp; Uploads Hub
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center gap-1 shadow-2xs whitespace-nowrap">
+              <HardDrive className="h-3 w-3" />
+              {stats?.formatted_total_size || '0 B'} Used
+            </span>
+            <Badge
+              variant="outline"
+              className="text-xs font-semibold px-2.5 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer hover:bg-amber-500/20 transition-all"
+              onClick={() =>
+                triggerGuardrail(
+                  'storage',
+                  'File Storage Hub',
+                  'Storage quotas and asset persistence are governed by your subscription plan.'
+                )
+              }
+              title="Click to view subscription plan entitlements"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-500" />
+              <span>Plan: {entitlements.planName}</span>
+            </Badge>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {onNavigate && (
+        {/* ROW 2: Description on Left + Action Buttons on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Organized directory structure for all system imports, knowledge docs, voice assets, and leads
+          </p>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {onNavigate && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  triggerNavigationHandoff(onNavigate, {
+                    sourceScreen: 'storage',
+                    sourceLabel: 'File Storage Hub',
+                    contextTitle: 'Deleted Files & Recovery',
+                    contextBadge: 'Recycle Bin',
+                    targetScreen: 'recycle-bin',
+                  })
+                }
+                className="h-7.5 text-xs font-semibold px-2.5 rounded-lg border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer shadow-2xs"
+                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+              >
+                Recycle Bin ({trashStats?.total_items ?? 0})
+              </Button>
+            )}
+
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onNavigate('recycle-bin')}
-              className="border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-              leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+              onClick={loadData}
+              className="h-7.5 text-xs font-semibold px-2.5 rounded-lg shadow-2xs"
+              leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />}
             >
-              Recycle Bin ({trashStats?.total_items ?? 0})
+              Refresh
             </Button>
-          )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadData}
-            leftIcon={<RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />}
-          >
-            Refresh
-          </Button>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            multiple
-            className="hidden"
-          />
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            leftIcon={<UploadCloud className="h-4 w-4" />}
-          >
-            {isUploading ? 'Uploading...' : `Upload to ${CATEGORY_CONFIG[uploadCategory]?.label || 'Folder'}`}
-          </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              multiple
+              className="hidden"
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="h-7.5 text-xs font-semibold px-2.5 rounded-lg shadow-2xs"
+              leftIcon={<UploadCloud className="h-3.5 w-3.5" />}
+            >
+              {isUploading ? 'Uploading...' : `Upload to ${targetDisplayTitle}`}
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Top Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800">
+        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800 rounded-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Total Uploaded Files</p>
@@ -368,13 +1252,13 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
               </h3>
               <p className="text-[11px] text-zinc-400 mt-0.5">Across all storage categories</p>
             </div>
-            <div className="h-11 w-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
               <Folder className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800">
+        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800 rounded-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Total Storage Consumed</p>
@@ -383,70 +1267,75 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
               </h3>
               <p className="text-[11px] text-emerald-500 font-medium mt-0.5">Physical disk usage</p>
             </div>
-            <div className="h-11 w-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <HardDrive className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800">
+        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800 rounded-lg">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Active Subfolders</p>
               <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">
-                {Object.keys(CATEGORY_CONFIG).length}
+                {Object.keys(OFFICIAL_CATEGORIES).length}
               </h3>
               <p className="text-[11px] text-zinc-400 mt-0.5">Auto-partitioned under uploads/</p>
             </div>
-            <div className="h-11 w-11 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
               <Layers className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
 
-        {/* Target Upload Subfolder Card - Custom Searchable Popover Dropdown */}
-        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800">
+        {/* Target Upload Subfolder Card - Custom Searchable Popover Dropdown with Sub-Destinations */}
+        <Card className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur border-zinc-200 dark:border-zinc-800 rounded-lg">
           <CardContent className="p-4 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Target Upload Subfolder</p>
-              <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <div className="h-8 w-8 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <UploadCloud className="h-4 w-4" />
               </div>
             </div>
 
-            {/* Custom Searchable Dropdown */}
+            {/* Custom Searchable Dropdown with Sub-Destinations */}
             <div className="relative mt-2" ref={targetDropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsTargetDropdownOpen(!isTargetDropdownOpen)}
-                className="w-full h-8 px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 flex items-center justify-between gap-2 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors shadow-xs cursor-pointer text-xs"
+                className="w-full h-8 px-2.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 flex items-center justify-between gap-2 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors shadow-xs cursor-pointer text-xs"
               >
                 <div className="flex items-center gap-1.5 min-w-0">
                   {(() => {
-                    const CurrentIcon = CATEGORY_CONFIG[uploadCategory]?.icon || Folder;
+                    const CurrentIcon = targetSubTabMeta?.icon || targetCategoryMeta?.icon || Folder;
                     return (
                       <CurrentIcon
-                        className={`h-3.5 w-3.5 shrink-0 ${CATEGORY_CONFIG[uploadCategory]?.color || 'text-zinc-500'}`}
+                        className={`h-3.5 w-3.5 shrink-0 ${targetSubTabMeta?.color || targetCategoryMeta?.color || 'text-zinc-500'}`}
                       />
                     );
                   })()}
                   <span className="font-semibold truncate">
-                    {CATEGORY_CONFIG[uploadCategory]?.label || uploadCategory}
+                    {targetCategoryMeta?.label || uploadCategory}
                   </span>
+                  {targetSubTabMeta && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded shrink-0">
+                      {targetSubTabMeta.label}
+                    </span>
+                  )}
                   <span className="text-[10px] font-mono text-zinc-400 truncate hidden sm:inline">
                     (uploads/{uploadCategory}/)
                   </span>
                 </div>
                 <ChevronDown
-                  className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${
+                  className={`h-3.5 w-3.5 text-zinc-400 transition-transform shrink-0 ${
                     isTargetDropdownOpen ? 'rotate-180 text-blue-500' : ''
                   }`}
                 />
               </button>
 
-              {/* Dropdown Menu Popover - Wide & Spacious */}
+              {/* Dropdown Menu Popover with All Sub-Targets Grouped */}
               {isTargetDropdownOpen && (
-                <div className="absolute top-full right-0 w-80 sm:w-96 mt-1.5 z-50 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute top-full right-0 w-80 sm:w-[420px] mt-1.5 z-50 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                   {/* Search Box */}
                   <div className="p-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/60">
                     <div className="relative">
@@ -455,55 +1344,116 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                         type="text"
                         value={targetSearchQuery}
                         onChange={(e) => setTargetSearchQuery(e.target.value)}
-                        placeholder="Search destination subfolders..."
-                        className="w-full h-8 pl-8 pr-2.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Search categories & sub-destinations..."
+                        className="w-full h-8 pl-8 pr-2.5 text-xs rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         autoFocus
                       />
                     </div>
                   </div>
 
-                  {/* List of subfolders */}
-                  <div className="max-h-48 overflow-y-auto p-1 divide-y divide-zinc-50 dark:divide-zinc-800/40">
-                    {Object.entries(CATEGORY_CONFIG)
+                  {/* List of subfolders & granular sub-targets */}
+                  <div className="max-h-64 overflow-y-auto p-1 divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    {Object.entries(OFFICIAL_CATEGORIES)
                       .filter(([key, cfg]) => {
                         if (!targetSearchQuery) return true;
                         const query = targetSearchQuery.toLowerCase();
+                        const subNav = CATEGORY_SUBNAV[key];
+                        const matchesSubTab = subNav?.tabs.some(
+                          (t) => t.label.toLowerCase().includes(query) || t.desc.toLowerCase().includes(query)
+                        );
                         return (
                           cfg.label.toLowerCase().includes(query) ||
                           key.toLowerCase().includes(query) ||
-                          cfg.desc.toLowerCase().includes(query)
+                          cfg.desc.toLowerCase().includes(query) ||
+                          matchesSubTab
                         );
                       })
                       .map(([key, cfg]) => {
                         const IconComp = cfg.icon;
-                        const isSelected = uploadCategory === key;
+                        const subNav = CATEGORY_SUBNAV[key];
+                        const isCatSelected = uploadCategory === key;
 
                         return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => {
-                              setUploadCategory(key);
-                              setIsTargetDropdownOpen(false);
-                              setTargetSearchQuery('');
-                            }}
-                            className={`w-full p-2 rounded-lg text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200'
-                                : 'hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`h-6 w-6 rounded-md ${cfg.bg} flex items-center justify-center shrink-0`}>
-                                <IconComp className={`h-3.5 w-3.5 ${cfg.color}`} />
+                          <div key={key} className="py-1">
+                            {/* Main Category Row */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUploadCategory(key);
+                                setUploadSubTarget('all');
+                                setSelectedCategory(key);
+                                setSelectedSubFilter('all');
+                                setIsTargetDropdownOpen(false);
+                                setTargetSearchQuery('');
+                              }}
+                              className={`w-full p-2 rounded-md text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                isCatSelected && uploadSubTarget === 'all'
+                                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200'
+                                  : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/70 text-zinc-900 dark:text-zinc-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`h-6 w-6 rounded-md ${cfg.bg} flex items-center justify-center shrink-0`}>
+                                  <IconComp className={`h-3.5 w-3.5 ${cfg.color}`} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold truncate leading-tight">{cfg.label}</p>
+                                  <p className="text-[10px] font-mono text-zinc-400 truncate">uploads/{key}/ (All)</p>
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold truncate leading-tight">{cfg.label}</p>
-                                <p className="text-[10px] font-mono text-zinc-400 truncate">uploads/{key}/</p>
+                              {isCatSelected && uploadSubTarget === 'all' && (
+                                <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                              )}
+                            </button>
+
+                            {/* Sub-targets pill options */}
+                            {subNav && (
+                              <div className="pl-8 pr-2 py-1 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                {subNav.tabs
+                                  .filter((t) => t.id !== 'all')
+                                  .filter((t) => {
+                                    if (!targetSearchQuery) return true;
+                                    const query = targetSearchQuery.toLowerCase();
+                                    return (
+                                      t.label.toLowerCase().includes(query) ||
+                                      t.desc.toLowerCase().includes(query) ||
+                                      cfg.label.toLowerCase().includes(query)
+                                    );
+                                  })
+                                  .map((t) => {
+                                    const SubIcon = t.icon;
+                                    const isSubSelected = uploadCategory === key && uploadSubTarget === t.id;
+
+                                    return (
+                                      <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setUploadCategory(key);
+                                          setUploadSubTarget(t.id);
+                                          setSelectedCategory(key);
+                                          setSelectedSubFilter(t.id);
+                                          setIsTargetDropdownOpen(false);
+                                          setTargetSearchQuery('');
+                                        }}
+                                        className={`px-2 py-1 rounded text-left flex items-center justify-between gap-1.5 transition-colors cursor-pointer border text-[11px] ${
+                                          isSubSelected
+                                            ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                                            : 'bg-zinc-50/60 dark:bg-zinc-800/40 border-zinc-200/60 dark:border-zinc-700/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                        }`}
+                                        title={t.desc}
+                                      >
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <SubIcon className={`h-3 w-3 shrink-0 ${isSubSelected ? 'text-white' : t.color}`} />
+                                          <span className="truncate">{t.label}</span>
+                                        </div>
+                                        {isSubSelected && <Check className="h-3 w-3 text-white shrink-0" />}
+                                      </button>
+                                    );
+                                  })}
                               </div>
-                            </div>
-                            {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />}
-                          </button>
+                            )}
+                          </div>
                         );
                       })}
                   </div>
@@ -511,12 +1461,12 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
               )}
             </div>
 
-            <p className="text-[10px] text-zinc-400 mt-1">Direct upload destination</p>
+            <p className="text-[10px] text-zinc-400 mt-1">Direct upload destination & format</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Storage Directories Navigator - Spans 2 Rows cleanly (4 columns x 2 rows) */}
+      {/* Storage Directories Navigator */}
       <div className="space-y-2.5">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
           Storage Directories (uploads/ subfolders)
@@ -524,10 +1474,15 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {/* ALL Button */}
           <button
-            onClick={() => setSelectedCategory('ALL')}
-            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+            onClick={() => {
+              setSelectedCategory('ALL');
+              setSelectedSubFilter('all');
+              setUploadCategory('knowledge_base');
+              setUploadSubTarget('all');
+            }}
+            className={`p-3.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
               selectedCategory === 'ALL'
-                ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
                 : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-zinc-800 dark:text-zinc-200'
             }`}
           >
@@ -537,7 +1492,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                 <span className="text-xs font-bold truncate">All Upload Folders</span>
               </div>
               <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                   selectedCategory === 'ALL'
                     ? 'bg-white/20 text-white'
                     : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'
@@ -556,19 +1511,27 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
             </div>
           </button>
 
-          {/* Individual Categories */}
-          {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => {
+          {/* Individual Categories (Matching exact real sidebar module names & Auto-Syncing Target Upload) */}
+          {Object.entries(OFFICIAL_CATEGORIES).map(([key, cfg]) => {
             const catStat = stats?.categories?.[key];
             const isSelected = selectedCategory === key;
             const IconComponent = cfg.icon;
+            const fileCount = catStat?.file_count ?? files.filter((f) => f.category === key).length;
+            const formattedSize = catStat?.total_formatted ?? '0 B';
 
             return (
               <button
                 key={key}
-                onClick={() => setSelectedCategory(key)}
-                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                onClick={() => {
+                  setSelectedCategory(key);
+                  setSelectedSubFilter('all');
+                  // Auto-sync target upload subfolder with clicked category
+                  setUploadCategory(key);
+                  setUploadSubTarget('all');
+                }}
+                className={`p-3.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   isSelected
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
                     : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-zinc-800 dark:text-zinc-200'
                 }`}
               >
@@ -580,13 +1543,13 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                     </span>
                   </div>
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
                       isSelected
                         ? 'bg-white/20 text-white'
                         : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'
                     }`}
                   >
-                    {catStat?.file_count ?? 0}
+                    {fileCount}
                   </span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[11px]">
@@ -594,7 +1557,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                     uploads/{key}/
                   </span>
                   <span className={`font-mono font-bold shrink-0 ml-1 ${isSelected ? 'text-white' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                    {catStat?.total_formatted ?? '0 B'}
+                    {formattedSize}
                   </span>
                 </div>
               </button>
@@ -603,18 +1566,88 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
         </div>
       </div>
 
-      {/* Main Files Table / Grid */}
-      <Card className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur border-zinc-200 dark:border-zinc-800 shadow-xs">
+      {/* Dynamic Sub-Department / Modality Sub-Tabs (Auto-Syncs Target Upload Sub-Destination) */}
+      {currentSubNav && currentTheme && (
+        <div className={`p-3.5 bg-gradient-to-r ${currentTheme.gradient} border ${currentTheme.border} rounded-lg shadow-xs space-y-2.5`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className={`h-6 w-6 rounded-md ${currentTheme.iconBg} flex items-center justify-center shrink-0`}>
+                <currentSubNav.icon className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <h3 className={`text-xs font-bold ${currentTheme.headerText}`}>
+                  {currentSubNav.title}
+                </h3>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  {currentSubNav.desc}
+                </p>
+              </div>
+            </div>
+
+            <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
+              Showing {filteredFiles.length} of {selectedCategory === 'ALL' ? files.length : files.filter((f) => f.category === selectedCategory).length} files
+            </span>
+          </div>
+
+          {/* Sub-tabs Row (Seamless wrap / scroll with crisp minor radius) */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-0.5">
+            {currentSubNav.tabs.map((tab) => {
+              const count = getSubTabCount(selectedCategory, tab.id);
+              const isActive = selectedSubFilter === tab.id;
+              const Icon = tab.icon;
+
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setSelectedSubFilter(tab.id);
+                    // Auto-sync target upload sub-destination with active pill tab
+                    if (selectedCategory !== 'ALL') {
+                      setUploadCategory(selectedCategory);
+                      setUploadSubTarget(tab.id);
+                    }
+                  }}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
+                    isActive
+                      ? currentTheme.activeTab
+                      : `bg-white dark:bg-zinc-900 border-zinc-200/90 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 ${currentTheme.hoverTab}`
+                  }`}
+                  title={tab.desc}
+                >
+                  <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-white' : tab.color}`} />
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Main Files Table / Grid Card */}
+      <Card className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xs">
         <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <CardTitle className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                   {selectedCategory === 'ALL'
-                    ? 'All Stored Uploads'
-                    : `Files in uploads/${selectedCategory}/`}
+                    ? selectedSubFilter === 'all'
+                      ? 'All Stored Uploads'
+                      : `All Uploads: ${ALL_FORMAT_SUBNAV.tabs.find((t) => t.id === selectedSubFilter)?.label || selectedSubFilter}`
+                    : selectedSubFilter === 'all'
+                    ? `Files in uploads/${selectedCategory}/`
+                    : `${CATEGORY_CONFIG[selectedCategory]?.label}: ${currentSubNav?.tabs.find((t) => t.id === selectedSubFilter)?.label || selectedSubFilter}`}
                 </CardTitle>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-[10px] rounded">
                   {filteredFiles.length} file{filteredFiles.length !== 1 ? 's' : ''}
                 </Badge>
               </div>
@@ -630,14 +1663,14 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   leftIcon={<Search className="h-3.5 w-3.5" />}
-                  className="h-8 text-xs"
+                  className="h-8 text-xs rounded-md"
                 />
               </div>
 
-              <div className="flex items-center border border-zinc-200 dark:border-zinc-700 rounded-lg p-0.5 bg-zinc-50 dark:bg-zinc-800">
+              <div className="flex items-center border border-zinc-200 dark:border-zinc-700 rounded-md p-0.5 bg-zinc-50 dark:bg-zinc-800">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded-md text-xs transition-colors ${
+                  className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
                     viewMode === 'grid'
                       ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs font-semibold'
                       : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -648,7 +1681,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                 </button>
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded-md text-xs transition-colors ${
+                  className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
                     viewMode === 'table'
                       ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs font-semibold'
                       : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -669,8 +1702,8 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
               <p className="text-xs text-zinc-500">Reading storage directory...</p>
             </div>
           ) : filteredFiles.length === 0 ? (
-            <div className="py-16 text-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
-              <div className="h-12 w-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto mb-3">
+            <div className="py-16 text-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
+              <div className="h-12 w-12 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto mb-3">
                 <Folder className="h-6 w-6" />
               </div>
               <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
@@ -678,12 +1711,15 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
               </h3>
               <p className="text-xs text-zinc-400 max-w-sm mx-auto mt-1 mb-4">
                 {searchTerm
-                  ? `No files matching "${searchTerm}" in this directory.`
+                  ? `No files matching "${searchTerm}" in this sub-department.`
+                  : selectedSubFilter !== 'all'
+                  ? `There are currently no files under the "${currentSubNav?.tabs.find((t) => t.id === selectedSubFilter)?.label}" filter.`
                   : `There are currently no files in uploads/${selectedCategory}/.`}
               </p>
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-md"
                 onClick={() => fileInputRef.current?.click()}
                 leftIcon={<UploadCloud className="h-3.5 w-3.5" />}
               >
@@ -698,7 +1734,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                 return (
                   <div
                     key={file.id}
-                    className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/60 hover:border-blue-400 dark:hover:border-blue-600 transition-all group flex flex-col justify-between shadow-xs hover:shadow-md"
+                    className="p-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/60 hover:border-blue-400 dark:hover:border-blue-600 transition-all group flex flex-col justify-between shadow-xs hover:shadow-md"
                   >
                     <div>
                       {/* Top badges */}
@@ -710,7 +1746,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                         >
                           uploads/{file.category}/
                         </span>
-                        <Badge variant="outline" className="text-[9px] uppercase font-mono">
+                        <Badge variant="outline" className="text-[9px] uppercase font-mono rounded">
                           {file.file_type}
                         </Badge>
                       </div>
@@ -721,7 +1757,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
                         className="flex items-start gap-2.5 cursor-pointer"
                         title="Click to Live Preview"
                       >
-                        <div className="h-9 w-9 rounded-lg bg-zinc-100 dark:bg-zinc-800/80 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/40 transition-colors">
+                        <div className="h-9 w-9 rounded-md bg-zinc-100 dark:bg-zinc-800/80 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/40 transition-colors">
                           {getFileIcon(file.file_type)}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -862,7 +1898,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         title="Delete File"
-        maxWidth="md"
+        maxWidth="max-w-md"
         footer={
           <div className="flex items-center justify-end gap-2.5 w-full">
             <Button
@@ -870,14 +1906,16 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
               size="sm"
               onClick={() => setDeleteModalOpen(false)}
               disabled={isDeleting}
+              className="rounded-md"
             >
               Cancel
             </Button>
             <Button
-              variant="danger"
+              variant="destructive"
               size="sm"
               onClick={handleMoveToTrash}
               disabled={isDeleting}
+              className="rounded-md"
               leftIcon={<Trash2 className="h-3.5 w-3.5" />}
             >
               {isDeleting ? 'Deleting...' : 'Delete File'}
@@ -886,8 +1924,8 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
         }
       >
         <div className="space-y-3.5">
-          <div className="flex items-start gap-3 p-3.5 bg-rose-50/60 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40 rounded-xl">
-            <div className="h-9 w-9 rounded-lg bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+          <div className="flex items-start gap-3 p-3.5 bg-rose-50/60 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40 rounded-lg">
+            <div className="h-9 w-9 rounded-md bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
               <Trash2 className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
@@ -900,7 +1938,7 @@ export const FileStorageView: React.FC<FileStorageViewProps> = ({ onNavigate }) 
             </div>
           </div>
 
-          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl space-y-2 text-xs">
+          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-lg space-y-2 text-xs">
             <div className="flex items-center justify-between gap-2">
               <span className="text-zinc-400">File Name:</span>
               <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[220px]" title={fileToDelete?.filename}>

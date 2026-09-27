@@ -6,10 +6,10 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { AppLayout } from './components/layout/AppLayout';
 import { ScreenId } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SovereignTargetProvider } from './context/SovereignTargetContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { BusinessRulesProvider } from './context/BusinessRulesContext';
 import { fetchAPI } from './lib/api';
-import { DEFAULT_BUSINESS_RULES_ITEMS } from './views/IntegrationsView';
 
 import { DashboardView } from './views/DashboardView';
 import { AgentsView } from './views/AgentsView';
@@ -44,9 +44,14 @@ import { AndroidGatewayView } from './views/AndroidGatewayView';
 import { MobileGatewayView } from './views/MobileGatewayView';
 import { FileStorageView } from './views/FileStorageView';
 import { RecycleBinView } from './views/RecycleBinView';
+import { MemoryBrainView } from './views/MemoryBrainView';
+import { SuperAdminView } from './views/SuperAdminView';
 
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const isSuperAdmin = Boolean(
+    user?.role === 'super_admin' || user?.email === 'admin@createcall.ai'
+  );
 
   const isCompanionRoute = () => {
     if (typeof window === 'undefined') return false;
@@ -78,7 +83,7 @@ function AppContent() {
     if (isCompanionRoute()) {
       return 'mobile-gateway';
     }
-    const saved = localStorage.getItem('nexus_current_screen');
+    const saved = localStorage.getItem('create_call_current_screen') || localStorage.getItem('nexus_current_screen');
     if (saved === 'loading' || saved === 'loading-state-demo' || saved === 'empty' || saved === 'empty-state-demo' || saved === 'auth') {
       return 'dashboard';
     }
@@ -88,6 +93,7 @@ function AppContent() {
   const setCurrentScreen = (screen: ScreenId) => {
     setCurrentScreenState(screen);
     try {
+      localStorage.setItem('create_call_current_screen', screen);
       localStorage.setItem('nexus_current_screen', screen);
     } catch {
       // ignore
@@ -105,33 +111,46 @@ function AppContent() {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  // Global Workspace Canonical SSOT Bootstrap on Application Startup
+  // Clear legacy un-scoped items once on load if needed
   React.useEffect(() => {
     try {
-      const saved = localStorage.getItem('nexus_custom_items');
-      if (!saved) {
-        localStorage.setItem('nexus_custom_items', JSON.stringify(DEFAULT_BUSINESS_RULES_ITEMS));
-      }
-    } catch {}
-
-    fetchAPI('/api/credentials')
-      .then((data) => {
-        if (data && typeof data === 'object') {
+      localStorage.removeItem('create_call_custom_items');
+      localStorage.removeItem('nexus_custom_items');
+      const email = (localStorage.getItem('nexus_user_email') || '').toLowerCase().trim();
+      if (email && email !== 'admin@createcall.ai') {
+        const userKey = `nexus_custom_items_${email}`;
+        const raw = localStorage.getItem(userKey);
+        if (raw) {
           try {
-            const saved = localStorage.getItem('nexus_custom_items');
-            const parsed = saved ? JSON.parse(saved) : {};
-            const merged = { ...DEFAULT_BUSINESS_RULES_ITEMS, ...parsed, ...data };
-            localStorage.setItem('nexus_custom_items', JSON.stringify(merged));
-            window.dispatchEvent(new Event('nexus_business_rules_updated'));
+            const parsed = JSON.parse(raw);
+            if (
+              parsed.business_types?.some((x: any) => x.id === 'bt_dental_01') ||
+              parsed.dispositions?.some((x: any) => x.id === 'disp_booked_01' || x.id === 'disp-appt') ||
+              parsed.departments?.some((x: any) => x.id === 'dept_sales_01')
+            ) {
+              localStorage.removeItem(userKey);
+            }
           } catch {}
         }
-      })
-      .catch(() => {});
+      }
+    } catch {}
   }, []);
 
   const [authGraceReady, setAuthGraceReady] = React.useState(false);
 
   React.useEffect(() => {
+    try {
+      (window as any).__dismissInitialLoader?.();
+      const loader = document.getElementById('initial-loader');
+      if (loader) {
+        loader.style.opacity = '0';
+        loader.style.pointerEvents = 'none';
+        setTimeout(() => {
+          if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+        }, 100);
+      }
+    } catch {}
+
     const timer = setTimeout(() => {
       setAuthGraceReady(true);
     }, 700);
@@ -173,40 +192,40 @@ function AppContent() {
       case 'phone-numbers':
         return <PhoneNumbersView onNavigate={setCurrentScreen} />;
       case 'knowledge-base':
-        return <KnowledgeBaseView />;
+        return <KnowledgeBaseView onNavigate={setCurrentScreen} />;
       case 'storage':
       case 'file-storage':
         return <FileStorageView onNavigate={setCurrentScreen} />;
       case 'call-history':
-        return <CallHistoryView />;
+        return <CallHistoryView onNavigate={setCurrentScreen} />;
       case 'analytics':
-        return <AnalyticsView />;
+        return <AnalyticsView onNavigate={setCurrentScreen} />;
       case 'workflows':
       case 'automation':
-        return <WorkflowsView />;
+        return <WorkflowsView onNavigate={setCurrentScreen} />;
       case 'integrations':
-        return <IntegrationsView />;
+        return <IntegrationsView onNavigate={setCurrentScreen} />;
       case 'billing':
-        return <BillingView />;
+        return <BillingView onNavigate={setCurrentScreen} />;
       case 'api-keys':
-        return <ApiKeysView />;
+        return <ApiKeysView onNavigate={setCurrentScreen} />;
       case 'settings':
       case 'security':
-        return <SettingsView />;
+        return isSuperAdmin ? <SettingsView /> : <UnauthorizedView onNavigate={setCurrentScreen} />;
       case 'profile':
-        return <ProfileView />;
+        return <ProfileView onNavigate={setCurrentScreen} />;
       case 'notifications':
-        return <NotificationsView />;
+        return <NotificationsView onNavigate={setCurrentScreen} />;
       case 'activity':
-        return <ActivityView />;
+        return isSuperAdmin ? <ActivityView /> : <UnauthorizedView onNavigate={setCurrentScreen} />;
       case 'recycle-bin':
       case 'trash':
-        return <RecycleBinView />;
+        return <RecycleBinView onNavigate={setCurrentScreen} />;
       case 'logs':
         return <LogsView />;
       case 'help':
       case 'help-center':
-        return <HelpCenterView />;
+        return <HelpCenterView onNavigate={setCurrentScreen} />;
       case '404':
         return <Error404View onNavigate={setCurrentScreen} />;
       case '500':
@@ -233,6 +252,12 @@ function AppContent() {
         return <AndroidGatewayView onNavigate={setCurrentScreen} />;
       case 'mobile-gateway':
         return <MobileGatewayView onNavigate={setCurrentScreen} />;
+      case 'memory':
+      case 'agent-memory':
+        return <MemoryBrainView onNavigate={setCurrentScreen} />;
+      case 'super-admin':
+      case 'admin-hub':
+        return isSuperAdmin ? <SuperAdminView onNavigate={setCurrentScreen} /> : <UnauthorizedView onNavigate={setCurrentScreen} />;
       default:
         return <DashboardView onNavigate={setCurrentScreen} />;
     }
@@ -253,15 +278,18 @@ export default function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <NotificationProvider>
-              <BusinessRulesProvider>
-                <AppContent />
-              </BusinessRulesProvider>
-            </NotificationProvider>
+            <SovereignTargetProvider>
+              <NotificationProvider>
+                <BusinessRulesProvider>
+                  <AppContent />
+                </BusinessRulesProvider>
+              </NotificationProvider>
+            </SovereignTargetProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
 }
+
 

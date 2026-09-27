@@ -17,6 +17,16 @@ if settings.DATABASE_URL.startswith("sqlite"):
         with engine.connect() as conn:
             conn.execute(text("PRAGMA journal_mode=WAL;"))
             conn.execute(text("PRAGMA busy_timeout=5000;"))
+            # Auto-migrate saved_payment_methods soft delete columns
+            try:
+                res = conn.execute(text("PRAGMA table_info(saved_payment_methods);")).fetchall()
+                existing_cols = [r[1] for r in res]
+                if existing_cols and "is_deleted" not in existing_cols:
+                    conn.execute(text("ALTER TABLE saved_payment_methods ADD COLUMN is_deleted BOOLEAN DEFAULT 0;"))
+                if existing_cols and "deleted_at" not in existing_cols:
+                    conn.execute(text("ALTER TABLE saved_payment_methods ADD COLUMN deleted_at DATETIME;"))
+            except Exception:
+                pass
             conn.commit()
     except Exception:
         pass

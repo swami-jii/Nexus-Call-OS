@@ -7,14 +7,14 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import get_current_user, get_current_user_optional
 from backend.database.session import get_db
 from backend.engine.agent_engine import AgentToolExecutor, EnterpriseAgentEngine
 from backend.models.models import Agent as AgentModel, ProviderCredential, User
 from backend.routers.knowledge_base import DynamicLLMInvoker
 from backend.routers.providers import resolve_provider_credential
 from backend.services.live_knowledge_service import LiveKnowledgeService
-from backend.services.session_memory_service import SessionMemoryManager
+from backend.services.session_memory_service import SessionMemoryManager, get_historical_caller_context
 from backend.services.telephony_engine import TelephonyCallingEngine
 from backend.skills.skill_registry import SkillRegistry
 
@@ -61,7 +61,7 @@ class PromptTestRequest(BaseModel):
 async def process_agent_turn(
     req: InteractRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     start_time = time.time()
     input_text = (req.user_message or req.user_input or "").strip()
@@ -100,8 +100,8 @@ async def process_agent_turn(
         if extracted_name.lower() not in ["an", "the", "a", "our", "their"]:
             agent_name = extracted_name
 
-    org_id_val = str(current_user.organization_id) if current_user.organization_id else ""
-    user_id_val = str(current_user.id) if current_user.id else ""
+    org_id_val = str(current_user.organization_id) if current_user and current_user.organization_id else ""
+    user_id_val = str(current_user.id) if current_user and current_user.id else ""
 
     agent_llm_model = str(getattr(agent_row, "llm_model", None) or "").strip() if agent_row else None
     agent_llm_provider = str(getattr(agent_row, "llm_provider", None) or "").strip() if agent_row else None
@@ -134,9 +134,22 @@ async def process_agent_turn(
     engine = get_or_create_engine(session_engine_id, custom_instructions)
     engine.add_turn(speaker="user", text=input_text, tokens=len(input_text.split()))
 
+    caller_name_candidate = (
+        (req.variables.get("caller_name") or req.variables.get("client_name") or "")
+        if req.variables
+        else ""
+    )
+    historical_context = get_historical_caller_context(
+        db=db,
+        agent_id=str(agent_row.id if agent_row else req.agent_id),
+        caller_name=caller_name_candidate or None,
+    )
+
     memory_mgr = SessionMemoryManager(session_id=session_engine_id, phone_number="")
+    if caller_name_candidate:
+        memory_mgr.set_caller_name(caller_name_candidate)
     memory_mgr.extract_and_update(user_text=input_text, ai_text="")
-    session_memory_prompt = memory_mgr.get_memory_prompt_block()
+    session_memory_prompt = memory_mgr.get_memory_prompt_block(historical_context=historical_context)
 
     full_system_prompt = TelephonyCallingEngine.build_telephony_system_prompt(
         agent_name=agent_name,
@@ -244,7 +257,7 @@ async def process_agent_turn(
                         "I can check our calendar availability and confirm an appointment for you right away. What date and time work best?"
                     )
                 else:
-                    ai_text = f"Hello {caller_name_val}! I am {agent_name}. I have received your request: '{input_text}'. How may I assist you further today?"
+                    ai_text = f"Hello {caller_name_val}! I am {agent_name}. How can I assist you with your inquiry today?"
 
     # Clean any leaked formatting, symbols, or identifiers
     if ai_text:
@@ -282,7 +295,7 @@ async def process_agent_turn(
 @router.post("/tools/execute")
 def execute_agent_tool(
     req: ToolExecuteRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     res = AgentToolExecutor.execute_tool(req.tool_name, req.arguments)
     return {"status": "success", "tool_name": req.tool_name, "output": res}
@@ -291,7 +304,7 @@ def execute_agent_tool(
 @router.post("/prompts/test")
 def test_prompt_template(
     req: PromptTestRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     template_text = req.template or req.system_prompt or ""
     compiled_prompt = template_text
@@ -317,7 +330,7 @@ def test_prompt_template(
 @router.get("/memory/{agent_id}")
 def get_agent_memory(
     agent_id: str | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     a_id = agent_id or "default_agent"
     engine = get_or_create_engine(a_id)

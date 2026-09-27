@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from backend.services.live_knowledge_service import LiveKnowledgeService
 
 RECORDINGS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "recordings")
+    os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "call_history")
 )
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
@@ -183,6 +183,7 @@ CRITICAL TELEPHONY COGNITIVE INSTRUCTIONS (104+ GLOBAL LANGUAGES):
 
         if raw_bytes:
             try:
+                os.makedirs(RECORDINGS_DIR, exist_ok=True)
                 with open(rec_filepath, "wb") as f:
                     f.write(raw_bytes)
             except Exception as e:

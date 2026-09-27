@@ -22,7 +22,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Sparkles,
-  Bot,
+  Headphones,
   Layers,
   Cpu,
   Server,
@@ -48,6 +48,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
 import { fetchAPI } from '../lib/api';
+import { triggerNavigationHandoff } from '../lib/handoffNavigation';
 
 // Authentic Vector SVG Brand Icons
 const AndroidBrandIcon = ({ className = 'h-4 w-4' }: { className?: string }) => (
@@ -765,7 +766,16 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
           <div className="flex items-center space-x-3">
             {onNavigate && (
               <button
-                onClick={() => onNavigate('android-gateway')}
+                type="button"
+                onClick={() =>
+                  triggerNavigationHandoff(onNavigate, {
+                    sourceScreen: 'mobile-gateway',
+                    sourceLabel: 'Mobile Gateway Station',
+                    contextTitle: 'Pair & Apps GSM Gateway & Device Manager',
+                    contextBadge: 'GSM Gateway',
+                    targetScreen: 'android-gateway',
+                  })
+                }
                 className={`p-2 rounded-xl transition-colors cursor-pointer ${
                   isDarkMode ? 'bg-zinc-800 text-zinc-300 hover:text-white' : 'bg-slate-100 text-slate-600 hover:text-slate-900'
                 }`}
@@ -937,7 +947,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
                 : cTheme.navInactive
             }`}
           >
-            <Bot className="h-3.5 w-3.5 shrink-0" />
+            <Headphones className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">AI Agents</span>
           </button>
 
@@ -977,7 +987,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
             {/* Call Header */}
             <div className="text-center space-y-1">
               <div className="inline-flex p-3 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/30 mb-1 animate-pulse">
-                <Bot className="h-8 w-8" />
+                <Headphones className="h-8 w-8" />
               </div>
               <h2 className={`text-lg font-extrabold ${cTheme.textPrimary}`}>
                 {selectedAgent?.name || 'Maya AI Receptionist'}
@@ -1289,7 +1299,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
           <div className={`p-5 rounded-3xl border shadow-xl space-y-4 transition-colors ${cTheme.card}`}>
             <div className={`flex items-center justify-between border-b pb-3 ${cTheme.border}`}>
               <div className="flex items-center space-x-2">
-                <Bot className="h-5 w-5 text-emerald-500" />
+                <Headphones className="h-5 w-5 text-emerald-500" />
                 <h2 className={`text-sm font-bold ${cTheme.textPrimary}`}>
                   Active Telephony AI Agents ({overviewData?.active_agents?.length || 2})
                 </h2>
@@ -1346,7 +1356,7 @@ export const MobileGatewayView: React.FC<MobileGatewayProps> = ({ onNavigate }) 
               </div>
             ) : (
               <div className={`p-6 text-center text-xs space-y-2 ${cTheme.textSecondary}`}>
-                <Bot className="h-8 w-8 text-zinc-400 mx-auto" />
+                <Headphones className="h-8 w-8 text-zinc-400 mx-auto" />
                 <p>Default Voice Agent Ready: Maya (Inbound Receptionist)</p>
                 <Button size="sm" onClick={() => startAICall()} className="bg-emerald-600 text-white text-xs">
                   Call Maya

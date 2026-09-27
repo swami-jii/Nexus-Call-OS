@@ -1,731 +1,576 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  CreditCard,
-  CheckCircle2,
-  Download,
+  ChevronDown,
+  RefreshCw,
+  AlertCircle,
   Check,
-  FileText,
-  Receipt,
-  ShieldCheck,
+  Building2,
   Plus,
-  Tag,
-  Percent,
-  Trash2,
-  DollarSign,
-  Building,
-  Smartphone,
-  Globe,
-  QrCode,
-  Zap,
-  Clock,
-  Sparkles,
-  Layers,
-  ArrowRight,
-  TrendingUp,
+  Search,
+  Crown,
+  Landmark,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Progress } from '../components/ui/Progress';
-import { Modal } from '../components/ui/Modal';
-import { Input } from '../components/ui/Input';
-import { Tabs } from '../components/ui/Tabs';
-import { useToast } from '../components/ui/Toast';
-import { couponRepository, paymentMethodRepository, planRepository } from '../repository';
-import { Coupon, PaymentMethodItem, SubscriptionPlan } from '../types';
+import { fetchAPI } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { SubscriptionPlan, BillingCurrencyOption, BillingInvoiceItem } from '../types';
+
+import { BillingTabNav, BillingTabKey } from '../components/billing/BillingTabNav';
+import { BillingOverviewTab } from '../components/billing/BillingOverviewTab';
+import { UsageCenterTab } from '../components/billing/UsageCenterTab';
+import { SubscriptionPlansTab } from '../components/billing/SubscriptionPlansTab';
+import { PaymentMethodsTab } from '../components/billing/PaymentMethodsTab';
+import { InvoicesTab } from '../components/billing/InvoicesTab';
+import { TransactionsTab } from '../components/billing/TransactionsTab';
+import { BillingSettingsTab } from '../components/billing/BillingSettingsTab';
+import { FullPageCheckout, detectUserGeoAndCurrency } from '../components/billing/FullPageCheckout';
 
 export const BillingView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'lifetime'>('monthly');
-  const [currentPlanId, setCurrentPlanId] = useState('pro');
+  const { user } = useAuth();
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Repositories Data State
+  // Active Navigation Tab
+  const [activeTab, setActiveTab] = useState<BillingTabKey>('overview');
+
+  // Full Screen Checkout Overlay State
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [checkoutMode, setCheckoutMode] = useState<'subscription_purchase' | 'wallet_topup'>('subscription_purchase');
+  const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionPlan | null>(null);
+  const [checkoutCycle, setCheckoutCycle] = useState<'monthly' | 'yearly' | 'lifetime'>('monthly');
+
+  // Authoritative Backend Data States
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [billingData, setBillingData] = useState<any>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>([]);
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [gateways, setGateways] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<BillingInvoiceItem[]>([]);
+  const [currencies, setCurrencies] = useState<BillingCurrencyOption[]>([
+    { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸', rate: 1.0, country: 'United States' },
+    { code: 'INR', symbol: '₹', name: 'Indian Rupee', flag: '🇮🇳', rate: 83.25, country: 'India' },
+    { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺', rate: 0.92, country: 'European Union' },
+    { code: 'GBP', symbol: '£', name: 'British Pound', flag: '🇬🇧', rate: 0.79, country: 'United Kingdom' },
+    { code: 'AED', symbol: 'AED ', name: 'UAE Dirham', flag: '🇦🇪', rate: 3.67, country: 'United Arab Emirates' },
+    { code: 'CAD', symbol: 'CA$', name: 'Canadian Dollar', flag: '🇨🇦', rate: 1.36, country: 'Canada' },
+    { code: 'AUD', symbol: 'AU$', name: 'Australian Dollar', flag: '🇦🇺', rate: 1.52, country: 'Australia' },
+    { code: 'SGD', symbol: 'SG$', name: 'Singapore Dollar', flag: '🇸🇬', rate: 1.35, country: 'Singapore' },
+    { code: 'JPY', symbol: '¥', name: 'Japanese Yen', flag: '🇯🇵', rate: 156.0, country: 'Japan' },
+  ]);
 
-  // Checkout & Coupon Application
-  const [checkoutCouponCode, setCheckoutCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [selectedCurrencyCode, setSelectedCurrencyCode] = useState<string>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('nexus_selected_currency') : null;
+      if (saved) return saved;
+      const geo = detectUserGeoAndCurrency();
+      return geo.currencyCode || 'INR';
+    } catch {
+      return 'INR';
+    }
+  });
+  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState('');
 
-  // Billing Address & Tax Details
-  const [taxId, setTaxId] = useState('US987654321-GSTIN');
-  const [billingAddress, setBillingAddress] = useState('500 Howard St, San Francisco, CA 94105, USA');
+  // Sync currency changes across window events and storage
+  useEffect(() => {
+    const handleCurrencyEvent = (e: any) => {
+      if (e.detail && typeof e.detail === 'string') {
+        setSelectedCurrencyCode(e.detail);
+      }
+    };
+    window.addEventListener('currency-changed', handleCurrencyEvent);
+    return () => window.removeEventListener('currency-changed', handleCurrencyEvent);
+  }, []);
 
-  // Modals
-  const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
-  const [isCreateCouponModalOpen, setIsCreateCouponModalOpen] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-  const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState<SubscriptionPlan | null>(null);
+  // Close currency dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsCurrencyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  // Add Payment Method Form State
-  const [paymentType, setPaymentType] = useState<
-    'card' | 'upi' | 'netbanking' | 'paypal' | 'wallet' | 'apple_pay' | 'google_pay'
-  >('card');
-  const [cardHolder, setCardHolder] = useState('Alex Vance');
-  const [cardNumber, setCardNumber] = useState('4242 4242 4242 4242');
-  const [cardExpiry, setCardExpiry] = useState('12/28');
-  const [upiId, setUpiId] = useState('alexvance@okaxis');
+  // Active Currency Object
+  const currentCurrency =
+    currencies.find((c) => c.code === selectedCurrencyCode) || currencies[0];
 
-  // New Coupon Form State
-  const [newCouponCode, setNewCouponCode] = useState('');
-  const [newDiscountType, setNewDiscountType] = useState<'percentage' | 'fixed'>('percentage');
-  const [newDiscountValue, setNewDiscountValue] = useState(25);
-  const [newMinPurchase, setNewMinPurchase] = useState(50);
-  const [newExpiry, setNewExpiry] = useState('2026-12-31');
+  // Dynamic search filtering over central registry currencies
+  const filteredCurrencies = useMemo(() => {
+    if (!currencySearch.trim()) return currencies;
+    const q = currencySearch.toLowerCase().trim();
+    return currencies.filter(
+      (c) =>
+        c.code.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
+        (c.country && c.country.toLowerCase().includes(q)) ||
+        c.symbol.toLowerCase().includes(q)
+    );
+  }, [currencies, currencySearch]);
 
-  const { addToast } = useToast();
+  // Fetch Live Billing Data with Resilient Promise.allSettled
+  const loadBillingData = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    else setIsRefreshing(true);
+    setLoadError(null);
 
-  const loadBillingData = async () => {
-    const loadedPlans = await planRepository.getAll();
-    const loadedPm = await paymentMethodRepository.getAll();
-    const loadedCoupons = await couponRepository.getAll();
-    setPlans(loadedPlans);
-    setPaymentMethods(loadedPm);
-    setCoupons(loadedCoupons);
-  };
+    try {
+      const [billingRes, plansRes, curRes, gwRes, invRes] = await Promise.allSettled([
+        fetchAPI('/api/billing'),
+        fetchAPI('/api/plans'),
+        fetchAPI('/api/billing/currencies'),
+        fetchAPI('/api/billing/gateways'),
+        fetchAPI('/api/billing/invoices'),
+      ]);
+
+      let hasFatalError = false;
+
+      // 1. Process Billing Dashboard Overview
+      if (billingRes.status === 'fulfilled' && billingRes.value) {
+        setBillingData(billingRes.value);
+      } else {
+        hasFatalError = true;
+      }
+
+      // 2. Process Plans
+      if (plansRes.status === 'fulfilled' && Array.isArray(plansRes.value)) {
+        setPlans(plansRes.value);
+      }
+
+      // 3. Process Currencies
+      if (curRes.status === 'fulfilled' && Array.isArray(curRes.value) && curRes.value.length > 0) {
+        setCurrencies(curRes.value);
+      }
+
+      // 4. Process Gateways
+      if (gwRes.status === 'fulfilled' && Array.isArray(gwRes.value)) {
+        setGateways(gwRes.value);
+      }
+
+      // 5. Process Invoices
+      if (invRes.status === 'fulfilled' && Array.isArray(invRes.value)) {
+        setInvoices(invRes.value);
+      }
+
+      if (hasFatalError && !silent) {
+        setLoadError('Unable to connect to billing server. Please check network connection and retry.');
+      }
+    } catch (err: any) {
+      setLoadError(err.message || 'Failed to sync with billing server.');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadBillingData();
-  }, []);
+  }, [loadBillingData, user?.id, (user as any)?.organization_id]);
 
-  const invoices = [
-    { id: 'inv_8801', date: 'Jul 01, 2026', amount: '$199.00', status: 'Paid', plan: 'Pro Subscription' },
-    { id: 'inv_8800', date: 'Jun 01, 2026', amount: '$199.00', status: 'Paid', plan: 'Pro Subscription' },
-    { id: 'inv_8799', date: 'May 01, 2026', amount: '$199.00', status: 'Paid', plan: 'Pro Subscription' },
-  ];
+  // Live Broadcast Listeners for Super Admin updates & Multi-tab sync
+  useEffect(() => {
+    const handleLiveSync = () => {
+      loadBillingData(true);
+    };
 
-  // Apply Coupon Logic
-  const handleApplyCoupon = () => {
-    if (!checkoutCouponCode.trim()) return;
-    const found = coupons.find(
-      (c) => c.code.toLowerCase() === checkoutCouponCode.trim().toLowerCase() && c.active
-    );
-    if (!found) {
-      addToast({ type: 'error', title: 'Invalid Coupon', description: 'Coupon code not found or expired.' });
-      return;
+    window.addEventListener('billing-data-updated', handleLiveSync);
+    window.addEventListener('plan-entitlements-updated', handleLiveSync);
+    window.addEventListener('app-plan-updated', handleLiveSync);
+    window.addEventListener('gateways-updated', handleLiveSync);
+    window.addEventListener('storage', (e) => {
+      if (
+        e.key === 'plan_entitlements_version' ||
+        e.key === 'gateways_version' ||
+        e.key === 'createcall_target_org_id'
+      ) {
+        handleLiveSync();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('billing-data-updated', handleLiveSync);
+      window.removeEventListener('plan-entitlements-updated', handleLiveSync);
+      window.removeEventListener('app-plan-updated', handleLiveSync);
+      window.removeEventListener('gateways-updated', handleLiveSync);
+    };
+  }, [loadBillingData]);
+
+  const [checkoutTopupAmount, setCheckoutTopupAmount] = useState<number>(100);
+
+  // Open Dedicated Wallet Top-Up Flow with optional preset amount
+  const handleOpenAddFunds = (amountUsd?: number | any) => {
+    const validAmount = typeof amountUsd === 'number' && !isNaN(amountUsd) && amountUsd > 0 ? amountUsd : 100;
+    setCheckoutMode('wallet_topup');
+    setCheckoutPlan(null);
+    setCheckoutTopupAmount(validAmount);
+    setShowCheckout(true);
+  };
+
+  // Open Dedicated Subscription Purchase / Upgrade Flow
+  const handleSelectPlan = (
+    plan: SubscriptionPlan,
+    cycle: 'monthly' | 'yearly' | 'lifetime'
+  ) => {
+    setCheckoutMode('subscription_purchase');
+    setCheckoutPlan(plan);
+    setCheckoutCycle(cycle);
+    setShowCheckout(true);
+  };
+
+  const handleOpenUpgradePlan = () => {
+    setActiveTab('plans');
+  };
+
+  // Callback on successful payment in FullPageCheckout
+  const handleCheckoutSuccess = (invoiceData: any) => {
+    // Keep user on the checkout Step 5 receipt view so they can review and print it.
+    // Do NOT automatically close checkout or redirect here!
+    loadBillingData(true);
+    if (invoiceData) {
+      setInvoices((prev) => [invoiceData, ...prev]);
     }
-    setAppliedCoupon(found);
-    addToast({
-      type: 'success',
-      title: 'Coupon Applied!',
-      description: `Discount ${found.discountType === 'percentage' ? `${found.discountValue}%` : `$${found.discountValue}`} applied.`,
-    });
   };
 
-  // Add Payment Method Handler
-  const handleAddPaymentMethod = async () => {
-    const created = await paymentMethodRepository.create({
-      type: paymentType,
-      brand: paymentType === 'card' ? 'Visa' : paymentType === 'upi' ? 'UPI' : 'PayPal',
-      last4: cardNumber.slice(-4) || '1111',
-      expMonth: 12,
-      expYear: 2028,
-      isDefault: paymentMethods.length === 0,
-      holderName: cardHolder,
-      details: paymentType === 'upi' ? upiId : undefined,
-    });
-    setPaymentMethods((prev) => [...prev, created]);
-    setIsAddPaymentModalOpen(false);
-    addToast({ type: 'success', title: 'Payment Method Added', description: `Saved ${paymentType.toUpperCase()} option.` });
-  };
+  // Full Page Checkout Overlay
+  if (showCheckout) {
+    const currentWalletBal =
+      billingData?.account?.balance_usd !== undefined
+        ? billingData.account.balance_usd
+        : billingData?.balance_usd !== undefined
+        ? billingData.balance_usd
+        : 0;
 
-  // Create Coupon Handler
-  const handleCreateCoupon = async () => {
-    if (!newCouponCode.trim()) return;
-    const created = await couponRepository.create({
-      code: newCouponCode.toUpperCase(),
-      discountType: newDiscountType,
-      discountValue: Number(newDiscountValue),
-      minPurchase: Number(newMinPurchase),
-      applicablePlans: ['Starter', 'Pro', 'Business', 'Enterprise'],
-      maxUsage: 500,
-      perUserLimit: 1,
-      usageCount: 0,
-      expiryDate: newExpiry,
-      active: true,
-    });
-    setCoupons((prev) => [...prev, created]);
-    setIsCreateCouponModalOpen(false);
-    setNewCouponCode('');
-    addToast({ type: 'success', title: 'Coupon Created', description: `Code ${created.code} activated.` });
-  };
+    return (
+      <FullPageCheckout
+        mode={checkoutMode}
+        initialPlan={checkoutPlan}
+        allPlans={plans}
+        initialBillingCycle={checkoutCycle}
+        initialCurrency={selectedCurrencyCode}
+        initialTopupAmountUsd={checkoutTopupAmount}
+        currentWalletBalanceUsd={currentWalletBal}
+        availableCurrencies={currencies}
+        availableGateways={gateways}
+        onBack={() => {
+          setShowCheckout(false);
+          loadBillingData(true);
+          setActiveTab('overview');
+        }}
+        onSuccess={handleCheckoutSuccess}
+      />
+    );
+  }
 
-  // Toggle Coupon Active Status
-  const handleToggleCoupon = async (c: Coupon) => {
-    const updated = await couponRepository.update(c.id, { active: !c.active });
-    setCoupons((prev) => prev.map((item) => (item.id === c.id ? updated : item)));
-    addToast({
-      type: 'info',
-      title: 'Coupon Status',
-      description: `${c.code} is now ${updated.active ? 'Active' : 'Deactivated'}.`,
-    });
-  };
+  const isSuperAdmin = Boolean(
+    billingData?.is_super_admin ||
+    billingData?.plan?.is_super_admin ||
+    (user as any)?.role === 'super_admin' ||
+    (user as any)?.role === 'superadmin' ||
+    user?.email === 'admin@createcall.ai'
+  );
 
-  // Set Default Payment Method
-  const handleSetDefaultPayment = async (id: string) => {
-    const updated = paymentMethods.map((pm) => ({
-      ...pm,
-      isDefault: pm.id === id,
-    }));
-    setPaymentMethods(updated);
-    addToast({ type: 'success', title: 'Default Payment Method', description: 'Updated primary payment option.' });
-  };
+  const subscriptionStatus =
+    billingData?.subscription_status ||
+    billingData?.plan?.status ||
+    'active';
 
-  // Delete Payment Method
-  const handleDeletePayment = async (id: string) => {
-    await paymentMethodRepository.delete(id);
-    setPaymentMethods((prev) => prev.filter((p) => p.id !== id));
-    addToast({ type: 'info', title: 'Payment Method Removed', description: 'Deleted payment option.' });
-  };
-
-  // Invoice Download
-  const handleDownloadInvoice = (invId: string, format: 'PDF' | 'CSV') => {
-    const content = `Invoice ID: ${invId}\nFormat: ${format}\nStatus: Paid\nOrganization: Nexus Org`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${invId}.${format.toLowerCase()}`;
-    link.click();
-    addToast({ type: 'success', title: 'Invoice Downloaded', description: `Saved ${invId}.${format.toLowerCase()}` });
-  };
-
-  const getPrice = (plan: SubscriptionPlan) => {
-    if (billingCycle === 'yearly') return plan.yearlyPrice;
-    if (billingCycle === 'lifetime' && plan.lifetimePrice) return plan.lifetimePrice;
-    return plan.monthlyPrice;
-  };
+  const workspaceName =
+    (user as any)?.organization_name ||
+    user?.fullName ||
+    'Workspace';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Enterprise Billing & Subscription Center
-          </h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            Manage subscription plans, concurrency limits, payment gateways, tax GST/VAT profiles, and discount coupons.
-          </p>
+    <div className="w-full max-w-full space-y-4 pb-12">
+      {/* Standard Header */}
+      <div className="space-y-1.5 border-b border-zinc-200/80 dark:border-zinc-800 pb-2.5 shrink-0 relative z-10">
+        {/* ROW 1: Heading on Left + Badges on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`p-1.5 rounded-lg shrink-0 ${
+              isSuperAdmin
+                ? 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                : 'bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400'
+            }`}>
+              {isSuperAdmin ? <Crown className="h-4 w-4" /> : <Building2 className="h-3.5 w-3.5" />}
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap leading-none">
+              {isSuperAdmin ? 'Platform Revenue & Financial Command Center' : 'Billing & Usage Command Center'}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Badge
+              variant={isSuperAdmin ? 'purple' : subscriptionStatus === 'active' ? 'emerald' : 'warning'}
+              size="xs"
+              className="font-mono text-[10px] uppercase font-bold flex items-center gap-1.5 shadow-2xs"
+            >
+              {isSuperAdmin ? (
+                <>
+                  <Crown className="h-3 w-3 text-amber-300" />
+                  <span>SOVEREIGN ROOT OWNER</span>
+                </>
+              ) : (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{subscriptionStatus}</span>
+                </>
+              )}
+            </Badge>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setIsAddPaymentModalOpen(true)} leftIcon={<CreditCard className="h-4 w-4" />}>
-            Add Payment Method
-          </Button>
-          <Button variant="primary" onClick={() => setActiveTab('plans')} leftIcon={<Sparkles className="h-4 w-4" />}>
-            Upgrade Plan
-          </Button>
+
+        {/* ROW 2: Description on Left + Action Buttons on Right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            {isSuperAdmin
+              ? 'Global multi-tenant platform revenue, payment gateway matrix, carrier voice telemetry, and unmetered root access.'
+              : 'Server-authoritative balance, carrier telephony quotas, subscription tiers, and tax-compliant receipts.'}
+          </p>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Dynamic SSOT Currency Dropdown */}
+            <div className="relative z-20" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCurrencyDropdownOpen((prev) => !prev);
+                  setCurrencySearch('');
+                }}
+                className="h-7.5 px-2.5 flex items-center gap-1.5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-750 text-xs font-semibold text-zinc-800 dark:text-zinc-200 transition-all cursor-pointer shadow-2xs"
+                aria-expanded={isCurrencyDropdownOpen}
+                aria-label="Select currency"
+              >
+                <span className="text-xs leading-none">{currentCurrency.flag}</span>
+                <span className="font-mono font-bold">{currentCurrency.code}</span>
+                <span className="text-zinc-400 font-normal">({currentCurrency.symbol})</span>
+                <ChevronDown className="h-3 w-3 text-zinc-400 ml-0.5" />
+              </button>
+
+              {isCurrencyDropdownOpen && (
+                <div className="absolute right-0 mt-1.5 w-72 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl py-1 z-30 divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <div className="p-2 space-y-1.5">
+                    <div className="flex items-center justify-between px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                      <span>Dynamic Currency SSOT</span>
+                      <span className="font-mono text-teal-600 dark:text-teal-400">{currencies.length} Available</span>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
+                      <input
+                        type="text"
+                        value={currencySearch}
+                        onChange={(e) => setCurrencySearch(e.target.value)}
+                        placeholder="Search currency, code, or country..."
+                        className="w-full h-8 pl-8 pr-3 text-xs rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-1 focus:ring-teal-500"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto py-1" style={{ scrollbarWidth: 'thin' }}>
+                    {filteredCurrencies.length > 0 ? (
+                      filteredCurrencies.map((curr) => {
+                        const isSelected = selectedCurrencyCode === curr.code;
+                        return (
+                          <button
+                            key={curr.code}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCurrencyCode(curr.code);
+                              try {
+                                localStorage.setItem('nexus_selected_currency', curr.code);
+                                window.dispatchEvent(new CustomEvent('currency-changed', { detail: curr.code }));
+                              } catch {}
+                              setIsCurrencyDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer text-left ${
+                              isSelected
+                                ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold'
+                                : 'text-zinc-700 dark:text-zinc-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-base shrink-0">{curr.flag}</span>
+                              <div className="min-w-0">
+                                <div className="truncate font-medium">{curr.name}</div>
+                                {curr.country && (
+                                   <div className="text-[10px] font-normal text-zinc-400 truncate">{curr.country}</div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 font-mono text-xs text-zinc-400 shrink-0 ml-2">
+                              <span className="font-bold text-zinc-700 dark:text-zinc-300">{curr.code}</span>
+                              <span className="text-[11px]">({curr.symbol})</span>
+                              {isSelected && <Check className="h-3.5 w-3.5 text-teal-600 shrink-0" />}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="p-4 text-center text-xs text-zinc-400">
+                        No currencies matching "{currencySearch}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sync Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadBillingData(true)}
+              disabled={isRefreshing}
+              className="h-7.5 text-xs font-semibold px-2.5 rounded-lg border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 shadow-2xs"
+              leftIcon={<RefreshCw className={`h-3.5 w-3.5 text-zinc-600 dark:text-zinc-400 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            >
+              Sync
+            </Button>
+
+            {/* Header Action Button */}
+            {isSuperAdmin ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setActiveTab('settings')}
+                className="h-7.5 text-xs font-semibold px-2.5 bg-purple-600 hover:bg-purple-700 border-purple-600 text-white rounded-lg shadow-2xs cursor-pointer"
+                leftIcon={<Landmark className="h-3.5 w-3.5" />}
+              >
+                Gateway Config
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOpenAddFunds}
+                className="h-7.5 text-xs font-semibold px-2.5 bg-teal-600 hover:bg-teal-700 border-teal-600 text-white rounded-lg shadow-2xs cursor-pointer"
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+              >
+                Add Funds
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      <Tabs
+      {/* Tab Navigation Row */}
+      <BillingTabNav
         activeTab={activeTab}
-        onChange={(t) => setActiveTab(t)}
-        variant="pills"
-        tabs={[
-          { id: 'overview', label: 'Overview & Usage' },
-          { id: 'plans', label: 'Subscription Plans' },
-          { id: 'payments', label: 'Payment Methods', badge: paymentMethods.length },
-          { id: 'coupons', label: 'Coupons & Discounts', badge: coupons.length },
-          { id: 'invoices', label: 'Invoices & Taxes' },
-        ]}
+        onTabChange={setActiveTab}
+        invoiceCount={invoices.length}
+        isSuperAdmin={isSuperAdmin}
       />
 
-      {/* TAB 1: OVERVIEW & USAGE */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
+      {/* Loading Skeleton */}
+      {isLoading ? (
+        <div className="space-y-4 animate-pulse">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="h-56 bg-zinc-200 dark:bg-zinc-800 rounded-lg lg:col-span-8" />
+            <div className="h-56 bg-zinc-200 dark:bg-zinc-800 rounded-lg lg:col-span-4" />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-semibold text-blue-100">Current Plan</p>
-                    <h3 className="text-2xl font-black mt-1">Pro Scale Plan</h3>
-                  </div>
-                  <Badge variant="success" size="sm" className="bg-emerald-500 text-white border-none">
-                    Active
-                  </Badge>
-                </div>
-                <p className="text-xs text-blue-100">Renews on August 15, 2026 • $199.00 / month</p>
-                <div className="pt-2 flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="white"
-                    className="!bg-white !text-blue-700 hover:!bg-blue-50 border-none font-bold shadow-sm"
-                    onClick={() => setActiveTab('plans')}
-                  >
-                    Change Subscription
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-bold text-zinc-500 uppercase">Monthly Voice Minutes</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">1,842</span>
-                  <span className="text-xs text-zinc-400">/ 3,000 Mins</span>
-                </div>
-                <Progress value={61} variant="primary" size="sm" />
-                <p className="text-[10px] text-zinc-400">61% of monthly allocation consumed</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-bold text-zinc-500 uppercase">Concurrent Line Capacity</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">4 / 10</span>
-                  <span className="text-xs text-emerald-500 font-bold">4 Active Calls</span>
-                </div>
-                <Progress value={40} variant="success" size="sm" />
-                <p className="text-[10px] text-zinc-400">6 additional concurrent trunks available</p>
-              </CardContent>
-            </Card>
+            <div className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+            <div className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+            <div className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
           </div>
-
-          {/* Payment Architecture Overview Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-blue-600" />
-                Multi-Gateway Payment Architecture Integration
-              </CardTitle>
-              <CardDescription>
-                Unified checkout processor routing through Stripe, Razorpay, Cashfree, PayPal, PhonePe, Google Pay, Apple Pay, and UPI.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { name: 'Stripe Global', status: 'Active (US/EU)', type: 'Card & Wallet' },
-                { name: 'Razorpay India', status: 'Active (IN)', type: 'UPI & NetBanking' },
-                { name: 'PayPal Express', status: 'Active Global', type: 'PayPal Balance' },
-                { name: 'Cashfree Payments', status: 'Active (IN)', type: 'Cards & Wallets' },
-              ].map((gw, idx) => (
-                <div key={idx} className="p-3 border rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 text-xs space-y-1">
-                  <p className="font-bold text-zinc-900 dark:text-zinc-100">{gw.name}</p>
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">{gw.status}</p>
-                  <p className="text-[10px] text-zinc-400">{gw.type}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
         </div>
-      )}
-
-      {/* TAB 2: SUBSCRIPTION PLANS */}
-      {activeTab === 'plans' && (
-        <div className="space-y-6">
-          {/* Billing Cycle Switcher */}
-          <div className="flex justify-center">
-            <div className="inline-flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl border border-zinc-200 dark:border-zinc-700">
+      ) : (
+        <>
+          {/* Error Banner with Retry */}
+          {loadError && (
+            <div className="p-3.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 flex items-center justify-between text-xs text-red-700 dark:text-red-300">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{loadError}</span>
+              </div>
               <button
                 type="button"
-                onClick={() => setBillingCycle('monthly')}
-                className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                  billingCycle === 'monthly'
-                    ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
-                }`}
+                onClick={() => loadBillingData()}
+                className="underline font-bold hover:text-red-900 dark:hover:text-red-100 cursor-pointer"
               >
-                Monthly Billing
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingCycle('yearly')}
-                className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
-                  billingCycle === 'yearly'
-                    ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
-                }`}
-              >
-                <span>Yearly Billing</span>
-                <span className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-extrabold">
-                  Save 20%
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingCycle('lifetime')}
-                className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                  billingCycle === 'lifetime'
-                    ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
-                }`}
-              >
-                Lifetime Enterprise License
+                Retry
               </button>
             </div>
-          </div>
-
-          {/* Grid of Plans */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {plans.map((plan) => {
-              const price = getPrice(plan);
-              const isCurrent = plan.id === currentPlanId;
-
-              return (
-                <Card
-                  key={plan.id}
-                  className={`flex flex-col justify-between relative ${
-                    plan.popular
-                      ? 'border-2 border-blue-600 shadow-lg shadow-blue-500/10'
-                      : 'border-zinc-200 dark:border-zinc-800'
-                  }`}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-black uppercase px-3 py-0.5 rounded-full">
-                      Most Popular Choice
-                    </div>
-                  )}
-
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-lg font-bold">{plan.name}</CardTitle>
-                    <CardDescription className="text-xs">{plan.tagline}</CardDescription>
-
-                    <div className="mt-4 flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-zinc-900 dark:text-zinc-100">${price}</span>
-                      <span className="text-xs text-zinc-400 font-semibold">
-                        {billingCycle === 'monthly' ? '/mo' : billingCycle === 'yearly' ? '/mo (billed annually)' : ' lifetime'}
-                      </span>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="p-4 pt-2 text-xs space-y-4">
-                    <ul className="space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-                      {plan.features.map((f, i) => (
-                        <li key={i} className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
-                          <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <Button
-                      variant={isCurrent ? 'outline' : plan.popular ? 'primary' : 'outline'}
-                      className="w-full"
-                      onClick={() => {
-                        setSelectedPlanForCheckout(plan);
-                        setIsUpgradeModalOpen(true);
-                      }}
-                    >
-                      {isCurrent ? 'Current Plan' : `Upgrade to ${plan.name}`}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: PAYMENT METHODS */}
-      {activeTab === 'payments' && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Saved Payment Methods</CardTitle>
-              <CardDescription>Credit Cards, Debit Cards, UPI IDs, PayPal, and Apple Pay</CardDescription>
-            </div>
-            <Button size="sm" variant="primary" onClick={() => setIsAddPaymentModalOpen(true)} leftIcon={<Plus className="h-4 w-4" />}>
-              Add Payment Method
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {paymentMethods.map((pm) => (
-              <div
-                key={pm.id}
-                className="p-4 border rounded-2xl border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-4 bg-zinc-50/50 dark:bg-zinc-900/30"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center font-bold">
-                    {pm.type === 'card' ? <CreditCard className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                        {pm.brand} {pm.last4 ? `•••• ${pm.last4}` : pm.details}
-                      </p>
-                      {pm.isDefault && <Badge variant="success" size="sm">Default</Badge>}
-                    </div>
-                    <p className="text-[11px] text-zinc-400">
-                      {pm.holderName} {pm.expMonth ? `• Exp ${pm.expMonth}/${pm.expYear}` : ''}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {!pm.isDefault && (
-                    <Button size="sm" variant="outline" onClick={() => handleSetDefaultPayment(pm.id)}>
-                      Make Default
-                    </Button>
-                  )}
-                  <Button size="sm" variant="danger" onClick={() => handleDeletePayment(pm.id)} leftIcon={<Trash2 className="h-3.5 w-3.5" />} />
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* TAB 4: COUPONS & DISCOUNTS */}
-      {activeTab === 'coupons' && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Admin Coupon Management System</CardTitle>
-                <CardDescription>Create percentage or fixed-amount discount coupons for checkout.</CardDescription>
-              </div>
-              <Button size="sm" variant="primary" onClick={() => setIsCreateCouponModalOpen(true)} leftIcon={<Plus className="h-4 w-4" />}>
-                Create Coupon Code
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {coupons.map((c) => (
-                <div
-                  key={c.id}
-                  className="p-4 border rounded-2xl border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50/50 dark:bg-zinc-900/30"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 flex items-center justify-center font-bold">
-                      <Tag className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-extrabold text-zinc-900 dark:text-zinc-100">{c.code}</span>
-                        <Badge variant={c.active ? 'success' : 'neutral'} size="sm">
-                          {c.active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        {c.discountType === 'percentage' ? `${c.discountValue}% OFF` : `$${c.discountValue} FLAT OFF`} • Min Purchase: ${c.minPurchase} • Used {c.usageCount}/{c.maxUsage}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => handleToggleCoupon(c)}>
-                      {c.active ? 'Deactivate' : 'Activate'}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* TAB 5: INVOICES & TAXES */}
-      {activeTab === 'invoices' && (
-        <div className="space-y-6">
-          {/* Tax Details Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Tax & VAT/GST Profile</CardTitle>
-              <CardDescription>Maintain organizational Tax Identification for legal invoice receipts.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  label="GSTIN / VAT ID / Tax Identification"
-                  value={taxId}
-                  onChange={(e) => setTaxId(e.target.value)}
-                />
-                <Input
-                  label="Billing Address"
-                  value={billingAddress}
-                  onChange={(e) => setBillingAddress(e.target.value)}
-                />
-              </div>
-              <Button variant="primary" onClick={() => addToast({ type: 'success', title: 'Tax Details Saved', description: 'Updated tax profile.' })}>
-                Save Tax Profile
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Invoices List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Invoice History</CardTitle>
-              <CardDescription>Download PDF and CSV receipts for accounting audit trail.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0 divide-y divide-zinc-100 dark:divide-zinc-800">
-              {invoices.map((inv) => (
-                <div key={inv.id} className="p-4 flex items-center justify-between gap-4 text-xs">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-zinc-900 dark:text-zinc-100">{inv.id}</span>
-                      <Badge variant="success" size="sm">{inv.status}</Badge>
-                    </div>
-                    <p className="text-zinc-500 text-[11px] mt-0.5">{inv.plan} • {inv.date}</p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span className="font-extrabold text-zinc-900 dark:text-zinc-100">{inv.amount}</span>
-                    <Button size="sm" variant="outline" onClick={() => handleDownloadInvoice(inv.id, 'PDF')}>
-                      PDF
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleDownloadInvoice(inv.id, 'CSV')}>
-                      CSV
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* CHECKOUT & UPGRADE MODAL WITH COUPON CODE INPUT */}
-      <Modal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        title={`Subscribe to ${selectedPlanForCheckout?.name || 'Selected Plan'}`}
-        description="Select payment gateway & apply discount coupon."
-        maxWidth="md"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setIsUpgradeModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (selectedPlanForCheckout) {
-                  setCurrentPlanId(selectedPlanForCheckout.id);
-                  setIsUpgradeModalOpen(false);
-                  addToast({ type: 'success', title: 'Subscription Activated', description: `Successfully upgraded to ${selectedPlanForCheckout.name}.` });
-                }
-              }}
-            >
-              Complete Checkout
-            </Button>
-          </>
-        }
-      >
-        {selectedPlanForCheckout && (
-          <div className="space-y-4">
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl flex items-center justify-between text-xs">
-              <span className="font-bold text-blue-900 dark:text-blue-100">{selectedPlanForCheckout.name} Plan</span>
-              <span className="font-extrabold text-blue-600">${selectedPlanForCheckout.monthlyPrice}/mo</span>
-            </div>
-
-            {/* Coupon Application Box */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Discount Coupon</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter WELCOME20"
-                  value={checkoutCouponCode}
-                  onChange={(e) => setCheckoutCouponCode(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-zinc-100 focus:outline-none"
-                />
-                <Button size="sm" variant="outline" onClick={handleApplyCoupon}>
-                  Apply
-                </Button>
-              </div>
-              {appliedCoupon && (
-                <p className="text-xs text-emerald-600 font-semibold">
-                  Coupon Applied: {appliedCoupon.code} (-{appliedCoupon.discountType === 'percentage' ? `${appliedCoupon.discountValue}%` : `$${appliedCoupon.discountValue}`})
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* CREATE COUPON MODAL */}
-      <Modal
-        isOpen={isCreateCouponModalOpen}
-        onClose={() => setIsCreateCouponModalOpen(false)}
-        title="Create Promotional Coupon"
-        description="Configure coupon discount code and minimum spend requirements."
-        maxWidth="md"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setIsCreateCouponModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleCreateCoupon}>
-              Save & Activate Coupon
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Input label="Coupon Code" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="SUMMER50" />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Discount Type</label>
-              <select
-                value={newDiscountType}
-                onChange={(e) => setNewDiscountType(e.target.value as any)}
-                className="w-full px-3 py-2 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-zinc-100"
-              >
-                <option value="percentage">Percentage (%)</option>
-                <option value="fixed">Fixed Amount ($)</option>
-              </select>
-            </div>
-            <Input label="Discount Value" type="number" value={newDiscountValue.toString()} onChange={(e) => setNewDiscountValue(Number(e.target.value))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Min Purchase ($)" type="number" value={newMinPurchase.toString()} onChange={(e) => setNewMinPurchase(Number(e.target.value))} />
-            <Input label="Expiry Date" type="date" value={newExpiry} onChange={(e) => setNewExpiry(e.target.value)} />
-          </div>
-        </div>
-      </Modal>
-
-      {/* ADD PAYMENT METHOD MODAL */}
-      <Modal
-        isOpen={isAddPaymentModalOpen}
-        onClose={() => setIsAddPaymentModalOpen(false)}
-        title="Add Payment Method"
-        description="Select Credit/Debit Card, UPI ID, or Wallet gateway."
-        maxWidth="md"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setIsAddPaymentModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleAddPaymentMethod}>
-              Save Payment Method
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Payment Gateway Option</label>
-            <select
-              value={paymentType}
-              onChange={(e) => setPaymentType(e.target.value as any)}
-              className="w-full px-3 py-2 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-zinc-100"
-            >
-              <option value="card">Credit / Debit Card (Stripe / Cashfree)</option>
-              <option value="upi">UPI / VPA (Razorpay / PhonePe)</option>
-              <option value="paypal">PayPal Balance</option>
-              <option value="netbanking">Net Banking (All Indian Banks)</option>
-            </select>
-          </div>
-
-          {paymentType === 'card' ? (
-            <>
-              <Input label="Cardholder Name" value={cardHolder} onChange={(e) => setCardHolder(e.target.value)} />
-              <Input label="Card Number" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} />
-              <Input label="Expiration (MM/YY)" value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} />
-            </>
-          ) : (
-            <Input label="UPI ID / Wallet Email" value={upiId} onChange={(e) => setUpiId(e.target.value)} />
           )}
-        </div>
-      </Modal>
+
+          {/* Active Tab View */}
+          <div className="w-full">
+            {activeTab === 'overview' && (
+              <BillingOverviewTab
+                billingData={billingData}
+                currency={currentCurrency}
+                onUpgradePlan={handleOpenUpgradePlan}
+                onAddBalance={handleOpenAddFunds}
+                onNavigateTab={(tabKey) => setActiveTab(tabKey)}
+                recentInvoices={invoices}
+                onRefresh={() => loadBillingData(true)}
+                isRefreshing={isRefreshing}
+              />
+            )}
+
+            {activeTab === 'usage' && (
+              <UsageCenterTab
+                billingData={billingData}
+                onUpgradePlan={() => setActiveTab('plans')}
+                onRefresh={() => loadBillingData(true)}
+                onNavigateTab={(tabKey) => setActiveTab(tabKey)}
+                isRefreshing={isRefreshing}
+              />
+            )}
+
+            {activeTab === 'plans' && (
+              <SubscriptionPlansTab
+                plans={plans}
+                currency={currentCurrency}
+                currentPlanId={billingData?.plan?.plan_key || billingData?.plan?.name || billingData?.active_plan || 'starter'}
+                isSuperAdmin={isSuperAdmin}
+                onSelectPlan={handleSelectPlan}
+              />
+            )}
+
+            {activeTab === 'payment_methods' && (
+              <PaymentMethodsTab
+                gateways={gateways}
+                billingAccount={billingData}
+                onAddFunds={handleOpenAddFunds}
+                onUpgradePlan={handleOpenUpgradePlan}
+                onNavigateTab={(tabKey) => setActiveTab(tabKey as any)}
+                isSuperAdmin={isSuperAdmin}
+              />
+            )}
+
+            {activeTab === 'invoices' && (
+              <InvoicesTab
+                invoices={invoices}
+                isSuperAdmin={isSuperAdmin}
+                onRefresh={() => loadBillingData(true)}
+              />
+            )}
+
+            {activeTab === 'transactions' && (
+              <TransactionsTab
+                isSuperAdmin={isSuperAdmin}
+                onRefresh={() => loadBillingData(true)}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <BillingSettingsTab
+                billingAccount={billingData}
+                isSuperAdmin={isSuperAdmin}
+                onSettingsSaved={() => loadBillingData(true)}
+              />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };
+
+export default BillingView;

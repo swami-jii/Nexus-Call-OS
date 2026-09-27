@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import (
+    get_current_user,
+    get_current_user_optional,
+    ensure_super_admin_exists,
+    get_effective_org_id,
+)
 from backend.database.session import get_db
 from backend.models.models import User
 from backend.repositories.repositories import campaign_repo
@@ -22,14 +27,19 @@ def list_campaigns(
     search: str | None = None,
     status_filter: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id)
     skip = (page - 1) * page_size
     filters = {}
     if status_filter:
         filters["status"] = status_filter
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if effective_org_id:
+        filters["organization_id"] = effective_org_id
+    elif effective_user.organization_id:
+        filters["organization_id"] = effective_user.organization_id
 
     items = campaign_repo.get_multi(
         db,
@@ -60,11 +70,15 @@ def list_campaigns(
 def create_campaign(
     campaign_in: CampaignCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_user_optional),
+    x_target_organization_id: str | None = Header(None, alias="X-Target-Organization-Id"),
 ):
+    effective_user = current_user or ensure_super_admin_exists(db)
+    effective_org_id = get_effective_org_id(effective_user, x_target_organization_id) or effective_user.organization_id
     data = campaign_in.model_dump()
-    data["organization_id"] = current_user.organization_id
+    data["organization_id"] = effective_org_id
     return campaign_repo.create(db, data)
+
 
 
 @router.get("/{campaign_id}", response_model=CampaignOut)
@@ -74,7 +88,8 @@ def get_campaign(
     current_user: User = Depends(get_current_user),
 ):
     campaign = campaign_repo.get_by_id(db, campaign_id)
-    if not campaign:
+    is_super_admin = (current_user.role == "super_admin" or current_user.email == "admin@createcall.ai")
+    if not campaign or (not is_super_admin and current_user.organization_id and campaign.organization_id != current_user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found"
         )
@@ -90,7 +105,8 @@ def update_campaign(
     current_user: User = Depends(get_current_user),
 ):
     campaign = campaign_repo.get_by_id(db, campaign_id)
-    if not campaign:
+    is_super_admin = (current_user.role == "super_admin" or current_user.email == "admin@createcall.ai")
+    if not campaign or (not is_super_admin and current_user.organization_id and campaign.organization_id != current_user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found"
         )
@@ -104,7 +120,8 @@ def delete_campaign(
     current_user: User = Depends(get_current_user),
 ):
     campaign = campaign_repo.get_by_id(db, campaign_id)
-    if not campaign:
+    is_super_admin = (current_user.role == "super_admin" or current_user.email == "admin@createcall.ai")
+    if not campaign or (not is_super_admin and current_user.organization_id and campaign.organization_id != current_user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found"
         )

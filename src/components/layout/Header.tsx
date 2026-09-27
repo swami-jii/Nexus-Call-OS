@@ -18,6 +18,9 @@ import { Dropdown } from '../ui/Dropdown';
 import { Avatar } from '../ui/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { clearNavigationHandoff } from '../../lib/handoffNavigation';
+import { BrandSocialIcon } from '../ui/BrandSocialIcon';
+import { detectSocialPlatform, getPlatformMeta, formatSocialUrl } from '../../data/globalSocialPlatformsCatalog';
 
 export interface HeaderProps {
   activeScreen: ScreenId;
@@ -80,37 +83,100 @@ export const Header: React.FC<HeaderProps> = ({
       'conversation-engine': 'Conversation Engine Observability',
       'demo-studio': 'Live Call Studio & Control Center',
       'android-gateway': 'Pair & Apps GSM Gateway & Device Manager',
-      'mobile-gateway': 'Nexus Mobile SIM Gateway App',
+      'mobile-gateway': 'Create Call Mobile SIM Gateway App',
+      memory: 'Agent Memory Brain & Session Hub',
+      'agent-memory': 'Agent Memory Brain & Session Hub',
+      'super-admin': 'Super Admin Governance Hub & User Management',
+      'admin-hub': 'Super Admin Governance Hub & User Management',
       'session-expired': 'Session Expired Preview',
     };
     return titles[screen] || 'Overview';
   };
+
+  const isSuperAdmin = Boolean(
+    user?.role === 'super_admin' || user?.email === 'admin@createcall.ai'
+  );
+
+  const handleDirectNavigate = (screen: ScreenId) => {
+    clearNavigationHandoff();
+    onNavigate(screen);
+  };
+
+  const activeHeaderChannels = React.useMemo(() => {
+    if (!user || user.showSocialInUI === false) return [];
+    if (user.socialPlacement !== 'header' && user.socialPlacement !== 'all') return [];
+
+    const list: { id: string; name: string; url: string; iconId: string; customIconUrl?: string }[] = [];
+
+    if (user.socialLinks && typeof user.socialLinks === 'object') {
+      Object.entries(user.socialLinks).forEach(([key, val]) => {
+        const rawVal = typeof val === 'string' ? val.trim() : '';
+        if (rawVal) {
+          const detected = detectSocialPlatform(rawVal);
+          const meta = getPlatformMeta(key);
+          list.push({
+            id: key,
+            name: detected.id !== 'website' ? detected.name : (meta?.name || key),
+            url: formatSocialUrl(rawVal, meta?.prefixUrl),
+            iconId: detected.id !== 'website' ? detected.id : (meta?.id || key),
+          });
+        }
+      });
+    }
+
+    if (Array.isArray((user as any).customSocialChannels)) {
+      (user as any).customSocialChannels.forEach((custom: any) => {
+        if (custom && custom.enabled !== false && custom.url && typeof custom.url === 'string' && custom.url.trim()) {
+          const detected = detectSocialPlatform(custom.url);
+          list.push({
+            id: custom.id,
+            name: custom.platform || detected.name,
+            url: formatSocialUrl(custom.url),
+            iconId: custom.icon ? custom.icon.toLowerCase() : detected.id,
+            customIconUrl: custom.customIconUrl,
+          });
+        }
+      });
+    }
+
+    return list;
+  }, [user]);
 
   const profileMenuItems = [
     {
       id: 'prof',
       label: 'View Profile',
       icon: <User className="h-4 w-4" />,
-      onClick: () => onNavigate('profile'),
+      onClick: () => handleDirectNavigate('profile'),
     },
-    {
-      id: 'sets',
-      label: 'OS Settings',
-      icon: <Settings className="h-4 w-4" />,
-      onClick: () => onNavigate('settings'),
-    },
+    ...(isSuperAdmin
+      ? [
+          {
+            id: 'super_hub',
+            label: 'Admin Control Center',
+            icon: <ShieldAlert className="h-4 w-4 text-emerald-500" />,
+            onClick: () => handleDirectNavigate('super-admin'),
+          },
+          {
+            id: 'sets',
+            label: 'OS Settings',
+            icon: <Settings className="h-4 w-4" />,
+            onClick: () => handleDirectNavigate('settings'),
+          },
+        ]
+      : []),
     {
       id: 'docs',
       label: 'Help & API Docs',
       icon: <HelpCircle className="h-4 w-4" />,
-      onClick: () => onNavigate('help-center'),
+      onClick: () => handleDirectNavigate('help-center'),
     },
     { id: 'div1', label: '', divider: true },
     {
       id: 'auth_screen',
       label: 'Switch to Auth UI',
       icon: <ShieldAlert className="h-4 w-4" />,
-      onClick: () => onNavigate('auth'),
+      onClick: () => handleDirectNavigate('auth'),
     },
     {
       id: 'logout',
@@ -119,13 +185,13 @@ export const Header: React.FC<HeaderProps> = ({
       danger: true,
       onClick: () => {
         logout();
-        onNavigate('auth');
+        handleDirectNavigate('auth');
       },
     },
   ];
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 transition-all">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 transition-all">
       {/* =========================================================================
           MOBILE HEADER (Below lg breakpoint) - CLEAN 1-ROW DESIGN
          ========================================================================= */}
@@ -141,7 +207,7 @@ export const Header: React.FC<HeaderProps> = ({
             <Menu className="h-5 w-5" />
           </button>
           <div
-            onClick={() => onNavigate('dashboard')}
+            onClick={() => handleDirectNavigate('dashboard')}
             className="flex items-center gap-2 cursor-pointer select-none"
           >
             <img
@@ -193,7 +259,7 @@ export const Header: React.FC<HeaderProps> = ({
           <Dropdown
             trigger={
               <button type="button" className="p-0.5 rounded-full ring-2 ring-teal-500/20">
-                <Avatar name={user?.fullName || 'User'} size="xs" status="online" />
+                <Avatar name={user?.fullName || 'User'} src={user?.avatarUrl || undefined} size="xs" status="online" />
               </button>
             }
             items={profileMenuItems}
@@ -209,9 +275,9 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Left: Single-Line Breadcrumb */}
         <div className="flex items-center min-w-0 shrink-0 whitespace-nowrap">
           <Breadcrumbs
-            onHomeClick={() => onNavigate('dashboard')}
+            onHomeClick={() => handleDirectNavigate('dashboard')}
             items={[
-              { label: 'System', onClick: () => onNavigate('dashboard') },
+              { label: 'System', onClick: () => handleDirectNavigate('dashboard') },
               { label: getBreadcrumbTitle(activeScreen), active: true },
             ]}
           />
@@ -236,6 +302,28 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: System Controls & User Profile */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Header Social Icons Strip (when header or all placement selected) */}
+          {activeHeaderChannels.length > 0 && (
+            <div className="flex items-center gap-1.5 pr-2 mr-1 border-r border-zinc-200 dark:border-zinc-800">
+              {activeHeaderChannels.map((ch) => (
+                <a
+                  key={ch.id}
+                  href={ch.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`${ch.name} - ${ch.url}`}
+                  className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all hover:scale-110 flex items-center justify-center shrink-0 cursor-pointer"
+                >
+                  {ch.customIconUrl ? (
+                    <img src={ch.customIconUrl} alt={ch.name} className="h-4 w-4 rounded object-cover" />
+                  ) : (
+                    <BrandSocialIcon platformId={ch.iconId} className="h-4 w-4 shrink-0 rounded" />
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
+
           {/* Theme Switcher */}
           <button
             type="button"
@@ -278,7 +366,7 @@ export const Header: React.FC<HeaderProps> = ({
             <Dropdown
               trigger={
                 <div className="flex items-center gap-2 p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer">
-                  <Avatar name={user?.fullName || 'User'} size="xs" status="online" />
+                  <Avatar name={user?.fullName || 'User'} src={user?.avatarUrl || undefined} size="xs" status="online" />
                   <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                     {user?.fullName || 'User'}
                   </span>

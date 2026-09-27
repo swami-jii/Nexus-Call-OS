@@ -69,13 +69,19 @@ def list_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
+    scope: str = Query("my"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     skip = (page - 1) * page_size
+    is_super_admin = (current_user.role == "super_admin" or current_user.email == "admin@createcall.ai")
+
     filters = {}
-    if current_user.organization_id:
-        filters["organization_id"] = current_user.organization_id
+    if not is_super_admin or scope != "all":
+        if current_user.organization_id:
+            filters["organization_id"] = current_user.organization_id
+        if not is_super_admin:
+            filters["user_id"] = current_user.id
 
     total = audit_repo.count(
         db,
@@ -83,15 +89,6 @@ def list_audit_logs(
         search_query=search,
         search_fields=["action", "resource", "ip_address"],
     )
-
-    if total == 0 and not search:
-        seed_system_audit_logs(db, current_user)
-        total = audit_repo.count(
-            db,
-            filters=filters,
-            search_query=search,
-            search_fields=["action", "resource", "ip_address"],
-        )
 
     items = audit_repo.get_multi(
         db,

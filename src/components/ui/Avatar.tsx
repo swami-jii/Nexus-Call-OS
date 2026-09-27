@@ -3,10 +3,40 @@ import React from 'react';
 export interface AvatarProps {
   name: string;
   src?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   status?: 'online' | 'offline' | 'busy' | 'away';
   className?: string;
 }
+
+const GRADIENT_PALETTES = [
+  'from-emerald-500 to-teal-700 text-white',
+  'from-blue-500 to-indigo-700 text-white',
+  'from-purple-500 to-pink-600 text-white',
+  'from-amber-500 to-orange-600 text-white',
+  'from-cyan-500 to-blue-600 text-white',
+  'from-rose-500 to-red-700 text-white',
+  'from-violet-600 to-indigo-900 text-white',
+];
+
+const getInitials = (name: string): string => {
+  if (!name || !name.trim()) return 'U';
+  const clean = name.trim().replace(/[@._-]/g, ' ');
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const getDeterministicGradient = (str: string): string => {
+  if (!str) return GRADIENT_PALETTES[0];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % GRADIENT_PALETTES.length;
+  return GRADIENT_PALETTES[index];
+};
 
 export const Avatar: React.FC<AvatarProps> = ({
   name,
@@ -15,21 +45,30 @@ export const Avatar: React.FC<AvatarProps> = ({
   status,
   className = '',
 }) => {
-  const getInitials = (n: string) => {
-    return n
-      .split(' ')
-      .map((part) => part[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
+  const [imageFailed, setImageFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageFailed(false);
+  }, [src]);
 
   const sizes = {
     xs: 'h-6 w-6 text-[10px]',
-    sm: 'h-8 w-8 text-xs',
-    md: 'h-10 w-10 text-sm',
-    lg: 'h-12 w-12 text-base',
-    xl: 'h-16 w-16 text-lg',
+    sm: 'h-8 w-8 text-xs font-semibold',
+    md: 'h-10 w-10 text-sm font-semibold',
+    lg: 'h-12 w-12 text-base font-bold',
+    xl: 'h-16 w-16 text-lg font-bold',
+    '2xl': 'h-20 w-20 text-xl font-bold',
+    '3xl': 'h-24 w-24 text-2xl font-bold',
+  };
+
+  const iconSizes = {
+    xs: 'h-3.5 w-3.5',
+    sm: 'h-4 w-4',
+    md: 'h-5 w-5',
+    lg: 'h-6 w-6',
+    xl: 'h-8 w-8',
+    '2xl': 'h-10 w-10',
+    '3xl': 'h-12 w-12',
   };
 
   const statusColors = {
@@ -39,15 +78,33 @@ export const Avatar: React.FC<AvatarProps> = ({
     away: 'bg-amber-500 ring-white dark:ring-zinc-900',
   };
 
+  const hasValidImage = Boolean(src && typeof src === 'string' && src.trim() !== '' && !imageFailed);
+
   return (
-    <div className="relative inline-block shrink-0">
+    <div className="relative inline-block shrink-0 select-none">
       <div
-        className={`rounded-full overflow-hidden flex items-center justify-center font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 select-none ${sizes[size]} ${className}`}
+        className={`rounded-full overflow-hidden flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs ${sizes[size]} ${className}`}
       >
-        {src ? (
-          <img src={src} alt={name} className="h-full w-full object-cover" />
+        {hasValidImage ? (
+          <img
+            src={src}
+            alt={name || 'User Avatar'}
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
+            onError={() => setImageFailed(true)}
+            className="h-full w-full object-cover rounded-full"
+            loading="lazy"
+          />
         ) : (
-          <span>{getInitials(name)}</span>
+          <div className="h-full w-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500">
+            <svg
+              className={`${iconSizes[size]} text-zinc-400 dark:text-zinc-500`}
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+            </svg>
+          </div>
         )}
       </div>
       {status && (
@@ -79,3 +136,4 @@ export const AvatarGroup: React.FC<{
     </div>
   );
 };
+

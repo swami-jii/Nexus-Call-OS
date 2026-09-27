@@ -87,10 +87,10 @@ class TestVariableResolverService(unittest.TestCase):
         res = self.resolver.resolve_text(
             template,
             ResolutionContext(
-                workspace_overrides={"company_name": "Nexus AI Tech"}
+                workspace_overrides={"company_name": "Create Call AI Tech"}
             )
         )
-        self.assertIn("Nexus AI Tech", res.resolved_text)
+        self.assertIn("Create Call AI Tech", res.resolved_text)
 
     def test_5_precedence_hierarchy(self):
         """

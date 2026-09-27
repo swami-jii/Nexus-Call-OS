@@ -16,7 +16,11 @@ from backend.middleware.audit_middleware import AuditMiddleware
 from backend.middleware.rate_limit import RateLimitMiddleware
 from backend.routers.agent_engine_router import router as agent_engine_router
 from backend.routers.agents import router as agents_router
-from backend.routers.api_keys import router as api_key_router
+from backend.routers.api_keys import (
+    router as api_key_router,
+    admin_api_router,
+)
+from backend.routers.admin import router as admin_router
 from backend.routers.audit_logs import router as audit_router
 from backend.routers.analytics import router as analytics_router
 from backend.routers.auth import router as auth_router
@@ -74,6 +78,23 @@ from backend.routers.public_apis_catalog_router import (
 from backend.routers.skills_router import (
     router as skills_router,
 )
+from backend.routers.memory_router import (
+    router as memory_router,
+)
+from backend.routers.system_logs_router import (
+    router as system_logs_router,
+    ws_logs_router,
+)
+from backend.routers.banking_intelligence_router import (
+    router as banking_intelligence_router,
+)
+from backend.utils.live_logger import LiveLogStreamHandler
+import logging
+
+# Attach Live Log Stream Handler for real-time WebSocket terminal logs
+root_logger = logging.getLogger()
+root_logger.addHandler(LiveLogStreamHandler())
+
 from backend.websocket.router import ws_router
 from backend.websocket.twilio_stream_router import router as twilio_ws_router
 
@@ -110,6 +131,7 @@ app.add_middleware(
 UploadStorageService.initialize_storage()
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(health_router)
 app.include_router(users_router)
 app.include_router(agents_router)
@@ -121,6 +143,7 @@ app.include_router(uploads_router)
 app.include_router(call_router)
 app.include_router(integration_router)
 app.include_router(api_key_router)
+app.include_router(admin_api_router)
 app.include_router(credentials_router)
 app.include_router(billing_router)
 app.include_router(notification_router)
@@ -143,7 +166,11 @@ app.include_router(voice_runtime_router)
 app.include_router(prompt_templates_ai_router)
 app.include_router(webhooks_manager_router)
 app.include_router(public_apis_catalog_router)
+app.include_router(banking_intelligence_router)
 app.include_router(skills_router)
+app.include_router(memory_router)
+app.include_router(system_logs_router)
+app.include_router(ws_logs_router)
 app.include_router(ws_router)
 app.include_router(twilio_ws_router)
 
@@ -161,10 +188,11 @@ def serve_integration_docs(filename: str):
 
 @app.get("/download")
 @app.get("/download/apk")
+@app.get("/downloads/Create-Call-GSM-Gateway.apk")
 @app.get("/downloads/Nexus-GSM-Gateway.apk")
 @app.get("/downloads/Nexus-GSM-Gateway-v2.4.apk")
 @app.get("/downloads/{filename}")
-def direct_apk_download(filename: str = "Nexus-GSM-Gateway.apk"):
+def direct_apk_download(filename: str = "Create-Call-GSM-Gateway.apk"):
     """Direct APK download endpoint for mobile browsers over Wi-Fi."""
     import os
     import glob
@@ -179,7 +207,7 @@ def direct_apk_download(filename: str = "Nexus-GSM-Gateway.apk"):
     else:
         # Check metadata
         metadata_file = os.path.join(downloads_dir, "release_metadata.json")
-        canonical_name = "Nexus-GSM-Gateway.apk"
+        canonical_name = "Create-Call-GSM-Gateway.apk"
         if os.path.exists(metadata_file):
             try:
                 with open(metadata_file, "r", encoding="utf-8") as f:
@@ -188,6 +216,8 @@ def direct_apk_download(filename: str = "Nexus-GSM-Gateway.apk"):
             except Exception:
                 pass
         apk_path = os.path.join(downloads_dir, canonical_name)
+        if not os.path.exists(apk_path):
+            apk_path = os.path.join(downloads_dir, "Nexus-GSM-Gateway.apk")
         if not os.path.exists(apk_path):
             candidates = sorted(glob.glob(os.path.join(downloads_dir, "*.apk")), key=os.path.getmtime, reverse=True)
             if candidates:

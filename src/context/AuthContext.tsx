@@ -5,8 +5,16 @@ import { fetchAPI } from '../lib/api';
 interface AuthContextType {
   isAuthenticated: boolean;
   user: UserProfile | null;
-  login: (credentials: any, rememberMe: boolean) => Promise<void>;
-  register: (data: any) => Promise<void>;
+  setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
+  updateUser: (updates: Partial<UserProfile>) => void;
+  login: (credentials: any, rememberMe?: boolean) => Promise<{ requires2FA?: boolean; email?: string; message?: string } | void>;
+  verify2FALogin: (email: string, code: string, rememberMe?: boolean) => Promise<void>;
+  loginWithSSO: (
+    provider: 'google' | 'github' | 'discord' | 'apple' | 'microsoft' | string,
+    ssoData?: { email?: string; full_name?: string; avatar_url?: string }
+  ) => Promise<void>;
+  register: (data: any) => Promise<{ requires_verification?: boolean; email?: string; message?: string }>;
+  verifyRegistration: (email: string, code: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -21,23 +29,103 @@ export const useAuth = () => {
   return context;
 };
 
-// Default fallback profile data to satisfy UI requirements for fields backend doesn't have yet
-const DEFAULT_PROFILE_EXTRAS = {
-  company: 'Nexus AI Voice OS',
-  timezone: 'UTC',
-  language: 'en-US (English)',
-  address: '',
-  bio: 'Platform User',
-  avatarUrl: null,
-  coverUrl: null,
-  socialLinks: {
-    twitter: '',
-    linkedin: '',
-    github: '',
-    website: '',
-  },
-  twoFactorEnabled: false,
-  sessions: [],
+export const buildUserProfileFromAuthData = (userData: any): UserProfile => {
+  let profileData: any = {};
+  if (userData?.profile_data) {
+    try {
+      profileData = typeof userData.profile_data === 'string' ? JSON.parse(userData.profile_data) : userData.profile_data;
+    } catch {}
+  }
+
+  let cached: any = {};
+  try {
+    const raw = localStorage.getItem('nexus_user_profile');
+    if (raw) cached = JSON.parse(raw);
+  } catch {}
+
+  const email = (userData?.email || cached.email || localStorage.getItem('nexus_user_email') || 'user@createcall.ai').toLowerCase().trim();
+  const fullName = userData?.full_name || profileData.fullName || cached.fullName || email.split('@')[0];
+
+  const avatarUrl = profileData.avatarUrl !== undefined
+    ? profileData.avatarUrl
+    : (userData?.avatar_url !== undefined && userData?.avatar_url !== null
+        ? userData.avatar_url
+        : (cached.avatarUrl || null));
+
+  const coverUrl = profileData.coverUrl !== undefined
+    ? profileData.coverUrl
+    : (cached.coverUrl || null);
+
+  return {
+    fullName,
+    email,
+    phone: userData?.phone_number || profileData.phone || cached.phone || '',
+    company: profileData.company || userData?.organization_name || cached.company || 'Create Call OS',
+    role: userData?.role || cached.role || 'operator',
+    timezone: profileData.timezone || cached.timezone || 'Asia/Kolkata',
+    language: profileData.language || cached.language || 'English (US)',
+    address: profileData.address || cached.address || '',
+    bio: profileData.bio || cached.bio || '',
+    avatarUrl,
+    coverUrl,
+    showSocialInUI: profileData.showSocialInUI !== undefined ? !!profileData.showSocialInUI : (cached.showSocialInUI !== undefined ? cached.showSocialInUI : true),
+    socialPlacement: profileData.socialPlacement || cached.socialPlacement || 'header',
+    socialDockSize: profileData.socialDockSize || cached.socialDockSize || 'regular',
+    socialDockTheme: profileData.socialDockTheme || cached.socialDockTheme || 'glass',
+    socialDockPosition: profileData.socialDockPosition || cached.socialDockPosition || 'bottom-right',
+    socialAnimation: profileData.socialAnimation || cached.socialAnimation || 'smooth-pop',
+    socialLinks: profileData.socialLinks || cached.socialLinks || {},
+    customSocialChannels: Array.isArray(profileData.customSocialChannels)
+      ? profileData.customSocialChannels
+      : (Array.isArray(cached.customSocialChannels) ? cached.customSocialChannels : []),
+    twoFactorEnabled: profileData.twoFactorEnabled !== undefined ? !!profileData.twoFactorEnabled : !!cached.twoFactorEnabled,
+    sessions: Array.isArray(profileData.sessions) ? profileData.sessions : (Array.isArray(cached.sessions) ? cached.sessions : []),
+  };
+};
+
+export const clearAllWorkspaceCaches = () => {
+  try {
+    const keysToRemove = [
+      'nexus_access_token',
+      'nexus_refresh_token',
+      'nexus_user_email',
+      'nexus_user_profile',
+      'nexus_user_avatar',
+      'nexus_current_screen',
+      'nexus_custom_items',
+      'create_call_custom_items',
+      'nexus_models_cache',
+      'create_call_models_cache',
+      'nexus_enabled_toggles',
+      'nexus_test_results',
+      'nexus_active_tab',
+      'nexus_active_group',
+      'nexus_campaign_handoff_context',
+      'nexus_wf_chat_sessions',
+      'nexus_wf_active_session_id',
+      'nexus_wf_active_skills',
+      'token',
+      'access_token',
+    ];
+    keysToRemove.forEach((k) => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (
+        key.startsWith('create_call_custom_items_') ||
+        key.startsWith('nexus_custom_items_') ||
+        key.startsWith('nexus_campaign_meta_') ||
+        key.startsWith('nexus_wf_')
+      )) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch (e) {
+    console.error('Error clearing workspace cache:', e);
+  }
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -54,14 +142,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const cached = localStorage.getItem('nexus_user_profile');
       if (cached) return JSON.parse(cached);
-      const email = localStorage.getItem('nexus_user_email') || 'admin@nexus.ai';
-      return {
-        ...DEFAULT_PROFILE_EXTRAS,
-        fullName: email.split('@')[0].toUpperCase(),
-        email,
-        phone: '',
-        role: 'operator',
-      } as UserProfile;
+      const email = localStorage.getItem('nexus_user_email') || 'user@createcall.ai';
+      return buildUserProfileFromAuthData({ email });
     } catch {
       return null;
     }
@@ -84,6 +166,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const checkAuth = async () => {
+    // 1. Extract OAuth token from URL parameters if returning from OAuth provider
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenParam = urlParams.get('token');
+        const refreshParam = urlParams.get('refresh');
+        const emailParam = urlParams.get('email');
+        const avatarParam = urlParams.get('avatar');
+
+        if (tokenParam) {
+          localStorage.setItem('nexus_access_token', tokenParam);
+          if (refreshParam) {
+            localStorage.setItem('nexus_refresh_token', refreshParam);
+          }
+          if (emailParam) {
+            localStorage.setItem('nexus_user_email', emailParam);
+          }
+          if (avatarParam) {
+            localStorage.setItem('nexus_user_avatar', decodeURIComponent(avatarParam));
+          }
+          // Remove query params from address bar smoothly
+          const cleanUrl = window.location.origin + window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      } catch {}
+    }
+
     const token = localStorage.getItem('nexus_access_token') || sessionStorage.getItem('nexus_access_token');
     if (!token) {
       setIsAuthenticated(false);
@@ -95,13 +204,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userData = await fetchAPI('/auth/me');
       if (userData && userData.email) {
-        const profile: UserProfile = {
-          ...DEFAULT_PROFILE_EXTRAS,
-          fullName: userData.full_name || userData.email.split('@')[0],
-          email: userData.email,
-          phone: userData.phone_number || '',
-          role: userData.role || 'operator',
-        };
+        const profile = buildUserProfileFromAuthData(userData);
         setUser(profile);
         setIsAuthenticated(true);
         localStorage.setItem('nexus_user_profile', JSON.stringify(profile));
@@ -116,13 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (credentials: any, rememberMe: boolean = true) => {
     const storage = rememberMe ? localStorage : sessionStorage;
-    const userEmail = credentials?.email || '';
-
-    // Clear any previous user session keys
-    localStorage.removeItem('nexus_access_token');
-    localStorage.removeItem('nexus_refresh_token');
-    sessionStorage.removeItem('nexus_access_token');
-    sessionStorage.removeItem('nexus_refresh_token');
+    const userEmail = (credentials?.email || '').toLowerCase().trim();
 
     try {
       setIsLoading(true);
@@ -131,23 +228,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(credentials),
       });
 
+      if (data && data.requires_2fa) {
+        return {
+          requires2FA: true,
+          email: data.email || userEmail,
+          message: data.message,
+        };
+      }
+
       if (data && data.access_token) {
+        const previousEmail = (localStorage.getItem('nexus_user_email') || '').toLowerCase().trim();
+        const activeEmail = (data.user?.email || userEmail).toLowerCase().trim();
+        if (previousEmail && previousEmail !== activeEmail) {
+          clearAllWorkspaceCaches();
+        }
+
         storage.setItem('nexus_access_token', data.access_token);
         if (data.refresh_token) {
           storage.setItem('nexus_refresh_token', data.refresh_token);
         }
-        localStorage.setItem('nexus_user_email', data.user?.email || userEmail);
-
-        const loggedInUser: UserProfile = {
-          ...DEFAULT_PROFILE_EXTRAS,
-          fullName: data.user?.full_name || userEmail.split('@')[0].toUpperCase(),
-          email: data.user?.email || userEmail,
-          phone: data.user?.phone_number || '',
-          role: data.user?.role || 'operator',
-        };
+        const loggedInUser = buildUserProfileFromAuthData({
+          ...data.user,
+          email: activeEmail,
+        });
         setUser(loggedInUser);
         localStorage.setItem('nexus_user_profile', JSON.stringify(loggedInUser));
         setIsAuthenticated(true);
+        return { requires2FA: false };
       } else {
         throw new Error('Authentication response did not contain access token');
       }
@@ -159,30 +266,186 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const verify2FALogin = async (email: string, code: string, rememberMe: boolean = true) => {
+    const storage = rememberMe ? localStorage : sessionStorage;
+    const cleanEmail = email.toLowerCase().trim();
+    setIsLoading(true);
+    try {
+      const data = await fetchAPI('/auth/login/2fa', {
+        method: 'POST',
+        body: JSON.stringify({ email: cleanEmail, code, remember_me: rememberMe }),
+      });
+
+      if (data && data.access_token) {
+        const previousEmail = (localStorage.getItem('nexus_user_email') || '').toLowerCase().trim();
+        const activeEmail = (data.user?.email || cleanEmail).toLowerCase().trim();
+        if (previousEmail && previousEmail !== activeEmail) {
+          clearAllWorkspaceCaches();
+        }
+
+        storage.setItem('nexus_access_token', data.access_token);
+        if (data.refresh_token) {
+          storage.setItem('nexus_refresh_token', data.refresh_token);
+        }
+        const loggedInUser = buildUserProfileFromAuthData({
+          ...data.user,
+          email: activeEmail,
+        });
+        setUser(loggedInUser);
+        localStorage.setItem('nexus_user_profile', JSON.stringify(loggedInUser));
+        setIsAuthenticated(true);
+      } else {
+        throw new Error(data?.detail || '2FA verification failed');
+      }
+    } catch (err: any) {
+      console.error('2FA verification failed:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithSSO = async (
+    provider: 'google' | 'github' | 'discord' | 'apple' | 'microsoft' | string,
+    ssoData?: { email?: string; full_name?: string; avatar_url?: string }
+  ) => {
+    setIsLoading(true);
+    try {
+      const email = (ssoData?.email || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        throw new Error('Please enter a valid email address for SSO authentication');
+      }
+
+      // Format clean display name from full_name or email prefix
+      const derivedName = email
+        .split('@')[0]
+        .replace(/[._-]/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+      const fullName = (ssoData?.full_name || derivedName).trim();
+
+      const payload = {
+        provider,
+        email,
+        full_name: fullName,
+        avatar_url: ssoData?.avatar_url,
+      };
+
+      const data = await fetchAPI('/auth/sso/login', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (data && data.access_token) {
+        const previousEmail = (localStorage.getItem('nexus_user_email') || '').toLowerCase().trim();
+        const activeEmail = (data.user?.email || payload.email).toLowerCase().trim();
+        if (previousEmail && previousEmail !== activeEmail) {
+          clearAllWorkspaceCaches();
+        }
+
+        localStorage.setItem('nexus_access_token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('nexus_refresh_token', data.refresh_token);
+        }
+        const loggedInUser = buildUserProfileFromAuthData({
+          ...data.user,
+          email: activeEmail,
+          full_name: data.user?.full_name || payload.full_name,
+        });
+        setUser(loggedInUser);
+        localStorage.setItem('nexus_user_profile', JSON.stringify(loggedInUser));
+        setIsAuthenticated(true);
+      } else {
+        throw new Error('SSO authentication response did not contain access token');
+      }
+    } catch (err: any) {
+      console.error('SSO Login failed:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const register = async (userData: any) => {
-    await fetchAPI('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
+    setIsLoading(true);
+    try {
+      const data = await fetchAPI('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      });
+      return data;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyRegistration = async (email: string, code: string) => {
+    setIsLoading(true);
+    try {
+      const data = await fetchAPI('/auth/verify-registration', {
+        method: 'POST',
+        body: JSON.stringify({ email, otp_code: code }),
+      });
+
+      if (data && data.access_token) {
+        localStorage.setItem('nexus_access_token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('nexus_refresh_token', data.refresh_token);
+        }
+        const loggedInUser = buildUserProfileFromAuthData({
+          ...data.user,
+          email: data.user?.email || email,
+        });
+        setUser(loggedInUser);
+        localStorage.setItem('nexus_user_profile', JSON.stringify(loggedInUser));
+        setIsAuthenticated(true);
+      } else {
+        throw new Error('Account verification response did not contain access token');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateUser = (updates: Partial<UserProfile>) => {
+    setUser((prev) => {
+      const updated = prev ? ({ ...prev, ...updates } as UserProfile) : (updates as UserProfile);
+      try {
+        localStorage.setItem('nexus_user_profile', JSON.stringify(updated));
+        if (updates.avatarUrl !== undefined) {
+          if (updates.avatarUrl) {
+            localStorage.setItem('nexus_user_avatar', updates.avatarUrl);
+          } else {
+            localStorage.removeItem('nexus_user_avatar');
+          }
+        }
+      } catch {}
+      return updated;
     });
-    // After register, log in to the newly created account with its isolated workspace
-    await login({ email: userData.email, password: userData.password }, true);
   };
 
   const logout = () => {
-    localStorage.removeItem('nexus_access_token');
-    localStorage.removeItem('nexus_refresh_token');
-    localStorage.removeItem('nexus_user_email');
-    localStorage.removeItem('nexus_user_profile');
-    localStorage.removeItem('nexus_current_screen');
-    sessionStorage.removeItem('nexus_access_token');
-    sessionStorage.removeItem('nexus_refresh_token');
+    clearAllWorkspaceCaches();
     setIsAuthenticated(false);
     setUser(null);
     setIsLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, register, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        user,
+        setUser,
+        updateUser,
+        login,
+        verify2FALogin,
+        loginWithSSO,
+        register,
+        verifyRegistration,
+        logout,
+        isLoading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

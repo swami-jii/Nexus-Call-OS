@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 125 32" fill="none">
+  <rect x="2" y="3" width="26" height="26" rx="6" fill="#00D632"/>
+  <text x="10" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="18" fill="#FFFFFF">$</text>
+  <text x="34" y="23" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="20" fill="#00D632" letter-spacing="-0.3">
+    Cash App
+  </text>
+</svg>

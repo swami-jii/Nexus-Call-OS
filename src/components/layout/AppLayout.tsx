@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ScreenId } from '../../types';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { SovereignTargetBanner } from './SovereignTargetBanner';
 import { CommandPalette } from './CommandPalette';
 import { NotificationDrawer } from './NotificationDrawer';
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 import { useTheme } from '../../context/ThemeContext';
+import { GlobalHandoffReturnBanner } from '../campaigns/CampaignReturnBanner';
 
 export interface AppLayoutProps {
   activeScreen: ScreenId;
@@ -78,25 +80,58 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleTheme]);
 
+  const [isStudioShellHidden, setIsStudioShellHidden] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('nexus_studio_shell_hidden') === 'true';
+  });
+
+  useEffect(() => {
+    const handleToggle = () => {
+      setIsStudioShellHidden((prev) => {
+        const next = !prev;
+        localStorage.setItem('nexus_studio_shell_hidden', String(next));
+        if (!next) {
+          // When turning Show Header ON, default sidebar to closed (collapsed)
+          setIsSidebarCollapsed(true);
+        }
+        return next;
+      });
+    };
+    window.addEventListener('nexus-toggle-studio-shell', handleToggle);
+    return () => window.removeEventListener('nexus-toggle-studio-shell', handleToggle);
+  }, []);
+
+  useEffect(() => {
+    if (activeScreen === 'workflows' || activeScreen === 'automation') {
+      setIsSidebarCollapsed(true);
+    }
+  }, [activeScreen]);
+
   const isFullScreenPage = activeScreen === 'auth';
 
   if (isFullScreenPage) {
     return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">{children}</div>;
   }
 
+  const isWorkflowsStudio = activeScreen === 'workflows' || activeScreen === 'automation';
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex antialiased" style={{ fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
+    <div className={`min-h-screen ${isWorkflowsStudio ? 'h-screen overflow-hidden' : ''} bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex antialiased w-full max-w-full overflow-x-hidden`} style={{ fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block shrink-0">
-        <Sidebar
-          activeScreen={activeScreen}
-          onNavigate={(s) => {
-            handleNavigate(s);
-          }}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-      </div>
+      {!(isWorkflowsStudio && isStudioShellHidden) && (
+        <div className="hidden lg:block shrink-0 transition-all duration-300 ease-in-out">
+          <Sidebar
+            activeScreen={activeScreen}
+            onNavigate={(s) => {
+              handleNavigate(s);
+            }}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => {
+              setIsSidebarCollapsed((prev) => !prev);
+            }}
+          />
+        </div>
+      )}
 
       {/* Mobile Sidebar Overlay Drawer */}
       <AnimatePresence>
@@ -132,34 +167,46 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
       {/* Main OS Content Shell */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
-          isSidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'
+        className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden transition-all duration-300 ease-in-out ${
+          isWorkflowsStudio ? 'h-full overflow-hidden' : ''
+        } ${
+          isWorkflowsStudio && isStudioShellHidden
+            ? 'lg:pl-0'
+            : isSidebarCollapsed
+            ? 'lg:pl-16'
+            : 'lg:pl-64'
         }`}
       >
-        <Header
-          activeScreen={activeScreen}
-          onNavigate={(s) => {
-            console.warn('[DIAGNOSTIC Header onNavigate callback fired]', s, new Error().stack);
-            handleNavigate(s);
-          }}
-          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-          onOpenNotifications={() => setIsNotificationsOpen(true)}
-          onOpenShortcuts={() => setIsShortcutsOpen(true)}
-          onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
-        />
+        {!(isWorkflowsStudio && isStudioShellHidden) && (
+          <div className="shrink-0 sticky top-0 z-40">
+            <SovereignTargetBanner />
+            <Header
+              activeScreen={activeScreen}
+              onNavigate={(s) => {
+                handleNavigate(s);
+              }}
+              onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+              onOpenNotifications={() => setIsNotificationsOpen(true)}
+              onOpenShortcuts={() => setIsShortcutsOpen(true)}
+              onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+            />
+          </div>
+        )}
 
-        <main className="flex-1 px-3 sm:px-4 lg:px-4.5 py-4 max-w-[1600px] w-full mx-auto space-y-5">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeScreen}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+        <main
+          className={`flex-1 min-h-0 min-w-0 max-w-full flex flex-col overflow-x-hidden transition-all duration-300 relative z-0 ${
+            isWorkflowsStudio
+              ? 'p-0.5 sm:p-1 max-w-none w-full h-full overflow-hidden'
+              : 'px-3 sm:px-4 lg:px-4.5 py-4 max-w-[1600px] w-full mx-auto space-y-5'
+          }`}
+        >
+          <GlobalHandoffReturnBanner onNavigate={onNavigate} activeScreen={activeScreen} />
+          <div
+            key={activeScreen}
+            className={isWorkflowsStudio ? 'flex-1 min-h-0 flex flex-col w-full h-full overflow-hidden' : 'flex-1 min-h-0 min-w-0 max-w-full flex flex-col w-full overflow-x-hidden'}
+          >
+            {children}
+          </div>
         </main>
       </div>
 
@@ -174,6 +221,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       <NotificationDrawer
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
+        onNavigate={onNavigate}
       />
 
       {/* Keyboard Shortcuts Modal */}

@@ -1,6 +1,6 @@
 """
 Conversation Metrics Module
-Nexus Call OS v2.4 Enterprise
+Create Call OS v2.4 Enterprise
 
 Collects real-time telemetry metrics: latency ms, tokens used, cost USD, interruption counts.
 """

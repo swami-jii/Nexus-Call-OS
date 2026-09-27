@@ -1,6 +1,6 @@
 """
 Conversation State Machine Module
-Nexus Call OS v2.4 Enterprise
+Create Call OS v2.4 Enterprise
 
 Implements the universal finite state machine:
 IDLE -> GREETING -> LISTENING -> PROCESSING -> RESPONDING -> WAITING -> COMPLETED / FAILED.
@@ -55,12 +55,12 @@ class ConversationStateMachine:
     """Finite State Machine controlling conversation flow and transition logging."""
 
     VALID_TRANSITIONS: Dict[CoreConversationState, List[CoreConversationState]] = {
-        CoreConversationState.IDLE: [CoreConversationState.GREETING, CoreConversationState.LISTENING, CoreConversationState.FAILED],
-        CoreConversationState.GREETING: [CoreConversationState.LISTENING, CoreConversationState.RESPONDING, CoreConversationState.FAILED],
+        CoreConversationState.IDLE: [CoreConversationState.GREETING, CoreConversationState.LISTENING, CoreConversationState.WAITING, CoreConversationState.FAILED],
+        CoreConversationState.GREETING: [CoreConversationState.LISTENING, CoreConversationState.RESPONDING, CoreConversationState.WAITING, CoreConversationState.FAILED],
         CoreConversationState.LISTENING: [CoreConversationState.PROCESSING, CoreConversationState.WAITING, CoreConversationState.FAILED],
-        CoreConversationState.PROCESSING: [CoreConversationState.RESPONDING, CoreConversationState.LISTENING, CoreConversationState.FAILED],
+        CoreConversationState.PROCESSING: [CoreConversationState.RESPONDING, CoreConversationState.LISTENING, CoreConversationState.COMPLETED, CoreConversationState.FAILED],
         CoreConversationState.RESPONDING: [CoreConversationState.LISTENING, CoreConversationState.WAITING, CoreConversationState.COMPLETED, CoreConversationState.FAILED],
-        CoreConversationState.WAITING: [CoreConversationState.LISTENING, CoreConversationState.COMPLETED, CoreConversationState.FAILED],
+        CoreConversationState.WAITING: [CoreConversationState.LISTENING, CoreConversationState.PROCESSING, CoreConversationState.RESPONDING, CoreConversationState.COMPLETED, CoreConversationState.FAILED],
         CoreConversationState.COMPLETED: [],
         CoreConversationState.FAILED: [],
     }

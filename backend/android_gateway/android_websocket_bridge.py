@@ -266,11 +266,19 @@ class AndroidWebSocketBridgeServer:
             if dev:
                 dev.call_state = "ACTIVE"
             caller = event.get("caller_number", "Unknown")
+            dev_name = dev.name if dev else "Android Smartphone"
+            carrier = dev.carrier_name if dev else "Cellular SIM"
+            full_dev_label = f"{dev_name} ({carrier})"
             logger.info(f"[AndroidWSBridge] CALL_ACTIVE on device {device_id} with {caller}. Starting AI Voice Session...")
 
             # Initialize Voice Session and generate authentic greeting
             agent_id = dev.assigned_agent_id if dev else None
-            session = await self._voice_sessions.start_session(device_id, caller, agent_id=agent_id)
+            session = await self._voice_sessions.start_session(
+                device_id=device_id,
+                caller_number=caller,
+                agent_id=agent_id,
+                device_name=full_dev_label,
+            )
             greeting_pcm = await session.get_greeting_pcm()
 
             # Stream opening greeting PCM chunks to companion AudioTrack
@@ -290,6 +298,7 @@ class AndroidWebSocketBridgeServer:
                 "event": "CALL_ACTIVE_ACK",
                 "device_id": device_id,
                 "caller_number": caller,
+                "session_id": session.session_id,
                 "greeting_text": session.greeting_text,
                 "timestamp": time.time(),
             }
@@ -299,7 +308,7 @@ class AndroidWebSocketBridgeServer:
             if dev:
                 dev.call_state = "IDLE"
             duration = event.get("duration_sec", 0)
-            self._voice_sessions.end_session(device_id)
+            self._voice_sessions.end_session(device_id, duration_sec=duration)
             logger.info(f"[AndroidWSBridge] CALL_ENDED on device {device_id} (Duration: {duration}s)")
             return {
                 "type": "call_ended",

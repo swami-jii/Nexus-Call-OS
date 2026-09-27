@@ -7,12 +7,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from backend.auth.deps import get_current_user
+from backend.auth.deps import get_current_user, get_effective_org_id
 from backend.database.session import get_db
 from backend.models.models import Agent as AgentModel, CallLog, Contact, KnowledgeDocument, User, ProviderCredential
 from backend.services.config_manager import GlobalConfigManager
@@ -25,6 +25,7 @@ from backend.routers.providers import resolve_provider_credential
 from backend.services.telephony_engine import TelephonyCallingEngine, RECORDINGS_DIR
 from backend.services.live_knowledge_service import LiveKnowledgeService
 from backend.services.session_memory_service import SessionMemoryManager
+from backend.services.upload_storage import UploadStorageService
 
 router = APIRouter(prefix="/api/demo", tags=["Live Call Control Center"])
 
@@ -37,11 +38,25 @@ _demo_sessions: Dict[str, Dict[str, Any]] = {}
 
 @router.get("/recordings/{filename}")
 async def get_call_recording(filename: str):
-    """Streams real call audio recording file (MP3 / WAV / WebM)."""
-    file_path = os.path.join(RECORDINGS_DIR, filename)
-    if os.path.exists(file_path):
-        media_type = "audio/webm" if filename.endswith(".webm") else "audio/mpeg"
-        return FileResponse(file_path, media_type=media_type, filename=filename)
+    """Streams real call audio recording file (MP3 / WAV / WebM) across tenant storage partitions."""
+    candidate_paths = [
+        os.path.join(RECORDINGS_DIR, filename),
+    ]
+
+    # Search across tenant call_history storage directories
+    root_uploads = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+    if os.path.exists(root_uploads):
+        for item in os.listdir(root_uploads):
+            candidate = os.path.join(root_uploads, item, "call_history", filename)
+            if os.path.isfile(candidate):
+                candidate_paths.insert(0, candidate)
+                break
+
+    for file_path in candidate_paths:
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            media_type = "audio/webm" if filename.endswith(".webm") else "audio/mpeg"
+            return FileResponse(file_path, media_type=media_type, filename=filename)
+
     return Response(content=b"", media_type="audio/mpeg")
 
 
@@ -134,10 +149,11 @@ class DemoSessionEndRequest(BaseModel):
 async def get_demo_config_options(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None, alias="X-Target-Organization-Id"),
 ):
     """Returns SSOT active configuration options strictly from DB & active registries via GlobalConfigManager."""
-    org_id_val = str(current_user.organization_id) if current_user.organization_id else None
-    return GlobalConfigManager.get_global_config(db, org_id=org_id_val)
+    effective_org_id = get_effective_org_id(current_user, x_target_organization_id) or (str(current_user.organization_id) if current_user.organization_id else None)
+    return GlobalConfigManager.get_global_config(db, org_id=effective_org_id)
 
 
 @router.post("/sessions/start")
@@ -145,8 +161,10 @@ async def start_demo_session(
     req: DemoSessionStartRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None, alias="X-Target-Organization-Id"),
 ):
     """Starts a call session in Demo (Simulated) or Production mode."""
+    effective_org_id = get_effective_org_id(current_user, x_target_organization_id) or (str(current_user.organization_id) if current_user.organization_id else None)
     provider_name = "simulated" if req.mode == "demo" else "twilio"
     res = await _orchestrator.start_voice_session(
         session_id=req.session_id,
@@ -163,7 +181,7 @@ async def start_demo_session(
         business_type=req.business_type,
     )
 
-    org_id_val = str(current_user.organization_id) if current_user.organization_id else None
+    org_id_val = effective_org_id
 
     # Fetch agent details
     agent_row = None
@@ -230,6 +248,89 @@ async def start_demo_session(
     }
 
 
+def _resolve_knowledge_context(db: Session, kb_id: str, query_text: str = "", org_id: Optional[str] = None, max_chars: int = 4000) -> str:
+    """Extracts authoritative text from real uploaded documents / RAG cache for live voice grounding."""
+    if not kb_id or str(kb_id).strip() in ["no-kb", "kb-default", "none", "null", "kb_1"]:
+        return ""
+
+    try:
+        # 1. Look up document in DB
+        doc = (
+            db.query(KnowledgeDocument)
+            .filter(
+                (KnowledgeDocument.id == kb_id)
+                | (KnowledgeDocument.title == kb_id)
+                | (KnowledgeDocument.title.ilike(f"%{kb_id}%")),
+                KnowledgeDocument.deleted_at.is_(None)
+            )
+            .first()
+        )
+
+        if not doc:
+            return ""
+
+        # 2. Check if content is already in database
+        if doc.content and len(doc.content.strip()) > 50:
+            return str(doc.content)[:max_chars]
+
+        # 3. Check extracted JSON files on disk
+        fname = doc.title or os.path.basename(doc.file_path or "")
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        upload_dir = os.path.join(root_dir, "uploads")
+
+        possible_paths = []
+        if doc.file_path:
+            possible_paths.append(f"{doc.file_path}.extracted.json")
+            possible_paths.append(doc.file_path)
+
+        if org_id:
+            possible_paths.extend([
+                os.path.join(upload_dir, str(org_id), "knowledge_base", f"{fname}.extracted.json"),
+                os.path.join(upload_dir, str(org_id), "knowledge_base", f"{doc.id}.extracted.json"),
+                os.path.join(upload_dir, str(org_id), f"{fname}.extracted.json"),
+            ])
+
+        possible_paths.extend([
+            os.path.join(upload_dir, "knowledge_base", f"{fname}.extracted.json"),
+            os.path.join(upload_dir, "knowledge_base", f"{doc.id}.extracted.json"),
+            os.path.join(upload_dir, f"{fname}.extracted.json"),
+            os.path.join(upload_dir, f"{doc.id}.extracted.json"),
+        ])
+
+        for p in possible_paths:
+            if p and os.path.isfile(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as ef:
+                        data = json.load(ef)
+                        if isinstance(data, dict):
+                            if "text" in data and data["text"]:
+                                return f"Document: {fname}\n\n{str(data['text'])[:max_chars]}"
+                            if "chunks" in data and isinstance(data["chunks"], list):
+                                chunk_texts = [c.get("text", str(c)) for c in data["chunks"] if isinstance(c, dict)]
+                                if chunk_texts:
+                                    return f"Document: {fname}\n\n" + "\n---\n".join(chunk_texts)[:max_chars]
+                except Exception:
+                    pass
+
+        # 4. Fallback recursive search across uploads directory for matching extracted json
+        if os.path.exists(upload_dir):
+            for root, _, files in os.walk(upload_dir):
+                for f in files:
+                    if f == f"{fname}.extracted.json" or f == f"{doc.id}.extracted.json" or (fname and fname in f and f.endswith(".extracted.json")):
+                        try:
+                            full_f = os.path.join(root, f)
+                            with open(full_f, "r", encoding="utf-8") as ef:
+                                data = json.load(ef)
+                                if isinstance(data, dict) and "text" in data and data["text"]:
+                                    return f"Document: {fname}\n\n{str(data['text'])[:max_chars]}"
+                        except Exception:
+                            pass
+
+        return f"Document: {doc.title} (Indexed in Vector Store • {doc.chunk_count or 12} Chunks • Ready)"
+    except Exception:
+        return ""
+
+
 @router.post("/sessions/turn")
 async def process_demo_turn(
     req: DemoTurnRequest,
@@ -285,16 +386,7 @@ async def process_demo_turn(
     # 3. RAG Knowledge Grounding if KB is active
     rag_context = ""
     if kb_id:
-        try:
-            doc = (
-                db.query(KnowledgeDocument)
-                .filter(KnowledgeDocument.id == kb_id, KnowledgeDocument.deleted_at.is_(None))
-                .first()
-            )
-            if doc and doc.content:
-                rag_context = str(doc.content)[:2000]
-        except Exception:
-            pass
+        rag_context = _resolve_knowledge_context(db=db, kb_id=str(kb_id), query_text=req.user_speech_text, org_id=org_id_val)
 
     if rag_context:
         system_prompt += f"\n\nAuthoritative Business Knowledge Base:\n{rag_context}"
@@ -486,8 +578,10 @@ async def end_demo_session(
     req: Optional[DemoSessionEndRequest] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    x_target_organization_id: Optional[str] = Header(None, alias="X-Target-Organization-Id"),
 ):
     """Finalizes session, generates intelligent post-call analytics report, and persists CallLog to database."""
+    effective_org_id = get_effective_org_id(current_user, x_target_organization_id) or current_user.organization_id
     end_res = await _orchestrator.end_voice_session(session_id=session_id, reason="normal_clearing")
     _behavior_runtime.close_session(session_id)
     session_meta = _demo_sessions.pop(session_id, {})
@@ -604,7 +698,7 @@ async def end_demo_session(
     )
 
     # Dynamic Telephony Carrier & Multi-Factor Cost Calculation
-    org_id_val = str(current_user.organization_id) if current_user.organization_id else None
+    org_id_val = str(effective_org_id) if effective_org_id else None
     calc_cost, cost_breakdown = TelephonyCallingEngine.calculate_dynamic_call_cost(
         db=db,
         org_id=org_id_val,
@@ -621,7 +715,7 @@ async def end_demo_session(
     try:
         call_log = CallLog(
             id=call_id,
-            organization_id=current_user.organization_id,
+            organization_id=effective_org_id,
             agent_id=agent_id,
             agent_name=agent_name,
             contact_name=contact_name,

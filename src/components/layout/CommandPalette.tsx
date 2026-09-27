@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search,
-  Bot,
+  Headphones,
   PhoneCall,
   Users,
   Megaphone,
@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { ScreenId } from '../../types';
 import { Modal } from '../ui/Modal';
+import { useAuth } from '../../context/AuthContext';
+import { clearNavigationHandoff } from '../../lib/handoffNavigation';
 
 export interface CommandPaletteProps {
   isOpen: boolean;
@@ -39,6 +41,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const { user } = useAuth();
+  const isSuperAdmin = Boolean(
+    user?.role === 'super_admin' || user?.email === 'admin@createcall.ai'
+  );
+
   const commands = [
     {
       screen: 'dashboard' as ScreenId,
@@ -48,9 +55,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     },
     {
       screen: 'agents' as ScreenId,
-      title: 'Configure AI Voice Agents (Sophia, Marcus, Elena)',
+      title: 'Configure AI Voice Agents',
       category: 'AI Agents',
-      icon: <Bot className="h-4 w-4 text-blue-500" />,
+      icon: <Headphones className="h-4 w-4 text-blue-500" />,
     },
     {
       screen: 'call-history' as ScreenId,
@@ -70,12 +77,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       category: 'Directory',
       icon: <Users className="h-4 w-4 text-purple-500" />,
     },
-    {
-      screen: 'settings' as ScreenId,
-      title: 'OS Settings & Telephony Routing',
-      category: 'System',
-      icon: <Settings className="h-4 w-4 text-zinc-500" />,
-    },
+    ...(isSuperAdmin
+      ? [
+          {
+            screen: 'settings' as ScreenId,
+            title: 'OS Settings & Telephony Routing',
+            category: 'System',
+            icon: <Settings className="h-4 w-4 text-zinc-500" />,
+          },
+        ]
+      : []),
     {
       screen: 'help-center' as ScreenId,
       title: 'Open API Documentation & Help Center',
@@ -91,6 +102,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   );
 
   const handleSelect = (screen: ScreenId) => {
+    clearNavigationHandoff();
     onNavigate(screen);
     onClose();
     setQuery('');

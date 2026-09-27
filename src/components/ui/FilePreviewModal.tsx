@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Download,
@@ -23,10 +23,17 @@ import {
   ZoomOut,
   Layers,
   Scroll,
-  FileCheck,
+  Sparkles,
+  ShieldCheck,
+  BookOpen,
+  Search,
+  Filter,
+  ArrowRight,
+  HardDrive,
 } from 'lucide-react';
 import { Button } from './Button';
 import { Badge } from './Badge';
+import { SearchableSelect, SearchableOption } from './SearchableSelect';
 
 export interface PreviewableFile {
   filename: string;
@@ -37,6 +44,8 @@ export interface PreviewableFile {
   size_formatted?: string;
   created_at?: string;
   is_trash?: boolean;
+  content?: string;
+  raw_content?: string;
 }
 
 interface FilePreviewModalProps {
@@ -46,6 +55,7 @@ interface FilePreviewModalProps {
 }
 
 export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose, extraActions }) => {
+  // 1. Core State Hooks
   const [textContent, setTextContent] = useState<string | null>(null);
   const [isLoadingText, setIsLoadingText] = useState<boolean>(false);
   const [textError, setTextError] = useState<string | null>(null);
@@ -53,18 +63,30 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [csvViewMode, setCsvViewMode] = useState<'table' | 'raw'>('table');
 
-  // PDF Page Viewer State
+  // 2. Multi-Page Extracted Vector State (Supports 31, 50, 100+ pages)
+  const [extractedMeta, setExtractedMeta] = useState<{
+    page_count?: number;
+    chunk_count?: number;
+    char_count?: number;
+  } | null>(null);
+  const [selectedExtractedPage, setSelectedExtractedPage] = useState<number | 'all'>('all');
+  const [extractedSearchQuery, setExtractedSearchQuery] = useState<string>('');
+
+  // 3. PDF Page Viewer State
   const [pdfPage, setPdfPage] = useState<number>(1);
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(1);
   const [pdfZoom, setPdfZoom] = useState<number>(100);
   const [isPdfLoading, setIsPdfLoading] = useState<boolean>(false);
-  const [pdfViewMode, setPdfViewMode] = useState<'scroll' | 'single'>('scroll');
+  const [pdfViewMode, setPdfViewMode] = useState<'scroll' | 'single' | 'text'>('scroll');
+  const [pdfImageErrors, setPdfImageErrors] = useState<Record<number, boolean>>({});
 
+  // 4. File Type Classifications
   const ext = (file?.file_type || file?.filename?.split('.').pop() || '').toUpperCase();
-
   const isImage = ['PNG', 'JPG', 'JPEG', 'WEBP', 'GIF', 'SVG', 'ICO', 'BMP'].includes(ext);
   const isAudio = ['MP3', 'WAV', 'OGG', 'M4A', 'AAC', 'FLAC'].includes(ext);
   const isPdf = ['PDF'].includes(ext);
+  const isDocx = ['DOCX', 'DOC', 'RTF', 'ODT'].includes(ext);
+  const isCsv = ['CSV'].includes(ext);
   const isTextOrCode = [
     'TXT',
     'JSON',
@@ -82,26 +104,32 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
     'ENV',
     'SH',
     'SQL',
-  ].includes(ext);
-  const isCsv = ['CSV'].includes(ext);
+    'DOCX',
+    'DOC',
+    'RTF',
+  ].includes(ext) || Boolean(file?.content || file?.raw_content);
 
-  // Load PDF metadata
+  // 5. Load PDF metadata Effect
   useEffect(() => {
-    if (!file || !isPdf) return;
+    if (!file || !isPdf || !file.filename) return;
 
     setPdfPage(1);
     setPdfZoom(100);
+    setPdfImageErrors({});
     setIsPdfLoading(true);
 
-    const trashMatch = file.url.match(/trash\/(?:download\/)?([a-f0-9-]+)/i);
+    const trashMatch = file.url ? file.url.match(/trash\/(?:download\/)?([a-f0-9-]+)/i) : null;
     const trashId = trashMatch ? trashMatch[1] : null;
 
     const infoUrl = trashId
       ? `/api/uploads/trash/pdf-info/${trashId}`
-      : `/api/uploads/pdf-info/${file.category || 'knowledge_base'}/${file.filename}`;
+      : `/api/uploads/pdf-info/${file.category || 'knowledge_base'}/${encodeURIComponent(file.filename)}`;
 
     fetch(infoUrl)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('PDF info endpoint unavailable');
+        return res.json();
+      })
       .then((data) => {
         if (data.total_pages) {
           setPdfTotalPages(data.total_pages);
@@ -109,54 +137,136 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
         setIsPdfLoading(false);
       })
       .catch((err) => {
-        console.error('Failed to get PDF info:', err);
+        console.warn('PDF info notice:', err);
         setIsPdfLoading(false);
       });
   }, [file, isPdf]);
 
-  // Load Text / Code Content
+  // 6. Load Full Multi-Page Extracted Vector Text Effect (Handles 31, 50, 100+ pages)
   useEffect(() => {
     if (!file) {
       setTextContent(null);
       setTextError(null);
+      setExtractedMeta(null);
+      setSelectedExtractedPage('all');
+      setExtractedSearchQuery('');
       return;
     }
 
-    if (isTextOrCode) {
-      setIsLoadingText(true);
-      setTextError(null);
-      fetch(file.url)
-        .then((res) => {
-          if (!res.ok) throw new Error(`Failed to load content (${res.status})`);
-          return res.text();
-        })
-        .then((text) => {
-          setTextContent(text);
-          setIsLoadingText(false);
-        })
-        .catch((err) => {
-          setTextError(err.message || 'Could not load text content');
-          setIsLoadingText(false);
-        });
-    } else {
-      setTextContent(null);
+    setIsLoadingText(true);
+    setTextError(null);
+    setSelectedExtractedPage('all');
+    setExtractedSearchQuery('');
+
+    // Try fetching complete multi-page extracted text from backend cache/worker
+    const fetchFullExtracted = async () => {
+      if (file.filename) {
+        try {
+          const cat = file.category || 'knowledge_base';
+          const endpoints = [
+            `/api/knowledge-base/documents/${encodeURIComponent(file.filename)}/extracted-text`,
+            `/api/uploads/extracted/${cat}/${encodeURIComponent(file.filename)}`,
+          ];
+
+          for (const ep of endpoints) {
+            try {
+              const res = await fetch(ep);
+              if (res.ok) {
+                const data = await res.json();
+                if (data.text) {
+                  setTextContent(data.text);
+                  setExtractedMeta({
+                    page_count: data.page_count,
+                    chunk_count: data.chunk_count,
+                    char_count: data.char_count || data.text.length,
+                  });
+                  if (data.page_count && data.page_count > 1) {
+                    setPdfTotalPages(data.page_count);
+                  }
+                  setIsLoadingText(false);
+                  return;
+                }
+              }
+            } catch {}
+          }
+        } catch (err) {
+          console.warn('Extracted text fetch warning:', err);
+        }
+      }
+
+      // Fallback: If pre-passed content is comprehensive
+      if (file.content || file.raw_content) {
+        const fallbackText = file.content || file.raw_content || '';
+        setTextContent(fallbackText);
+        setIsLoadingText(false);
+        return;
+      }
+
+      // Fallback: Direct file stream read
+      if (file.url && (isTextOrCode || isPdf)) {
+        fetch(file.url)
+          .then((res) => {
+            if (!res.ok) throw new Error(`Failed to load content (${res.status})`);
+            return res.text();
+          })
+          .then((text) => {
+            setTextContent(text);
+            setIsLoadingText(false);
+          })
+          .catch((err) => {
+            setTextError(err.message || 'Could not load text content');
+            setIsLoadingText(false);
+          });
+      } else {
+        setTextContent(null);
+        setIsLoadingText(false);
+      }
+    };
+
+    fetchFullExtracted();
+  }, [file, isTextOrCode, isPdf]);
+
+  // 7. Memoized Active Text & Multi-Page Parsing (MUST be called BEFORE any early returns!)
+  const activeTextToRender = textContent || file?.content || file?.raw_content || '';
+
+  const parsedExtractedPages = useMemo(() => {
+    if (!activeTextToRender) return [];
+
+    const pageMarkerRegex = /(?:^|\n)##\s*Page\s*(\d+)/gi;
+    const matches = Array.from(activeTextToRender.matchAll(pageMarkerRegex)) as RegExpExecArray[];
+
+    if (matches.length > 1) {
+      const pages: { pageNum: number; content: string }[] = [];
+      for (let i = 0; i < matches.length; i++) {
+        const match = matches[i];
+        const pageNum = parseInt(match[1], 10) || i + 1;
+        const startIndex = match.index ?? 0;
+        const nextIndex = i + 1 < matches.length ? (matches[i + 1].index ?? activeTextToRender.length) : activeTextToRender.length;
+        const pageRaw = activeTextToRender.substring(startIndex, nextIndex).trim();
+        pages.push({ pageNum, content: pageRaw });
+      }
+      return pages;
     }
-  }, [file, isTextOrCode]);
 
-  if (!file) return null;
+    return [{ pageNum: 1, content: activeTextToRender }];
+  }, [activeTextToRender]);
 
-  const handleCopyText = () => {
-    if (!textContent) return;
-    navigator.clipboard.writeText(textContent);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const displayedExtractedPages = useMemo(() => {
+    let list = parsedExtractedPages;
+    if (selectedExtractedPage !== 'all') {
+      list = list.filter((p) => p.pageNum === selectedExtractedPage);
+    }
+    if (extractedSearchQuery.trim()) {
+      const q = extractedSearchQuery.toLowerCase().trim();
+      list = list.filter((p) => p.content.toLowerCase().includes(q));
+    }
+    return list;
+  }, [parsedExtractedPages, selectedExtractedPage, extractedSearchQuery]);
 
-  // Parse CSV rows if CSV table mode
-  const parsedCsvRows = (() => {
-    if (!isCsv || !textContent) return [];
+  const parsedCsvRows = useMemo(() => {
+    if (!isCsv || !activeTextToRender) return [];
     try {
-      const lines = textContent.trim().split('\n');
+      const lines = activeTextToRender.trim().split('\n');
       return lines.map((line) => {
         const regex = /(".*?"|[^",]+)(?=\s*,|\s*$)/g;
         const matches = line.match(regex);
@@ -165,20 +275,55 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
     } catch {
       return [];
     }
-  })();
+  }, [isCsv, activeTextToRender]);
+
+  const totalPageCount = parsedExtractedPages.length > 1 ? parsedExtractedPages.length : (extractedMeta?.page_count || pdfTotalPages || 1);
+  const totalChunksCount = extractedMeta?.chunk_count || (activeTextToRender ? Math.max(1, Math.ceil(activeTextToRender.length / 700)) : 1);
+
+  const pageOptions: SearchableOption[] = useMemo(() => {
+    const opts: SearchableOption[] = [
+      { value: 'all', label: `All Pages (${totalPageCount})`, badge: `${totalPageCount} Pgs`, badgeVariant: 'primary' },
+    ];
+    parsedExtractedPages.forEach((p) => {
+      opts.push({
+        value: String(p.pageNum),
+        label: `Page ${p.pageNum}`,
+        subLabel: `${p.content.length.toLocaleString()} chars • ${p.content.split('\n').length} lines`,
+        badge: `Pg ${p.pageNum}`,
+        badgeVariant: 'secondary',
+      });
+    });
+    return opts;
+  }, [parsedExtractedPages, totalPageCount]);
+
+  // ALL HOOKS DEFINED ABOVE. EARLY RETURN PLACED HERE SAFELY:
+  if (!file) return null;
 
   const csvHeaders = parsedCsvRows.length > 0 ? parsedCsvRows[0] : [];
   const csvBody = parsedCsvRows.length > 1 ? parsedCsvRows.slice(1) : [];
 
-  const downloadUrl = file.url.includes('?') ? `${file.url}&download=true` : `${file.url}?download=true`;
+  const rawUrl = file.url || `/api/uploads/${file.category || 'knowledge_base'}/${encodeURIComponent(file.filename || 'file')}`;
+  const downloadUrl = rawUrl.includes('?') ? `${rawUrl}&download=true` : `${rawUrl}?download=true`;
 
-  const trashMatch = file.url.match(/trash\/(?:download\/)?([a-f0-9-]+)/i);
+  const trashMatch = file.url ? file.url.match(/trash\/(?:download\/)?([a-f0-9-]+)/i) : null;
   const trashId = trashMatch ? trashMatch[1] : null;
 
   const getPdfPageUrl = (p: number) => {
     return trashId
       ? `/api/uploads/trash/pdf-page/${trashId}?page=${p}&dpi=150`
-      : `/api/uploads/pdf-page/${file.category || 'knowledge_base'}/${file.filename}?page=${p}&dpi=150`;
+      : `/api/uploads/pdf-page/${file.category || 'knowledge_base'}/${encodeURIComponent(file.filename)}?page=${p}&dpi=150`;
+  };
+
+  const handleCopyText = (customText?: any) => {
+    const textToCopy = (typeof customText === 'string' ? customText : null) || textContent || file.content || file.raw_content || '';
+    if (!textToCopy) return;
+    try {
+      navigator.clipboard.writeText(String(textToCopy));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.warn('Clipboard write error:', e);
+    }
   };
 
   // Safe Open in New Tab Viewer (Zero Download)
@@ -207,7 +352,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
         <html lang="en">
         <head>
           <meta charset="UTF-8">
-          <title>${file.filename} - Live In-App Document Viewer</title>
+          <title>${file.filename} - Live Document Viewer</title>
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
             * { box-sizing: border-box; }
@@ -245,8 +390,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
           <head>
             <title>${file.filename} - Image Viewer</title>
             <style>
-              body { margin: 0; background: #09090b; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-              img { max-width: 95vw; max-height: 95vh; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+              body { margin: 0; background: #09090b; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+              img { max-width: 95vw; max-height: 95vh; object-fit: contain; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border-radius: 8px; }
             </style>
           </head>
           <body>
@@ -261,28 +406,191 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
     }
   };
 
+  // Render High-Fidelity Multi-Page Vector Content Sheet
+  const renderDocumentSheet = () => {
+    return (
+      <div className="w-full max-w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 space-y-5 text-zinc-900 dark:text-zinc-100">
+        {/* Document Header Branding & Stats */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
+              {ext === 'PDF' ? <FileText className="h-5 w-5 text-rose-500" /> : <BookOpen className="h-5 w-5 text-blue-500" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-100 truncate max-w-sm sm:max-w-md" title={file.filename}>
+                  {file.filename}
+                </h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold">
+                  {ext}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-zinc-400 mt-1 flex-wrap">
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300">{file.category_name || file.category || 'Knowledge Base'}</span>
+                <span>•</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">{totalPageCount} Pages Extracted</span>
+                <span>•</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{totalChunksCount} Vector Chunks</span>
+                <span>•</span>
+                <span className="font-mono">{activeTextToRender.length.toLocaleString()} chars</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge variant="success" size="sm" className="font-semibold">
+              <ShieldCheck className="h-3.5 w-3.5 mr-1 text-emerald-500" />
+              100% Vector Grounded
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleCopyText()}
+              leftIcon={copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+              className="text-xs font-semibold h-8"
+            >
+              {copied ? 'Copied All' : 'Copy All Text'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Multi-Page Navigation Bar & Live Search (Perfect for 31, 50, 100+ pages) */}
+        {activeTextToRender && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-50 dark:bg-zinc-950/70 rounded-xl border border-zinc-200/70 dark:border-zinc-800/80">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Search inside extracted vector pages..."
+                  value={extractedSearchQuery}
+                  onChange={(e) => setExtractedSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                />
+                {extractedSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setExtractedSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              {parsedExtractedPages.length > 1 && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+                    <Filter className="h-3 w-3" />
+                    <span>Page:</span>
+                  </span>
+                  <div className="w-48">
+                    <SearchableSelect
+                      value={String(selectedExtractedPage)}
+                      onChange={(v) => setSelectedExtractedPage(v === 'all' ? 'all' : parseInt(v, 10))}
+                      options={pageOptions}
+                      placeholder="Select Page..."
+                      searchPlaceholder="Filter pages..."
+                      size="sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="text-[11px] text-zinc-500 font-mono flex items-center gap-2 self-end sm:self-center">
+              <span>Showing <strong>{displayedExtractedPages.length}</strong> of <strong>{totalPageCount}</strong> pages</span>
+            </div>
+          </div>
+        )}
+
+        {/* Multi-Page Rendered Body */}
+        {isLoadingText ? (
+          <div className="py-20 text-center space-y-3">
+            <RefreshCw className="h-8 w-8 text-blue-500 animate-spin mx-auto" />
+            <p className="text-xs text-zinc-500 font-medium">Extracting complete multi-page vector text...</p>
+          </div>
+        ) : displayedExtractedPages.length > 0 ? (
+          <div className="space-y-4 max-h-[62vh] overflow-y-auto pr-1">
+            {displayedExtractedPages.map((pageItem) => (
+              <div
+                key={`extracted-page-card-${pageItem.pageNum}`}
+                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/80 overflow-hidden shadow-2xs"
+              >
+                {/* Page Card Subheader */}
+                <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-900/90 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-xs">
+                      <FileText className="h-3 w-3" />
+                      Page {pageItem.pageNum} / {totalPageCount}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-400">
+                      {pageItem.content.length} chars • {pageItem.content.split('\n').length} lines
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(pageItem.content)}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 font-medium hover:underline flex items-center gap-1 cursor-pointer"
+                    title={`Copy Page ${pageItem.pageNum} text`}
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Copy Page</span>
+                  </button>
+                </div>
+
+                {/* Page Markdown Content */}
+                <div className="p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap select-text text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-950">
+                  {pageItem.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-16 text-center text-zinc-400 space-y-2">
+            <FileText className="h-10 w-10 mx-auto text-zinc-300 dark:text-zinc-700" />
+            <p className="text-sm font-semibold">No matching pages found</p>
+            <p className="text-xs max-w-sm mx-auto">
+              No extracted vector content matched your filter query "{extractedSearchQuery}".
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setExtractedSearchQuery('');
+                setSelectedExtractedPage('all');
+              }}
+              className="mt-2 text-xs"
+            >
+              Reset Filters
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
       <div
         className={`bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col transition-all duration-300 ${
-          isFullscreen
-            ? 'w-full h-full max-w-none rounded-none'
-            : 'w-full max-w-5xl h-[90vh] max-h-[92vh]'
+          isFullscreen ? 'w-full h-full max-w-none rounded-none' : 'w-full max-w-5xl h-[90vh] max-h-[92vh]'
         }`}
       >
         {/* Modal Header */}
-        <div className="px-4 sm:px-6 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 shrink-0">
+        <div className="px-4 sm:px-6 py-3 border-b border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-9 w-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
               <Eye className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 truncate" title={file.filename}>
+                <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[200px] sm:max-w-xs md:max-w-md" title={file.filename}>
                   {file.filename}
                 </h3>
                 {file.category && (
-                  <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">
+                  <Badge variant="outline" className="text-[10px] hidden md:inline-flex">
                     uploads/{file.category}/
                   </Badge>
                 )}
@@ -290,19 +598,22 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
                   {ext || 'FILE'}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
+              <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
                 {file.size_formatted ? `${file.size_formatted} • ` : ''}
                 Live Document & Asset Preview
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {isCsv && textContent && (
-              <div className="flex items-center border border-zinc-200 dark:border-zinc-700 rounded-lg p-0.5 bg-zinc-50 dark:bg-zinc-800 mr-1">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {extraActions}
+
+            {isCsv && activeTextToRender && (
+              <div className="flex items-center border border-zinc-200 dark:border-zinc-700 rounded-lg p-0.5 bg-zinc-50 dark:bg-zinc-800">
                 <button
+                  type="button"
                   onClick={() => setCsvViewMode('table')}
-                  className={`px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                     csvViewMode === 'table'
                       ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs font-semibold'
                       : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -312,20 +623,21 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
                   <span>Table</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setCsvViewMode('raw')}
-                  className={`px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                     csvViewMode === 'raw'
                       ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs font-semibold'
                       : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
                   }`}
                 >
                   <Code2 className="h-3 w-3" />
-                  <span>Raw Text</span>
+                  <span>Raw</span>
                 </button>
               </div>
             )}
 
-            {isTextOrCode && textContent && (
+            {isTextOrCode && activeTextToRender && (
               <Button
                 variant="outline"
                 size="sm"
@@ -357,19 +669,19 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
               <Download className="h-4 w-4" />
             </a>
 
-            {extraActions}
-
             <button
+              type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors hidden sm:inline-flex"
+              className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors hidden sm:inline-flex cursor-pointer"
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
 
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors ml-1"
+              className="p-1.5 text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors ml-1 cursor-pointer"
               title="Close Preview"
             >
               <X className="h-5 w-5" />
@@ -380,7 +692,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
         {/* PDF Reader Toolbar with View Mode Toggle */}
         {isPdf && (
           <div className="px-4 py-2 bg-zinc-100/90 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3 text-xs shrink-0 flex-wrap">
-            {/* View Mode Toggle: Continuous Scroll vs Single Page Flip */}
             <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs">
               <button
                 type="button"
@@ -392,7 +703,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
                 }`}
               >
                 <Scroll className="h-3 w-3" />
-                <span>Continuous Scroll (All {pdfTotalPages} Pages)</span>
+                <span>Continuous Pages ({pdfTotalPages})</span>
               </button>
               <button
                 type="button"
@@ -403,12 +714,23 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                 }`}
               >
-                <FileText className="h-3 w-3" />
-                <span>Single Page Flip</span>
+                <Layers className="h-3 w-3" />
+                <span>Page Flip</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPdfViewMode('text')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  pdfViewMode === 'text'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                }`}
+              >
+                <BookOpen className="h-3 w-3" />
+                <span>Extracted Vector Content</span>
               </button>
             </div>
 
-            {/* Single Page Pagination Controls (active when in single page mode) */}
             {pdfViewMode === 'single' && (
               <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <button
@@ -435,40 +757,42 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
               </div>
             )}
 
-            {/* Zoom Controls with 10% Increments */}
-            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <button
-                type="button"
-                onClick={() => setPdfZoom((z) => Math.max(30, z - 10))}
-                disabled={pdfZoom <= 30}
-                className="p-1 rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                title="Zoom Out (-10%)"
-              >
-                <ZoomOut className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPdfZoom(100)}
-                className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300 font-semibold px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
-                title="Click to reset zoom to 100%"
-              >
-                {pdfZoom}%
-              </button>
-              <button
-                type="button"
-                onClick={() => setPdfZoom((z) => Math.min(200, z + 10))}
-                disabled={pdfZoom >= 200}
-                className="p-1 rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                title="Zoom In (+10%)"
-              >
-                <ZoomIn className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            {/* Zoom Controls */}
+            {pdfViewMode !== 'text' && (
+              <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={() => setPdfZoom((z) => Math.max(30, z - 10))}
+                  disabled={pdfZoom <= 30}
+                  className="p-1 rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="Zoom Out (-10%)"
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfZoom(100)}
+                  className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300 font-semibold px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
+                  title="Click to reset zoom to 100%"
+                >
+                  {pdfZoom}%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfZoom((z) => Math.min(200, z + 10))}
+                  disabled={pdfZoom >= 200}
+                  className="p-1 rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="Zoom In (+10%)"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* Modal Body / Viewer */}
-        <div className="flex-1 overflow-auto p-3 sm:p-5 bg-zinc-100/50 dark:bg-zinc-950 flex flex-col items-center justify-start">
+        <div className="flex-1 overflow-auto p-2.5 sm:p-4 bg-zinc-100/60 dark:bg-zinc-950 flex flex-col items-center justify-start">
           {/* PDF Page Interactive Viewer */}
           {isPdf && (
             <div className="w-full flex-1 flex flex-col items-center justify-start">
@@ -477,48 +801,86 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
                   <RefreshCw className="h-8 w-8 text-blue-500 animate-spin mx-auto mb-2" />
                   <p className="text-xs text-zinc-500">Loading document pages...</p>
                 </div>
+              ) : pdfViewMode === 'text' ? (
+                renderDocumentSheet()
               ) : pdfViewMode === 'scroll' ? (
-                /* Continuous Scroll Mode - All pages stacked vertically */
+                /* Continuous Scroll Mode */
                 <div
-                  className="flex flex-col items-center gap-6 w-full py-2"
+                  className="flex flex-col items-center gap-5 w-full py-1"
                   style={{
                     width: `${pdfZoom}%`,
-                    maxWidth: pdfZoom > 100 ? 'none' : '900px',
+                    maxWidth: '100%',
                   }}
                 >
                   {Array.from({ length: pdfTotalPages }, (_, i) => i + 1).map((pageNum) => (
                     <div
                       key={`pdf-scroll-page-${pageNum}`}
-                      className="relative w-full bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+                      className="relative w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-md border border-zinc-200 dark:border-zinc-800 overflow-hidden"
                     >
-                      <div className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-md bg-zinc-900/80 text-white text-[10px] font-bold backdrop-blur shadow-sm">
+                      <div className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-md bg-zinc-900/80 text-white text-[10px] font-bold backdrop-blur shadow-xs">
                         Page {pageNum} / {pdfTotalPages}
                       </div>
-                      <img
-                        src={getPdfPageUrl(pageNum)}
-                        alt={`Page ${pageNum} of ${file.filename}`}
-                        className="w-full h-auto object-contain select-none"
-                        loading={pageNum <= 3 ? 'eager' : 'lazy'}
-                      />
+                      {pdfImageErrors[pageNum] ? (
+                        <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-zinc-50 dark:bg-zinc-900/60 rounded-xl m-4 border border-zinc-200 dark:border-zinc-800">
+                          <FileText className="h-10 w-10 text-zinc-400 mb-2" />
+                          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Page {pageNum} Visual Stream</p>
+                          <p className="text-[11px] text-zinc-400 max-w-xs mt-1">Switch to "Extracted Vector Content" tab to view complete searchable text.</p>
+                          <button
+                            type="button"
+                            onClick={() => setPdfViewMode('text')}
+                            className="mt-3 px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 cursor-pointer"
+                          >
+                            View Extracted Content
+                          </button>
+                        </div>
+                      ) : (
+                        <img
+                          src={getPdfPageUrl(pageNum)}
+                          alt={`Page ${pageNum} of ${file.filename}`}
+                          className="w-full h-auto object-contain select-none min-h-[300px]"
+                          loading={pageNum <= 3 ? 'eager' : 'lazy'}
+                          onError={() => {
+                            setPdfImageErrors((prev) => ({ ...prev, [pageNum]: true }));
+                          }}
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
               ) : (
                 /* Single Page Flip Mode */
                 <div
-                  className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-800 transition-all duration-150 overflow-hidden my-auto"
+                  className="bg-white dark:bg-zinc-900 rounded-2xl shadow-md border border-zinc-200 dark:border-zinc-800 transition-all duration-150 overflow-hidden my-auto w-full"
                   style={{
                     width: `${pdfZoom}%`,
-                    maxWidth: pdfZoom > 100 ? 'none' : '900px',
+                    maxWidth: '100%',
                   }}
                 >
-                  <img
-                    key={`pdf-single-${file.filename}-${pdfPage}`}
-                    src={getPdfPageUrl(pdfPage)}
-                    alt={`Page ${pdfPage} of ${file.filename}`}
-                    className="w-full h-auto object-contain select-none"
-                    loading="eager"
-                  />
+                  {pdfImageErrors[pdfPage] ? (
+                    <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-zinc-50 dark:bg-zinc-900/60 rounded-xl m-4 border border-zinc-200 dark:border-zinc-800">
+                      <FileText className="h-12 w-12 text-zinc-400 mb-2" />
+                      <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Page {pdfPage} Preview</p>
+                      <p className="text-xs text-zinc-400 max-w-sm mt-1">Direct PDF page render unavailable. Switch to the full extracted vector content tab to read all pages.</p>
+                      <button
+                        type="button"
+                        onClick={() => setPdfViewMode('text')}
+                        className="mt-4 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 cursor-pointer"
+                      >
+                        Read Extracted Vector Content
+                      </button>
+                    </div>
+                  ) : (
+                    <img
+                      key={`pdf-single-${file.filename}-${pdfPage}`}
+                      src={getPdfPageUrl(pdfPage)}
+                      alt={`Page ${pdfPage} of ${file.filename}`}
+                      className="w-full h-auto object-contain select-none min-h-[300px]"
+                      loading="eager"
+                      onError={() => {
+                        setPdfImageErrors((prev) => ({ ...prev, [pdfPage]: true }));
+                      }}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -528,11 +890,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
           {isImage && (
             <div className="flex flex-col items-center justify-center w-full h-full my-auto">
               <div className="p-2 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-md max-w-full max-h-full overflow-hidden flex items-center justify-center">
-                <img
-                  src={file.url}
-                  alt={file.filename}
-                  className="max-h-[70vh] max-w-full object-contain rounded-lg"
-                />
+                <img src={file.url} alt={file.filename} className="max-h-[70vh] max-w-full object-contain rounded-lg" />
               </div>
               <p className="text-xs text-zinc-400 mt-2 font-mono">{file.filename}</p>
             </div>
@@ -556,18 +914,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
             </div>
           )}
 
-          {/* Text / Code / CSV Viewer */}
-          {isTextOrCode && (
+          {/* Text / Code / CSV / DOCX Viewer */}
+          {!isPdf && isTextOrCode && (
             <div className="w-full h-full flex flex-col overflow-hidden">
               {isLoadingText ? (
                 <div className="py-20 text-center my-auto">
                   <RefreshCw className="h-8 w-8 text-blue-500 animate-spin mx-auto mb-2" />
                   <p className="text-xs text-zinc-500">Reading document contents...</p>
-                </div>
-              ) : textError ? (
-                <div className="py-16 text-center text-rose-500 my-auto">
-                  <p className="text-sm font-semibold">Failed to load text preview</p>
-                  <p className="text-xs text-zinc-400 mt-1">{textError}</p>
                 </div>
               ) : isCsv && csvViewMode === 'table' && parsedCsvRows.length > 0 ? (
                 /* CSV Table Viewer */
@@ -607,17 +960,22 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClos
                     </table>
                   </div>
                 </div>
+              ) : isDocx || ext === 'MD' ? (
+                /* Formatted Document / Markdown Viewer */
+                <div className="w-full h-full overflow-y-auto flex justify-center py-2">
+                  {renderDocumentSheet()}
+                </div>
               ) : (
                 /* Raw Code / Text Viewer */
                 <div className="w-full h-full bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-xs flex flex-col">
                   <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs text-zinc-400 bg-zinc-50 dark:bg-zinc-800/60 shrink-0">
                     <span className="font-mono text-[11px]">
-                      {textContent ? `${textContent.split('\n').length} lines • ${new Blob([textContent]).size} bytes` : ''}
+                      {activeTextToRender ? `${activeTextToRender.split('\n').length} lines • ${activeTextToRender.length} chars` : ''}
                     </span>
                     <span className="text-[10px] uppercase font-bold tracking-wider">{ext} Document</span>
                   </div>
                   <pre className="p-4 overflow-auto font-mono text-xs text-zinc-800 dark:text-zinc-200 flex-1 whitespace-pre leading-relaxed select-text">
-                    {textContent}
+                    {activeTextToRender}
                   </pre>
                 </div>
               )}
